@@ -1,132 +1,163 @@
 # UNPAM LMS Mobile (Mentari & Sakura)
 
-> **Tugas Proyek Mata Kuliah: Mobile Programming (04SIFE001)**
-> **Dosen Pengampu:** SAMSO SUPRIYATNA S.Kom., M.Kom.
-> **Mahasiswa:** DIMAS ALFA PRATAMA (NIM: 241011750041)
-> **Semester:** 20261 • Shift E (Sabtu)
+> **Tugas Proyek Mata Kuliah:** Mobile Programming (04SIFE001)  
+> **Dosen Pengampu:** SAMSO SUPRIYATNA S.Kom., M.Kom.  
+> **Mahasiswa:** DIMAS ALFA PRATAMA (NIM: 241011750041)  
+> **Semester:** 20261 • Shift E (Sabtu)  
 
-Aplikasi Android berbasis **Flutter** untuk melihat mata kuliah, pertemuan, kuis, dan tugas dari LMS Universitas Pamulang (Mentari dan Sakura) langsung dari smartphone.
+Aplikasi Android berbasis **Flutter** untuk mengelola aktivitas akademik LMS Universitas Pamulang (Mentari dan Sakura) secara terintegrasi langsung dari smartphone.
 
-Seluruh data diambil dari server UNPAM menggunakan akun mahasiswa yang sedang login. Aplikasi tidak memakai data contoh (mock) dan tidak memiliki mode demo. Jika server menolak permintaan atau koneksi gagal, aplikasi menampilkan pesan error, bukan data pengganti.
+Aplikasi tidak hanya berfungsi sebagai viewer (read-only), melainkan menyediakan platform interaktif lengkap: melihat jadwal mata kuliah, memantau 21 pertemuan dan peserta kelas, mengerjakan kuis, mengunggah tugas, berdiskusi di forum, hingga menganalisis soal kuis berbantuan **AI Study Assistant**.
 
----
-
-## Latar Belakang
-
-Mengecek tugas dan kuis lewat browser di laptop merepotkan. Aplikasi ini memungkinkan mahasiswa:
-
-1. Melihat daftar mata kuliah semester berjalan beserta dosen, SKS, dan hari kuliah.
-2. Membuka detail tiap mata kuliah: pertemuan, kuis, penugasan, forum, dan materi.
-3. Melihat aktivitas yang belum selesai (`completion: false`) tanpa membuka pertemuan satu per satu.
+Seluruh data disinkronkan secara langsung dengan server UNPAM menggunakan akun mahasiswa aktif tanpa data mock atau mode demo dummy.
 
 ---
 
-## Arsitektur
+## Fitur Utama
+
+- **Dashboard Akademik Real-Time**: Daftar mata kuliah semester berjalan, total SKS, jadwal hari kuliah, nama dosen, dan progress perkuliahan.
+- **Universal Cloudflare Clearance**: Mengatasi proteksi Cloudflare Challenge dan TLS Fingerprinting (JA3/JA4) via engine headless Chromium terintegrasi, mencegah error 403 Forbidden.
+- **Pengerjaan Kuis & Tugas In-App**: Membuka dan mengerjakan kuis, mengunggah penugasan, mengisi kuesioner, dan berpartisipasi dalam forum diskusi langsung di dalam aplikasi tanpa terlempar ke browser eksternal.
+- **Deteksi Otomatis Penyelesaian (Auto-Completion)**: Mendeteksi pengiriman jawaban atau form submit secara otomatis untuk memperbarui status penyelesaian tugas (`completion: true`) dan progress bar.
+- **Bahas Soal dengan AI (AI Assistant)**: Ekstraksi otomatis teks pertanyaan dan pilihan ganda dari tampilan kuis ke Asisten AI untuk pembahasan konsep materi dan panduan belajar.
+- **Sinkronisasi Data Cerdas & Dual Fallback**: Mendukung sinkronisasi data kelas melalui Sakura API, Mentari API, serta *Headless Sync Bridge* untuk mengekstrak 21 pertemuan dan daftar teman sekelas secara presisi.
+- **Offline Caching & Fast Loading**: Penyimpanan lokal untuk detail mata kuliah, pertemuan, dan riwayat tugas, memastikan aplikasi tetap responsif meskipun koneksi server kampus lambat.
+- **Pusat Tugas Tertunda (Pending Tasks)**: Agregasi seluruh tugas, kuis, dan forum dari seluruh mata kuliah yang belum diselesaikan dalam satu tampilan ringkas.
+
+---
+
+## Arsitektur Sistem
 
 ```
-              [ Aplikasi Flutter (Android / iOS) ]
-                              |
-          +-------------------+-------------------+
-          v                                       v
- mentari.unpam.ac.id                     sakura.unpam.ac.id
-   GET /api/user-course                    GET /api/course/:kode_course
-   Daftar mata kuliah                      Pertemuan, kuis, materi, peserta
-
-   Header: Authorization: Bearer <token>
+                      [ Aplikasi Flutter (Android) ]
+                                    |
+          +-------------------------+-------------------------+
+          |                                                   |
+ [ ChromiumSessionService ]                              [ UI Screens ]
+ (Headless WebView Engine)                                    |
+  - Cloudflare cf_clearance cookies              +------------+------------+
+  - In-engine fetch() bridge                     |                         |
+  - Session & Token Sync               [MentariActivityScreen]    [AiAssistantScreen]
+          |                            (In-App Task/Quiz Runner)   (AI Problem Solver)
+          v                                      |                         |
+  +-------+--------------------+                 +------------+------------+
+  v                            v                              v
+mentari.unpam.ac.id      sakura.unpam.ac.id             Google Gemini API
+(Auth, Course List)      (Detail 21 Pertemuan,          (Analisis & Pembahasan)
+                          Kuis, Tugas, Forum)
 ```
 
-Lapisan kode:
+### Komponen Arsitektur:
 
-| Lapisan | Lokasi | Tugas |
+| Lapisan | File / Direktori | Fungsi Utama |
 |---|---|---|
-| Jaringan | `lib/core/network/api_client.dart` | Dio, header Bearer, penerjemahan error ke `ApiException` |
-| Penyimpanan | `lib/core/services/storage_service.dart` | Token dan identitas sesi (`shared_preferences`) |
-| State | `lib/providers/` | `AuthProvider`, `CourseProvider` (Provider) |
-| UI | `lib/screens/`, `lib/widgets/` | Layar login, home, detail mata kuliah, tugas pending |
+| **Engine Clearance** | `lib/core/services/chromium_session_service.dart` | Menjalankan request HTTP di dalam context browser Chromium dengan cookie aktif dan token Cloudflare clearance. |
+| **Jaringan & API** | `lib/core/network/api_client.dart` | Prioritas request via Chromium fetch bridge dengan fallback Dio REST API, validasi token, dan header host spesifik. |
+| **Penyimpanan Lokal** | `lib/core/services/storage_service.dart` | Pengelolaan cache detail kelas, token sesi JWT, profil mahasiswa, dan kredensial. |
+| **Kecerdasan Buatan** | `lib/core/services/ai_service.dart` | Integrasi model AI Gemini untuk asisten belajar, penjabaran materi, dan analisis soal kuis. |
+| **Manajemen State** | `lib/providers/` | `AuthProvider` (sesi dan validasi) & `CourseProvider` (kursus, pertemuan, pending tasks, offline state). |
+| **Aktivitas In-App** | `lib/screens/mentari_activity_screen.dart` | Browser interaktif WebView dengan DOM extractor, listener form submit, dan tombol Bahas Soal AI. |
+| **Sinkronisasi Bridge** | `lib/widgets/mentari_course_sync_sheet.dart` | BottomSheet interaktif & headless extractor untuk sinkronisasi 21 pertemuan dan peserta kelas. |
+| **Antarmuka (UI)** | `lib/screens/` & `lib/widgets/` | Dashboard, Detail Pertemuan, Dialog Kuis, Kartu Mata Kuliah, dan Pengaturan Profil. |
 
 ---
 
-## Alur Login
+## Mekanisme Cloudflare Bypass
 
-Halaman login Mentari dilindungi **Cloudflare Turnstile**, sehingga aplikasi tidak bisa mengirim username dan password langsung ke API. Aplikasi menyediakan dua cara masuk:
-
-1. **Masuk lewat Mentari (WebView).** Aplikasi membuka halaman login Mentari yang asli. Setelah login berhasil, aplikasi mencari token JWT di `localStorage`, `sessionStorage`, dan cookie halaman tersebut, lalu mengujinya ke server.
-2. **Bearer Token manual.** Tempel token JWT secara manual jika cara pertama tidak berhasil.
-
-Token selalu divalidasi ke server (`/user-course`) sebelum sesi disimpan. Token yang ditolak tidak pernah tersimpan. Nama dan NIM mahasiswa dibaca dari klaim `fullname` dan `username` pada token.
-
-### Mengambil token manual
-
-1. Login di `https://mentari.unpam.ac.id` lewat Chrome di komputer.
-2. Tekan **F12**, buka tab **Application**, lalu **Local Storage** dan pilih `https://mentari.unpam.ac.id`.
-3. Salin nilai yang diawali `eyJ...`.
-4. Alternatif: tab **Network**, klik request `api/user-course`, salin nilai header `Authorization` tanpa kata `Bearer`.
-5. Di aplikasi, centang **Gunakan Bearer Token Manual**, tempel token, lalu tap **Masuk dengan Token**.
-
-> **Keamanan:** token setara dengan akses ke akun Anda. Jangan dibagikan, jangan di-commit ke repositori, dan jangan masuk ke tangkapan layar. Token disimpan lokal di perangkat dan dihapus saat keluar.
+Server LMS UNPAM (Mentari & Sakura) dilindungi oleh **Cloudflare Managed Challenge** dan proteksi bot yang memvalidasi TLS fingerprinting:
+1. Permintaan langsung melalui client HTTP murni (seperti Dio, cURL, atau HttpClient biasa) akan diblokir dengan status `HTTP 403 Forbidden` (`cf-mitigated: challenge`).
+2. **Solusi UNPAM LMS Mobile:** Aplikasi menginisialisasi `ChromiumSessionService` yang terpasang di root aplikasi (`main.dart`). Engine ini mempertahankan cookie sesi resmi dan token `cf_clearance` di dalam native `CookieManager`.
+3. Seluruh panggilan data penting (`getUserCourses` dan `getCourseDetail`) dieksekusi melalui evaluasi JavaScript `fetch()` di dalam context Chromium yang telah tervalidasi, sehingga request dikenali sebagai interaksi peramban sah.
+4. Tersedia tombol sinkronisasi visual (`MentariCourseSyncSheet`) sebagai lapisan fallback jika server menuntut verifikasi visual Turnstile interaktif.
 
 ---
 
-## Fitur
+## Alur Autentikasi
 
-- Dashboard mata kuliah semester berjalan, total SKS, dan hari kuliah dari data server.
-- Tarik ke bawah (pull to refresh) untuk memuat ulang.
-- Detail mata kuliah: pertemuan, kuis, tugas, forum, dan materi dari Sakura.
-- Ringkasan tugas dan kuis yang belum selesai.
-- Penanganan error: sesi berakhir mengarahkan ke login ulang, gangguan jaringan menampilkan tombol coba lagi.
+Aplikasi menyediakan dua metode masuk:
 
-## Keterbatasan
-
-- Login WebView hanya berjalan di Android dan iOS (tidak untuk build web).
-- Jika Mentari menyimpan token di cookie `httpOnly`, login WebView tidak dapat membacanya. Gunakan token manual.
-- Cloudflare dapat memblokir permintaan API dari aplikasi. Dalam kasus itu aplikasi menampilkan error 403.
-- Token Mentari belum tentu diterima oleh API Sakura. Jika detail pertemuan gagal dimuat, periksa kode error yang ditampilkan.
-- Ringkasan tugas pending dihitung dari mata kuliah yang terakhir dibuka.
-- API UNPAM tidak terdokumentasi publik dan dapat berubah sewaktu-waktu.
+1. **Masuk Lewat Mentari (Web SSO Otomatis):**
+   - Aplikasi membuka halaman login resmi Mentari di WebView.
+   - Mahasiswa memasukkan NIM dan password serta menyelesaikan CAPTCHA Turnstile.
+   - Skrip injector otomatis mendeteksi keberhasilan login, menangkap JWT token dari `localStorage`, `sessionStorage`, dan cookie, lalu memvalidasi token ke server sebelum menyimpan sesi.
+2. **Masuk dengan Bearer Token Manual:**
+   - Disediakan bagi pengguna yang ingin menempelkan token JWT secara langsung.
+   - Token divalidasi ke server sebelum disimpan; token kedaluwarsa atau tidak valid akan langsung ditolak.
 
 ---
 
-## Struktur Proyek
+## Struktur Repositori
 
 ```text
 unpam_mobile/
 ├── lib/
 │   ├── core/
-│   │   ├── constants/api_constants.dart
-│   │   ├── network/api_client.dart
-│   │   └── services/storage_service.dart
+│   │   ├── constants/
+│   │   │   └── api_constants.dart
+│   │   ├── network/
+│   │   │   ├── api_client.dart
+│   │   │   └── api_exception.dart
+│   │   ├── services/
+│   │   │   ├── ai_service.dart
+│   │   │   ├── chromium_session_service.dart
+│   │   │   └── storage_service.dart
+│   │   └── telemetry/
+│   │       └── ...
 │   ├── models/
-│   │   ├── user_course_model.dart
-│   │   └── course_detail_model.dart
+│   │   ├── course_detail_model.dart
+│   │   └── user_course_model.dart
 │   ├── providers/
 │   │   ├── auth_provider.dart
 │   │   └── course_provider.dart
 │   ├── screens/
-│   │   ├── login_screen.dart
-│   │   ├── mentari_web_login_screen.dart
-│   │   ├── home_screen.dart
+│   │   ├── ai_assistant_screen.dart
+│   │   ├── all_pending_tasks_screen.dart
 │   │   ├── course_detail_screen.dart
-│   │   └── all_pending_tasks_screen.dart
-│   ├── theme/app_theme.dart
+│   │   ├── home_screen.dart
+│   │   ├── login_screen.dart
+│   │   ├── mentari_activity_screen.dart
+│   │   ├── mentari_web_login_screen.dart
+│   │   └── profile_screen.dart
+│   ├── theme/
+│   │   └── app_theme.dart
 │   ├── widgets/
+│   │   ├── course_card.dart
+│   │   ├── mentari_course_sync_sheet.dart
+│   │   ├── quiz_dialog.dart
+│   │   └── sub_section_tile.dart
 │   └── main.dart
-└── pubspec.yaml
+├── pubspec.yaml
+└── README.md
 ```
 
 ---
 
 ## Menjalankan Proyek
 
-Prasyarat: Flutter SDK dan perangkat atau emulator Android.
+### Prasyarat
+- **Flutter SDK**: Versi `^3.19.0` atau yang lebih baru
+- **Android SDK**: Min SDK 21, Target SDK 34
+- **Perangkat / Emulator**: Android 8.0+ (Oreo atau lebih tinggi disarankan)
 
+### Langkah Instalasi
 ```bash
-flutter doctor
+# 1. Unduh dependensi
 flutter pub get
+
+# 2. Verifikasi kesiapan sistem
+flutter doctor
+
+# 3. Jalankan analisis statis
+dart analyze lib
+
+# 4. Jalankan aplikasi pada perangkat
 flutter run
 ```
 
-Pemeriksaan kode:
+---
 
-```bash
-flutter analyze
-```
+## Catatan Teknis & Keamanan
+
+- **Kerahasiaan Token:** Token JWT disimpan secara lokal menggunakan `SharedPreferences` perangkat dan langsung dihapus saat pengguna melakukan Logout.
+- **Kepatuhan Privasi:** Kredensial akun (password) tidak pernah disimpan di storage aplikasi; proses autentikasi dilakukan langsung melalui halaman resmi Universitas Pamulang.
+- **API Status:** Endpoint API Mentari dan Sakura merupakan layanan internal kampus yang dapat mengalami pembaruan sewaktu-waktu. Penanganan error fail-safe dan offline cache dirancang untuk meminimalkan dampak gangguan server.
