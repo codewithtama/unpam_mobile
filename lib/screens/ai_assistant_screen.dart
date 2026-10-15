@@ -2,8 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:provider/provider.dart';
+import 'package:url_launcher/url_launcher.dart';
 import '../providers/ai_provider.dart';
-import '../providers/course_provider.dart';
 import '../models/ai_message_model.dart';
 import '../theme/app_theme.dart';
 
@@ -82,8 +82,10 @@ class _AiAssistantScreenState extends State<AiAssistantScreen> {
     final hasImg = _selectedImageBytes != null && _selectedImageBytes!.isNotEmpty;
     if (text.isEmpty && !hasImg) return;
 
-    final courseProv = context.read<CourseProvider>();
-    final courses = courseProv.courses.map((c) => c.namaMataKuliah).toList();
+    final selectedCourse = context.read<AiProvider>().selectedCourseName;
+    final courses = (selectedCourse != null && selectedCourse.isNotEmpty)
+        ? [selectedCourse]
+        : null;
 
     final imgBytes = _selectedImageBytes;
     final imgMime = _selectedImageMime;
@@ -106,8 +108,22 @@ class _AiAssistantScreenState extends State<AiAssistantScreen> {
   @override
   Widget build(BuildContext context) {
     final aiProv = context.watch<AiProvider>();
-    final courseProv = context.watch<CourseProvider>();
-    final courseList = courseProv.courses.map((c) => c.namaMataKuliah).toList();
+    final activeFocus = aiProv.selectedCourseName;
+    const commonCourses = [
+      'Pemrograman Mobile',
+      'Basis Data',
+      'Kecerdasan Buatan',
+      'Rekayasa Perangkat Lunak',
+      'Jaringan Komputer',
+      'Struktur Data & Algoritma',
+      'Pemrograman Web',
+      'Sistem Operasi',
+      'Etika Profesi & Keorganisasian',
+    ];
+    final allCourses = <String>{
+      if (activeFocus != null && activeFocus.isNotEmpty) activeFocus,
+      ...commonCourses,
+    }.toList();
 
     return Scaffold(
       appBar: AppBar(
@@ -119,6 +135,15 @@ class _AiAssistantScreenState extends State<AiAssistantScreen> {
           ],
         ),
         actions: [
+          IconButton(
+            tooltip: 'Pengaturan Gemini API Key',
+            icon: Icon(
+              Icons.vpn_key_rounded,
+              color: aiProv.hasCustomApiKey ? AppTheme.accentGold : Colors.white70,
+              size: 20,
+            ),
+            onPressed: () => _showApiKeyDialog(context),
+          ),
           IconButton(
             tooltip: 'Bersihkan Riwayat Chat',
             icon: const Icon(Icons.delete_outline_rounded),
@@ -133,6 +158,54 @@ class _AiAssistantScreenState extends State<AiAssistantScreen> {
       ),
       body: Column(
         children: [
+          // Engine Status Indicator Banner
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 5),
+            color: aiProv.hasCustomApiKey
+                ? const Color(0xFFFEF3C7)
+                : const Color(0xFFF1F5F9),
+            child: Row(
+              children: [
+                Icon(
+                  aiProv.hasCustomApiKey
+                      ? Icons.bolt_rounded
+                      : Icons.cloud_done_rounded,
+                  size: 15,
+                  color: aiProv.hasCustomApiKey
+                      ? const Color(0xFFD97706)
+                      : AppTheme.primaryBlue,
+                ),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    aiProv.hasCustomApiKey
+                        ? 'Engine: Google Gemini 1.5 Flash (Vision OCR Aktif)'
+                        : 'Engine: Cloud AI Standar (Bebas Kuota, Tanpa API Key)',
+                    style: TextStyle(
+                      fontSize: 11,
+                      fontWeight: FontWeight.w600,
+                      color: aiProv.hasCustomApiKey
+                          ? const Color(0xFF92400E)
+                          : AppTheme.textDark,
+                    ),
+                  ),
+                ),
+                InkWell(
+                  onTap: () => _showApiKeyDialog(context),
+                  child: Text(
+                    aiProv.hasCustomApiKey ? 'Ubah' : 'Atur Gemini Key',
+                    style: const TextStyle(
+                      fontSize: 11,
+                      color: AppTheme.primaryBlue,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const Divider(height: 1, color: AppTheme.cardBorder),
+
           // Course Context Selector
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
@@ -153,7 +226,9 @@ class _AiAssistantScreenState extends State<AiAssistantScreen> {
                 Expanded(
                   child: DropdownButtonHideUnderline(
                     child: DropdownButton<String?>(
-                      value: aiProv.selectedCourseName,
+                      value: allCourses.contains(aiProv.selectedCourseName)
+                          ? aiProv.selectedCourseName
+                          : null,
                       isExpanded: true,
                       hint: const Text('Semua Mata Kuliah (Umum)', style: TextStyle(fontSize: 12)),
                       items: [
@@ -161,7 +236,7 @@ class _AiAssistantScreenState extends State<AiAssistantScreen> {
                           value: null,
                           child: Text('Semua Mata Kuliah (Umum)', style: TextStyle(fontSize: 12)),
                         ),
-                        ...courseList.map(
+                        ...allCourses.map(
                           (c) => DropdownMenuItem<String?>(
                             value: c,
                             child: Text(
@@ -640,6 +715,189 @@ class _AiAssistantScreenState extends State<AiAssistantScreen> {
           ],
         ],
       ),
+    );
+  }
+
+  void _showApiKeyDialog(BuildContext context) {
+    final aiProv = context.read<AiProvider>();
+    final controller = TextEditingController(text: aiProv.getGeminiApiKey());
+    bool obscure = true;
+    bool isSaving = false;
+    String? statusMessage;
+    bool? isSuccess;
+
+    showDialog(
+      context: context,
+      builder: (dialogCtx) {
+        return StatefulBuilder(
+          builder: (ctx, setDialogState) {
+            return AlertDialog(
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
+              title: const Row(
+                children: [
+                  Icon(Icons.vpn_key_rounded, color: AppTheme.accentGold, size: 22),
+                  SizedBox(width: 8),
+                  Text('Kunci API Gemini', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+                ],
+              ),
+              content: SingleChildScrollView(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.all(10),
+                      decoration: BoxDecoration(
+                        color: aiProv.hasCustomApiKey
+                            ? AppTheme.successGreen.withOpacity(0.12)
+                            : AppTheme.primaryLight.withOpacity(0.1),
+                        borderRadius: BorderRadius.circular(10),
+                      ),
+                      child: Row(
+                        children: [
+                          Icon(
+                            aiProv.hasCustomApiKey ? Icons.check_circle_rounded : Icons.info_outline_rounded,
+                            size: 18,
+                            color: aiProv.hasCustomApiKey ? AppTheme.successGreen : AppTheme.primaryBlue,
+                          ),
+                          const SizedBox(width: 8),
+                          Expanded(
+                            child: Text(
+                              aiProv.hasCustomApiKey
+                                  ? 'Mode Google Gemini 1.5 Flash Aktif (Vision OCR Aktif)'
+                                  : 'Mode Cloud AI Gratis Aktif (Bebas Kuota, Tanpa API Key)',
+                              style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w600),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                    const Text(
+                      'Gemini API Key gratis resmi dari Google memberikan kecepatan instan dan kemampuan membaca screenshot soal kuis.',
+                      style: TextStyle(fontSize: 12, color: AppTheme.textMuted, height: 1.4),
+                    ),
+                    const SizedBox(height: 8),
+                    InkWell(
+                      onTap: () async {
+                        final uri = Uri.parse('https://aistudio.google.com/app/apikey');
+                        if (await canLaunchUrl(uri)) {
+                          await launchUrl(uri, mode: LaunchMode.externalApplication);
+                        }
+                      },
+                      child: const Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(Icons.open_in_new_rounded, size: 14, color: AppTheme.primaryBlue),
+                          SizedBox(width: 4),
+                          Text(
+                            'Dapatkan API Key Gratis di Google AI Studio',
+                            style: TextStyle(
+                              fontSize: 12,
+                              color: AppTheme.primaryBlue,
+                              fontWeight: FontWeight.bold,
+                              decoration: TextDecoration.underline,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(height: 14),
+                    TextField(
+                      controller: controller,
+                      obscureText: obscure,
+                      style: const TextStyle(fontSize: 13),
+                      decoration: InputDecoration(
+                        labelText: 'Google Gemini API Key',
+                        hintText: 'Paste API Key di sini...',
+                        isDense: true,
+                        prefixIcon: const Icon(Icons.key_outlined, size: 18),
+                        suffixIcon: IconButton(
+                          icon: Icon(obscure ? Icons.visibility_off : Icons.visibility, size: 18),
+                          onPressed: () => setDialogState(() => obscure = !obscure),
+                        ),
+                        border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
+                      ),
+                    ),
+                    if (statusMessage != null) ...[
+                      const SizedBox(height: 8),
+                      Text(
+                        statusMessage!,
+                        style: TextStyle(
+                          fontSize: 11,
+                          fontWeight: FontWeight.w600,
+                          color: isSuccess == true ? AppTheme.successGreen : AppTheme.dangerRed,
+                        ),
+                      ),
+                    ],
+                  ],
+                ),
+              ),
+              actions: [
+                if (aiProv.hasCustomApiKey)
+                  TextButton(
+                    onPressed: isSaving
+                        ? null
+                        : () async {
+                            setDialogState(() => isSaving = true);
+                            await aiProv.removeGeminiApiKey();
+                            if (ctx.mounted) Navigator.pop(ctx);
+                          },
+                    child: const Text('Hapus Key', style: TextStyle(color: AppTheme.dangerRed)),
+                  ),
+                TextButton(
+                  onPressed: isSaving ? null : () => Navigator.pop(ctx),
+                  child: const Text('Tutup'),
+                ),
+                ElevatedButton(
+                  onPressed: isSaving
+                      ? null
+                      : () async {
+                          final text = controller.text.trim();
+                          if (text.isEmpty) {
+                            await aiProv.removeGeminiApiKey();
+                            if (ctx.mounted) Navigator.pop(ctx);
+                            return;
+                          }
+                          setDialogState(() {
+                            isSaving = true;
+                            statusMessage = 'Memverifikasi API Key ke Google...';
+                            isSuccess = null;
+                          });
+                          final ok = await aiProv.validateAndSaveApiKey(text);
+                          if (!ctx.mounted) return;
+                          setDialogState(() {
+                            isSaving = false;
+                            if (ok) {
+                              statusMessage = '✅ Kunci API Valid! Gemini 1.5 Flash Aktif.';
+                              isSuccess = true;
+                            } else {
+                              statusMessage = '❌ Kunci API tidak valid atau gagal terhubung.';
+                              isSuccess = false;
+                            }
+                          });
+                          if (ok) {
+                            await Future.delayed(const Duration(milliseconds: 700));
+                            if (ctx.mounted) Navigator.pop(ctx);
+                          }
+                        },
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: AppTheme.primaryBlue,
+                    foregroundColor: Colors.white,
+                  ),
+                  child: isSaving
+                      ? const SizedBox(
+                          width: 14,
+                          height: 14,
+                          child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+                        )
+                      : const Text('Simpan & Uji'),
+                ),
+              ],
+            );
+          },
+        );
+      },
     );
   }
 }

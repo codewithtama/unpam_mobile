@@ -13,16 +13,11 @@ Seluruh data disinkronkan secara langsung dengan server UNPAM menggunakan akun m
 
 ---
 
-## Fitur Utama
-
-- **Dashboard Akademik Real-Time**: Daftar mata kuliah semester berjalan, total SKS, jadwal hari kuliah, nama dosen, dan progress perkuliahan.
-- **Universal Cloudflare Clearance**: Mengatasi proteksi Cloudflare Challenge dan TLS Fingerprinting (JA3/JA4) via engine headless Chromium terintegrasi, mencegah error 403 Forbidden.
-- **Pengerjaan Kuis & Tugas In-App**: Membuka dan mengerjakan kuis, mengunggah penugasan, mengisi kuesioner, dan berpartisipasi dalam forum diskusi langsung di dalam aplikasi tanpa terlempar ke browser eksternal.
-- **Deteksi Otomatis Penyelesaian (Auto-Completion)**: Mendeteksi pengiriman jawaban atau form submit secara otomatis untuk memperbarui status penyelesaian tugas (`completion: true`) dan progress bar.
-- **Bahas Soal dengan AI (AI Assistant)**: Ekstraksi otomatis teks pertanyaan dan pilihan ganda dari tampilan kuis ke Asisten AI untuk pembahasan konsep materi dan panduan belajar.
-- **Sinkronisasi Data Cerdas & Dual Fallback**: Mendukung sinkronisasi data kelas melalui Sakura API, Mentari API, serta *Headless Sync Bridge* untuk mengekstrak 21 pertemuan dan daftar teman sekelas secara presisi.
-- **Offline Caching & Fast Loading**: Penyimpanan lokal untuk detail mata kuliah, pertemuan, dan riwayat tugas, memastikan aplikasi tetap responsif meskipun koneksi server kampus lambat.
-- **Pusat Tugas Tertunda (Pending Tasks)**: Agregasi seluruh tugas, kuis, dan forum dari seluruh mata kuliah yang belum diselesaikan dalam satu tampilan ringkas.
+## Fitur Utama- **Native Portal WebView Wrapper**: Membungkus portal resmi Mentari & Sakura secara langsung di dalam engine Chromium asli. Login, sesi SSO, cookie `httpOnly`, dan mitigasi Cloudflare Turnstile ditangani 100% oleh browser engine tanpa risiko kegagalan reverse engineering endpoint API kampus.
+- **Pengerjaan Kuis, Tugas, & Forum Asli**: Seluruh fitur kuis interaktif, upload berkas tugas, dan diskusi forum berjalan mulus sesuai rancangan web kampus dengan performa native.
+- **Deteksi Eksternal Pintar**: Otomatis mendeteksi dan mengarahkan link Google Meet, Zoom, WhatsApp dosen, serta unduhan dokumen ke aplikasi smartphone terkait.
+- **Bahas Soal dengan AI (AI Assistant)**: Ekstraksi teks pertanyaan langsung dari DOM layar web ke Asisten AI Gemini untuk pembahasan konsep materi, rumus, dan panduan belajar.
+- **Navigasi Cepat & Manajemen Riwayat**: Mendukung tombol back history peramban, pull-to-refresh, dan pengalihan instan antara Mentari Portal dan Sakura LMS.
 
 ---
 
@@ -33,42 +28,40 @@ Seluruh data disinkronkan secara langsung dengan server UNPAM menggunakan akun m
                                     |
           +-------------------------+-------------------------+
           |                                                   |
- [ ChromiumSessionService ]                              [ UI Screens ]
- (Headless WebView Engine)                                    |
-  - Cloudflare cf_clearance cookies              +------------+------------+
-  - In-engine fetch() bridge                     |                         |
-  - Session & Token Sync               [MentariActivityScreen]    [AiAssistantScreen]
-          |                            (In-App Task/Quiz Runner)   (AI Problem Solver)
-          v                                      |                         |
-  +-------+--------------------+                 +------------+------------+
-  v                            v                              v
-mentari.unpam.ac.id      sakura.unpam.ac.id             Google Gemini API
-(Auth, Course List)      (Detail 21 Pertemuan,          (Analisis & Pembahasan)
-                          Kuis, Tugas, Forum)
+ [ PortalWebViewScreen ]                                 [ AI Engine ]
+  (Native Chromium Shell)                                     |
+   - Mentari UNPAM (https://mentari.unpam.ac.id/)      [AiAssistantScreen]
+   - Sakura LMS (https://sakura.unpam.ac.id/)          (Multimodal & Context)
+   - Browser Cookie & Session Management                      |
+   - Cloudflare Turnstile Native Handling                     v
+   - History & External App Handler                   Google Gemini API
+          |
+          v
+  +-------+--------------------+
+  v                            v
+mentari.unpam.ac.id      sakura.unpam.ac.id
+(Portal Perkuliahan,     (LMS Kurikulum,
+ Sesi Mahasiswa, Tugas)   Kuis, & Ujian)
 ```
 
 ### Komponen Arsitektur:
 
 | Lapisan | File / Direktori | Fungsi Utama |
 |---|---|---|
-| **Engine Clearance** | `lib/core/services/chromium_session_service.dart` | Menjalankan request HTTP di dalam context browser Chromium dengan cookie aktif dan token Cloudflare clearance. |
-| **Jaringan & API** | `lib/core/network/api_client.dart` | Prioritas request via Chromium fetch bridge dengan fallback Dio REST API, validasi token, dan header host spesifik. |
-| **Penyimpanan Lokal** | `lib/core/services/storage_service.dart` | Pengelolaan cache detail kelas, token sesi JWT, profil mahasiswa, dan kredensial. |
-| **Kecerdasan Buatan** | `lib/core/services/ai_service.dart` | Integrasi model AI Gemini untuk asisten belajar, penjabaran materi, dan analisis soal kuis. |
-| **Manajemen State** | `lib/providers/` | `AuthProvider` (sesi dan validasi) & `CourseProvider` (kursus, pertemuan, pending tasks, offline state). |
-| **Aktivitas In-App** | `lib/screens/mentari_activity_screen.dart` | Browser interaktif WebView dengan DOM extractor, listener form submit, dan tombol Bahas Soal AI. |
-| **Sinkronisasi Bridge** | `lib/widgets/mentari_course_sync_sheet.dart` | BottomSheet interaktif & headless extractor untuk sinkronisasi 21 pertemuan dan peserta kelas. |
-| **Antarmuka (UI)** | `lib/screens/` & `lib/widgets/` | Dashboard, Detail Pertemuan, Dialog Kuis, Kartu Mata Kuliah, dan Pengaturan Profil. |
+| **Portal Wrapper Shell** | `lib/screens/portal_webview_screen.dart` | Antarmuka utama membungkus Mentari & Sakura dalam WebView dengan navigasi, history back, pull-to-refresh, dan quick switcher. |
+| **Kecerdasan Buatan** | `lib/core/services/ai_service.dart` & `lib/providers/ai_provider.dart` | Integrasi model AI Gemini untuk konsultasi belajar, penjabaran materi, dan analisis soal kuis. |
+| **Layar Asisten AI** | `lib/screens/ai_assistant_screen.dart` | Ruang konsultasi belajar dengan kemampuan menerima teks soal yang diekstrak langsung dari layar web. |
+| **Penyimpanan Lokal** | `lib/core/services/storage_service.dart` | Pengelolaan kunci API Gemini, pengaturan cache, dan preferensi aplikasi. |
+| **Profil & Edit Mahasiswa** | `lib/screens/profile_screen.dart` | Kartu Tanda Mahasiswa (KTM) Digital UNPAM dan formulir interaktif edit profil mahasiswa (Nama, NIM, Prodi, Fakultas, Kelas, Shift, Semester, Email, No. HP). |
 
 ---
 
-## Mekanisme Cloudflare Bypass
+## Mekanisme Cloudflare & Session Handling
 
 Server LMS UNPAM (Mentari & Sakura) dilindungi oleh **Cloudflare Managed Challenge** dan proteksi bot yang memvalidasi TLS fingerprinting:
-1. Permintaan langsung melalui client HTTP murni (seperti Dio, cURL, atau HttpClient biasa) akan diblokir dengan status `HTTP 403 Forbidden` (`cf-mitigated: challenge`).
-2. **Solusi UNPAM LMS Mobile:** Aplikasi menginisialisasi `ChromiumSessionService` yang terpasang di root aplikasi (`main.dart`). Engine ini mempertahankan cookie sesi resmi dan token `cf_clearance` di dalam native `CookieManager`.
-3. Seluruh panggilan data penting (`getUserCourses` dan `getCourseDetail`) dieksekusi melalui evaluasi JavaScript `fetch()` di dalam context Chromium yang telah tervalidasi, sehingga request dikenali sebagai interaksi peramban sah.
-4. Tersedia tombol sinkronisasi visual (`MentariCourseSyncSheet`) sebagai lapisan fallback jika server menuntut verifikasi visual Turnstile interaktif.
+1. Melakukan reverse engineering terhadap REST API kampus rentan terblokir status `HTTP 403 Forbidden` (`cf-mitigated: challenge`) dan perubahan skema payload.
+2. **Solusi Portal WebView Wrapper:** Aplikasi memanfaatkan WebView Chromium native. Browser engine secara langsung mengeksekusi JavaScript, memvalidasi Turnstile token, serta menyimpan cookie sesi (`cf_clearance`, `session`, JWT) di persistent storage native.
+3. Seluruh interaksi login, kuis, dan pengumpulan tugas bekerja 100% identik dengan portal resmi tanpa perlu reverse engineering.f.
 
 ---
 
@@ -90,42 +83,30 @@ Aplikasi menyediakan dua metode masuk:
 
 ```text
 unpam_mobile/
+├── android/
+├── assets/
 ├── lib/
 │   ├── core/
 │   │   ├── constants/
 │   │   │   └── api_constants.dart
-│   │   ├── network/
-│   │   │   ├── api_client.dart
-│   │   │   └── api_exception.dart
-│   │   ├── services/
-│   │   │   ├── ai_service.dart
-│   │   │   ├── chromium_session_service.dart
-│   │   │   └── storage_service.dart
-│   │   └── telemetry/
-│   │       └── ...
+│   │   └── services/
+│   │       ├── ai_service.dart
+│   │       └── storage_service.dart
 │   ├── models/
-│   │   ├── course_detail_model.dart
-│   │   └── user_course_model.dart
+│   │   ├── ai_message_model.dart
+│   │   └── student_profile_model.dart
 │   ├── providers/
-│   │   ├── auth_provider.dart
-│   │   └── course_provider.dart
+│   │   ├── ai_provider.dart
+│   │   └── auth_provider.dart
 │   ├── screens/
 │   │   ├── ai_assistant_screen.dart
-│   │   ├── all_pending_tasks_screen.dart
-│   │   ├── course_detail_screen.dart
-│   │   ├── home_screen.dart
-│   │   ├── login_screen.dart
-│   │   ├── mentari_activity_screen.dart
-│   │   ├── mentari_web_login_screen.dart
+│   │   ├── portal_webview_screen.dart
 │   │   └── profile_screen.dart
 │   ├── theme/
 │   │   └── app_theme.dart
-│   ├── widgets/
-│   │   ├── course_card.dart
-│   │   ├── mentari_course_sync_sheet.dart
-│   │   ├── quiz_dialog.dart
-│   │   └── sub_section_tile.dart
 │   └── main.dart
+├── test/
+│   └── widget_test.dart
 ├── pubspec.yaml
 └── README.md
 ```

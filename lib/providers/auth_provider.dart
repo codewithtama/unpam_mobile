@@ -1,53 +1,31 @@
 import 'package:flutter/material.dart';
 import '../core/services/storage_service.dart';
-import '../core/network/api_client.dart';
-
-import '../models/user_course_model.dart';
+import '../models/student_profile_model.dart';
 
 class AuthProvider extends ChangeNotifier {
   final StorageService _storage;
-  final ApiClient _apiClient;
+  late StudentProfile _profile;
 
-  bool _isLoading = false;
-  String? _errorMessage;
-
-  AuthProvider(this._storage, this._apiClient);
-
-  bool get isLoading => _isLoading;
-  String? get errorMessage => _errorMessage;
-  bool get isLoggedIn => _storage.hasToken;
-  String get studentNim => _storage.getNim();
-  String get studentName {
-    final name = _storage.getStudentName();
-    return name.isNotEmpty ? name : _storage.getNim();
+  AuthProvider(this._storage) {
+    _profile = _storage.getStudentProfile();
   }
 
-  Future<bool> loginWithToken(
-    String token, {
-    String? cookies,
-    UserCourseResponse? preloadCourses,
-  }) async {
-    _isLoading = true;
-    _errorMessage = null;
-    notifyListeners();
+  StudentProfile get profile => _profile;
+  String get studentNim => _profile.nim;
+  String get studentName => _profile.name;
+  bool get isLoggedIn => _storage.hasToken || _profile.nim.isNotEmpty;
 
-    try {
-      await _apiClient.loginWithToken(
-        token,
-        cookies: cookies,
-        preloadCourses: preloadCourses,
-      );
-      return true;
-    } on ApiException catch (e) {
-      _errorMessage = e.message;
-      return false;
-    } catch (e) {
-      _errorMessage = 'Terjadi kesalahan autentikasi: $e';
-      return false;
-    } finally {
-      _isLoading = false;
-      notifyListeners();
-    }
+  Future<void> updateProfile(StudentProfile updated) async {
+    _profile = updated;
+    await _storage.saveStudentProfile(updated);
+    notifyListeners();
+  }
+
+  Future<void> resetProfileToDefault() async {
+    const defaultProfile = StudentProfile();
+    _profile = defaultProfile;
+    await _storage.saveStudentProfile(defaultProfile);
+    notifyListeners();
   }
 
   Future<void> logout() async {

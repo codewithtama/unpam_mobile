@@ -117,6 +117,25 @@ class AiProvider extends ChangeNotifier {
     notifyListeners();
   }
 
+  Future<bool> validateAndSaveApiKey(String key) async {
+    final clean = key.trim();
+    if (clean.isEmpty) {
+      await removeGeminiApiKey();
+      return true;
+    }
+    final valid = await _aiService.validateGeminiApiKey(clean);
+    if (valid) {
+      await _storage.saveGeminiApiKey(clean);
+      notifyListeners();
+    }
+    return valid;
+  }
+
+  Future<void> removeGeminiApiKey() async {
+    await _storage.saveGeminiApiKey('');
+    notifyListeners();
+  }
+
   String getGeminiApiKey() {
     return _storage.getGeminiApiKey() ?? '';
   }

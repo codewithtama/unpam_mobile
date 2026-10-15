@@ -13,14 +13,45 @@ class AiService {
 
   AiService(this._storage) {
     _dio.options = BaseOptions(
-      connectTimeout: const Duration(seconds: 20),
-      receiveTimeout: const Duration(seconds: 25),
+      connectTimeout: const Duration(seconds: 25),
+      receiveTimeout: const Duration(seconds: 35),
       headers: {'Content-Type': 'application/json'},
     );
   }
 
-  /// Memproses prompt mahasiswa: jika ada API key Gemini dan belum kena cooldown rate-limit,
-  /// panggil Gemini API; jika tidak ada atau kena rate-limit, gunakan built-in domain engine.
+  /// Memvalidasi Gemini API Key dengan memanggil model list atau ping ringan
+  Future<bool> validateGeminiApiKey(String key) async {
+    final cleanKey = key.trim();
+    if (cleanKey.isEmpty) return false;
+
+    final url =
+        'https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=$cleanKey';
+
+    try {
+      final res = await _dio.post<Map<String, dynamic>>(
+        url,
+        data: {
+          'contents': [
+            {
+              'parts': [
+                {'text': 'Ping'}
+              ]
+            }
+          ],
+          'generationConfig': {
+            'maxOutputTokens': 5,
+          }
+        },
+      );
+      return res.statusCode == 200;
+    } catch (_) {
+      return false;
+    }
+  }
+
+  /// Memproses prompt mahasiswa secara cerdas menggunakan Real LLM Engine:
+  /// 1. Jika ada Gemini API Key: gunakan Google Gemini 1.5/2.0 Flash (Multimodal OCR gambar + teks).
+  /// 2. Jika tidak ada Gemini API Key atau terkena limit: gunakan Cloud AI Engine (OpenAI/LLaMA) untuk menghasilkan jawaban asli, BUKAN template statis.
   Future<AiMessage> askAssistant({
     required String prompt,
     String? courseName,
@@ -32,7 +63,7 @@ class AiService {
     final hasImage = imageBytes != null && imageBytes.isNotEmpty;
     final cacheKey = '${courseName ?? "all"}_${cleanPrompt.toLowerCase()}';
 
-    // 1. Cek Cache Lokal jika teks saja (Hemat 100% token & cegah redundansi API call)
+    // 1. Cek Cache jika teks saja (hemat waktu & token)
     if (!hasImage && _cache.containsKey(cacheKey)) {
       final cached = _cache[cacheKey]!;
       return AiMessage(
@@ -47,11 +78,10 @@ class AiService {
     }
 
     final apiKey = _storage.getGeminiApiKey();
-
-    // 2. Proteksi Cooldown Rate-Limit: jika barusan kena 429, jangan spam ke Google
     final now = DateTime.now();
     final inCooldown = _rateLimitedUntil != null && now.isBefore(_rateLimitedUntil!);
 
+    // JIKA USER MENYEDIAKAN GEMINI API KEY & TIDAK COOLDOWN
     if (apiKey != null && apiKey.isNotEmpty && !inCooldown) {
       try {
         final result = await _askGemini(
@@ -66,39 +96,99 @@ class AiService {
       } on DioException catch (e) {
         final code = e.response?.statusCode;
         if (code == 429) {
-          // Cooldown 60 detik agar tidak membakar limit akun
-          _rateLimitedUntil = now.add(const Duration(minutes: 1));
+          _rateLimitedUntil = now.add(const Duration(seconds: 45));
+          // Fallback ke Cloud AI jika bukan gambar
+          if (!hasImage) {
+            return await _askFreeCloudAi(
+              prompt: cleanPrompt,
+              courseName: courseName,
+              rateLimitNotice:
+                  '⚠️ *Batas kuota Gemini (Rate Limit 429) tercapai. Asisten otomatis beralih ke Cloud AI untuk menjawab soal Anda.*\n\n',
+            );
+          } else {
+            return AiMessage(
+              id: DateTime.now().millisecondsSinceEpoch.toString(),
+              content:
+                  '⚠️ Kuota request Google Gemini API Anda mencapai batas harian / menit (Rate Limit 429). Mohon tunggu sekitar 1 menit sebelum mengirim gambar kembali.',
+              isUser: false,
+              timestamp: DateTime.now(),
+              relatedCourseName: courseName,
+            );
+          }
+        } else if (code == 400 || code == 403) {
+          return AiMessage(
+            id: DateTime.now().millisecondsSinceEpoch.toString(),
+            content:
+                '❌ **API Key Google Gemini Tidak Valid / Akses Ditolak ($code)**\n\n'
+                'Google menolak kunci API yang tersimpan. Silakan periksa kembali API Key Anda melalui tombol kunci 🔑 di pojok kanan atas.',
+            isUser: false,
+            timestamp: DateTime.now(),
+            relatedCourseName: courseName,
+          );
         }
-        return _generateDomainResponse(
-          prompt: cleanPrompt,
-          courseName: courseName,
-          hasImage: hasImage,
-          rateLimitNote: code == 429
-              ? '⚠️ *Batas kuota Gemini (Rate Limit 429) tercapai. Asisten dialihkan sementara ke engine cerdas UNPAM offline untuk melindungi kuota Anda.*'
-              : null,
-        );
-      } catch (_) {
-        return _generateDomainResponse(
-          prompt: cleanPrompt,
-          courseName: courseName,
-          hasImage: hasImage,
+
+        // Jika error jaringan lain pada Gemini, fallback ke Cloud AI
+        if (!hasImage) {
+          return await _askFreeCloudAi(
+            prompt: cleanPrompt,
+            courseName: courseName,
+          );
+        } else {
+          return AiMessage(
+            id: DateTime.now().millisecondsSinceEpoch.toString(),
+            content:
+                'Gagal menghubungi server Gemini (${e.message}). Pastikan koneksi internet Anda stabil.',
+            isUser: false,
+            timestamp: DateTime.now(),
+            relatedCourseName: courseName,
+          );
+        }
+      } catch (e) {
+        if (!hasImage) {
+          return await _askFreeCloudAi(
+            prompt: cleanPrompt,
+            courseName: courseName,
+          );
+        }
+        return AiMessage(
+          id: DateTime.now().millisecondsSinceEpoch.toString(),
+          content: 'Terjadi kendala saat menganalisis gambar: $e',
+          isUser: false,
+          timestamp: DateTime.now(),
+          relatedCourseName: courseName,
         );
       }
     }
 
-    // Default mode: Intelligent UNPAM Campus Engine
-    final result = _generateDomainResponse(
+    // JIKA TIDAK ADA GEMINI API KEY
+    // Jika melampirkan gambar tanpa Gemini API Key:
+    if (hasImage) {
+      return AiMessage(
+        id: DateTime.now().millisecondsSinceEpoch.toString(),
+        content:
+            '📷 **Screenshot Gambar Diterima**\n\n'
+            'Untuk membaca dan menganalisis soal kuis langsung dari screenshot gambar dengan Google Vision AI, silakan masukkan **Google Gemini API Key** Anda.\n\n'
+            'API Key ini **100% Gratis** resmi dari Google:\n'
+            '1. Ketuk tombol kunci 🔑 di pojok kanan atas layar ini.\n'
+            '2. Buka link Google AI Studio dan salin API Key Anda.\n'
+            '3. Tempel dan simpan di aplikasi.\n\n'
+            '*Catatan: Untuk pertanyaan berupa teks atau soal yang diekstrak langsung dari web portal, Anda dapat langsung bertanya tanpa memerlukan API Key!*',
+        isUser: false,
+        timestamp: DateTime.now(),
+        relatedCourseName: courseName,
+      );
+    }
+
+    // Eksekusi Real Cloud AI (Zero Setup, Real Answers)
+    final result = await _askFreeCloudAi(
       prompt: cleanPrompt,
       courseName: courseName,
-      hasImage: hasImage,
-      rateLimitNote: inCooldown
-          ? '⏳ *Gemini API dalam masa cooldown hemat kuota. Menggunakan engine cerdas UNPAM offline.*'
-          : null,
     );
-    if (!hasImage) _cache[cacheKey] = result;
+    _cache[cacheKey] = result;
     return result;
   }
 
+  /// Engine Google Gemini 1.5 Flash (Resmi Google AI)
   Future<AiMessage> _askGemini({
     required String apiKey,
     required String prompt,
@@ -110,12 +200,12 @@ class AiService {
         'https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=$apiKey';
 
     final systemPrompt =
-        'Anda adalah "UNPAM AI Study Assistant", asisten akademik cerdas untuk mahasiswa Universitas Pamulang. '
-        'Bantu mahasiswa memahami materi kuliah, rangkuman pertemuan, persiapan kuis, dan tugas pemrograman. '
-        'Bahasa: Bahasa Indonesia yang ramah, jelas, ringkas, terstruktur, dan edukatif. '
-        'Jika terdapat gambar lampiran (screenshot kuis/soal), baca teks soal pada gambar secara teliti, tentukan jawaban yang benar, dan berikan pembahasan yang jelas. '
-        'Jika pengguna meminta kuis/latihan soal teks, sertakan 3 soal pilihan ganda di akhir dengan format JSON khusus dalam tag ```json_quiz [{"question": "...", "options": ["A. ...", "B. ...", "C. ...", "D. ..."], "correctIndex": 0, "explanation": "..."}] ```. '
-        'Konteks mata kuliah saat ini: ${courseName ?? "Umum / Teknik Informatika"}.';
+        'Anda adalah UNPAM AI Study Assistant, asisten akademik cerdas untuk mahasiswa Universitas Pamulang. '
+        'Jawab pertanyaan atau tugas mahasiswa secara tepat, mendalam, akurat, to-the-point, dan edukatif dalam Bahasa Indonesia yang profesional dan ramah. '
+        'Jika pertanyaan adalah soal kuis pilihan ganda, sebutkan opsi jawaban yang benar secara tegas di awal, kemudian berikan pembahasan rasional dan konsep dasarnya. '
+        'Jika pertanyaan adalah tugas pemrograman, berikan kode solusi yang bersih, modular, aman, dan siap dijalankan beserta penjelasannya. '
+        'Jika pengguna meminta latihan soal/kuis, sertakan 2-3 soal pilihan ganda di akhir dengan format JSON khusus dalam tag ```json_quiz [{"question": "...", "options": ["A. ...", "B. ...", "C. ...", "D. ..."], "correctIndex": 0, "explanation": "..."}] ```. '
+        'Konteks Mata Kuliah: ${courseName ?? "Umum / Universitas Pamulang"}.';
 
     final List<Map<String, dynamic>> parts = [];
     if (imageBytes != null && imageBytes.isNotEmpty) {
@@ -129,8 +219,8 @@ class AiService {
 
     parts.add({
       'text': '$systemPrompt\n\n'
-          '${imageBytes != null ? "Perintah OCR Vision: Bacalah teks dan soal pada screenshot gambar di atas secara teliti. Berikan jawaban yang tepat dan pembahasan rasionalnya.\n\n" : ""}'
-          'Pertanyaan / Permintaan Mahasiswa:\n$prompt'
+          '${imageBytes != null ? "Perintah OCR Vision: Bacalah teks soal, pilihan opsi, atau instruksi pada gambar screenshot ini secara teliti. Berikan jawaban yang tepat dan analisis pembahasannya.\n\n" : ""}'
+          'Pertanyaan / Teks Mahasiswa:\n$prompt'
     });
 
     final body = {
@@ -138,8 +228,8 @@ class AiService {
         {'parts': parts}
       ],
       'generationConfig': {
-        'temperature': 0.6,
-        'maxOutputTokens': 1000,
+        'temperature': 0.4,
+        'maxOutputTokens': 1800,
       }
     };
 
@@ -160,9 +250,81 @@ class AiService {
     }
 
     final text = candidates.first['content']?['parts']?[0]?['text']?.toString() ??
-        'Tidak ada respons.';
+        'Tidak ada respons dari model.';
 
-    // Check if JSON quiz is embedded
+    return _parseQuizAndBuildMessage(text, courseName);
+  }
+
+  /// Engine Real Cloud LLM (OpenAI / LLaMA) Bebas API Key
+  Future<AiMessage> _askFreeCloudAi({
+    required String prompt,
+    String? courseName,
+    String? rateLimitNotice,
+  }) async {
+    final systemPrompt =
+        'Anda adalah UNPAM AI Study Assistant, asisten akademik cerdas untuk mahasiswa Universitas Pamulang. '
+        'Jawab pertanyaan atau tugas mahasiswa secara tepat, to-the-point, akurat, dan edukatif dalam Bahasa Indonesia. '
+        'Jika pertanyaan adalah soal kuis pilihan ganda, sebutkan opsi jawaban yang benar beserta penjelasan lengkapnya. '
+        'Jika pertanyaan berupa tugas pemrograman, sertakan contoh kode yang benar dan penjelasannya. '
+        'Jangan memberikan jawaban template kosong atau jawaban umum yang tidak berhubungan. Jawablah langsung sesuai pertanyaan yang diajukan. '
+        'Konteks mata kuliah saat ini: ${courseName ?? "Umum Universitas Pamulang"}.';
+
+    try {
+      final response = await _dio.post<dynamic>(
+        'https://text.pollinations.ai/',
+        data: {
+          'messages': [
+            {'role': 'system', 'content': systemPrompt},
+            {'role': 'user', 'content': prompt}
+          ],
+          'model': 'openai',
+          'jsonMode': false,
+        },
+        options: Options(
+          sendTimeout: const Duration(seconds: 20),
+          receiveTimeout: const Duration(seconds: 30),
+        ),
+      );
+
+      final rawData = response.data?.toString() ?? '';
+      if (rawData.trim().isNotEmpty) {
+        final content = rateLimitNotice != null ? '$rateLimitNotice$rawData' : rawData;
+        return _parseQuizAndBuildMessage(content, courseName);
+      }
+    } catch (_) {
+      // Fallback ke GET endpoint jika POST mengalami kendala
+      try {
+        final query = '$systemPrompt\n\nPertanyaan: $prompt';
+        final getUrl = 'https://text.pollinations.ai/${Uri.encodeComponent(query.substring(0, query.length.clamp(0, 1500)))}';
+        final res = await _dio.get<dynamic>(getUrl);
+        final rawData = res.data?.toString() ?? '';
+        if (rawData.trim().isNotEmpty) {
+          final content = rateLimitNotice != null ? '$rateLimitNotice$rawData' : rawData;
+          return _parseQuizAndBuildMessage(content, courseName);
+        }
+      } catch (err) {
+        return AiMessage(
+          id: DateTime.now().millisecondsSinceEpoch.toString(),
+          content:
+              'Tidak dapat memuat jawaban dari server AI ($err). Pastikan perangkat Anda terhubung ke internet, atau gunakan API Key Gemini Anda sendiri untuk koneksi langsung.',
+          isUser: false,
+          timestamp: DateTime.now(),
+          relatedCourseName: courseName,
+        );
+      }
+    }
+
+    return AiMessage(
+      id: DateTime.now().millisecondsSinceEpoch.toString(),
+      content:
+          'Maaf, server AI saat ini sedang sibuk. Silakan ulangi pertanyaan Anda atau masukkan Google Gemini API Key Anda untuk prioritas akses instan.',
+      isUser: false,
+      timestamp: DateTime.now(),
+      relatedCourseName: courseName,
+    );
+  }
+
+  AiMessage _parseQuizAndBuildMessage(String text, String? courseName) {
     List<QuizItem>? quizItems;
     final quizRegex = RegExp(r'```json_quiz\s*([\s\S]*?)\s*```');
     final match = quizRegex.firstMatch(text);
@@ -188,190 +350,5 @@ class AiService {
       quizItems: quizItems,
       relatedCourseName: courseName,
     );
-  }
-
-  /// Engine bawaan cerdas & interaktif yang siap pakai tanpa harus bayar / input API key.
-  AiMessage _generateDomainResponse({
-    required String prompt,
-    String? courseName,
-    String? rateLimitNote,
-    bool hasImage = false,
-  }) {
-    final lower = prompt.toLowerCase();
-    final course = courseName ?? 'Mata Kuliah Terpilih';
-    final imageNote = hasImage
-        ? '📷 *Screenshot Layar Diterima:*\n'
-        : '';
-    final prefix = rateLimitNote != null ? '$rateLimitNote\n\n$imageNote' : imageNote;
-
-    // 1. Kuis / Latihan Soal
-    if (lower.contains('kuis') || lower.contains('soal') || lower.contains('test') || lower.contains('pretest') || hasImage) {
-      final quizItems = _buildSimulatedQuiz(course);
-      return AiMessage(
-        id: DateTime.now().millisecondsSinceEpoch.toString(),
-        content: '${prefix}Berikut latihan soal adaptif untuk mata kuliah **$course** guna persiapan kuis/ujian Anda. Pilih jawaban langsung di bawah untuk melihat pembahasan otomatis:',
-        isUser: false,
-        timestamp: DateTime.now(),
-        type: AiMessageType.quiz,
-        quizItems: quizItems,
-        relatedCourseName: course,
-      );
-    }
-
-    // 2. Rangkuman Materi
-    if (lower.contains('rangkum') || lower.contains('ringkas') || lower.contains('materi')) {
-      return AiMessage(
-        id: DateTime.now().millisecondsSinceEpoch.toString(),
-        content: '''$prefix📌 **Rangkuman Esensial: $course**
-
-Berikut intisari materi utama dan konsep kunci yang sering diujikan pada sesi perkuliahan ini:
-
-1. **Konsep Fondasi**:
-   - Memahami arsitektur inti dan metodologi penyelesaian masalah berbasis modul terstruktur.
-   - Pemisahan tanggung jawab (*Separation of Concerns*) antara data model, logika bisnis, dan antarmuka.
-
-2. **Poin-Poin Kunci yang Harus Diingat**:
-   - Aturan sintaksis dan prinsip desain standar industri (*Clean Architecture*).
-   - Penanganan error runtime melalui validasi input awal (*Fail-Fast Principle*).
-   - Penggunaan struktur data efisien untuk meminimalkan kompleksitas waktu (Big-O).
-
-3. **Tips Menghadapi Kuis & Forum**:
-   - Gunakan argumentasi yang didukung contoh kasus nyata saat mengisi forum diskusi.
-   - Teliti batasan waktu pengerjaan kuis di portal Sakura sebelum menekan tombol Mulai.
-
-💡 *Butuh latihan soal atau contoh kasus praktis untuk materi ini? Coba tanyakan "Buatkan kuis latihan untuk $course"!*''',
-        isUser: false,
-        timestamp: DateTime.now(),
-        type: AiMessageType.summary,
-        relatedCourseName: course,
-      );
-    }
-
-    // 3. Draft Forum Diskusi
-    if (lower.contains('forum') || lower.contains('diskusi') || lower.contains('tanggapan')) {
-      return AiMessage(
-        id: DateTime.now().millisecondsSinceEpoch.toString(),
-        content: '''$prefix💬 **Draft Tanggapan Forum Diskusi LMS**
-*Mata Kuliah: $course*
-
----
-**Salam Bapak/Ibu Dosen dan Rekan-Rekan Mahasiswa,**
-
-Izin menyampaikan tanggapan dan pandangan saya terkait topik perkuliahan pada pertemuan ini:
-
-Berdasarkan modul pembelajaran yang telah dipelajari, implementasi konsep ini memberikan solusi efisien terhadap kendala skalabilitas dan keterbacaan program. Dalam penerapannya di lingkungan industri, pendekatan modular memudahkan proses *debugging*, meningkatkan pemeliharaan kode (*maintainability*), serta meminimalkan redundansi data.
-
-Sebagai contoh implementasi nyata, pembagian layer controller dan repository memungkinkan pengujian unit (*unit testing*) secara terisolasi tanpa mempengaruhi ketergantungan layer lain.
-
-Demikian tanggapan dari saya, mohon arahan dan masukan dari Bapak/Ibu Dosen serta rekan-rekan sekalian. Terima kasih.
----
-
-📋 *Anda dapat menyalin draft ini dan menyesuaikannya dengan studi kasus spesifik di modul pertemuan Anda.*''',
-        isUser: false,
-        timestamp: DateTime.now(),
-        type: AiMessageType.discussionDraft,
-        relatedCourseName: course,
-      );
-    }
-
-    // 4. Bantuan Kode / Pemrograman
-    if (lower.contains('kode') || lower.contains('code') || lower.contains('fungsi') || lower.contains('class') || lower.contains('coding')) {
-      return AiMessage(
-        id: DateTime.now().millisecondsSinceEpoch.toString(),
-        content: '''$prefix💻 **Panduan Implementasi Kode Bersih ($course)**
-
-Berikut contoh struktur implementasi pola arsitektur yang aman dan efisien:
-
-```dart
-// Contoh penerapan State Management & Error Handling yang tangguh
-class AcademicRepository {
-  Future<List<String>> fetchCourseModules(String courseId) async {
-    try {
-      // 1. Validasi parameter input
-      if (courseId.trim().isEmpty) {
-        throw ArgumentError('Course ID tidak boleh kosong.');
-      }
-      
-      // 2. Simulasi eksekusi I/O dengan timeout
-      final result = await Future.delayed(
-        const Duration(milliseconds: 400),
-        () => ['Pertemuan 1: Pengantar', 'Pertemuan 2: Teori Dasar'],
-      );
-      
-      return result;
-    } catch (e) {
-      // Selalu log context error dan lempar typed exception
-      throw Exception('Gagal memuat modul untuk \$courseId: \$e');
-    }
-  }
-}
-```
-
-**Karakteristik penting:**
-- Validasi awal (*guard clauses*) untuk mencegah nilai `null` atau `empty`.
-- Penanganan pengecualian bertipe (*typed exception*).
-- Hindari hardcode konfigurasi; pisahkan dalam kelas konstanta.''',
-        isUser: false,
-        timestamp: DateTime.now(),
-        type: AiMessageType.text,
-        relatedCourseName: course,
-      );
-    }
-
-    // 5. Default Academic Advice
-    return AiMessage(
-      id: DateTime.now().millisecondsSinceEpoch.toString(),
-      content: '''${prefix}Halo! Saya **UNPAM AI Study Assistant** siap membantu studi Anda di Universitas Pamulang.
-
-Saya dapat membantu Anda dalam:
-• 📝 **Latihan Kuis & Soal**: Coba ketik *"Buat kuis latihan untuk $course"*
-• 📚 **Rangkum Materi**: Coba ketik *"Rangkum materi utama $course"*
-• 💬 **Draft Forum Diskusi**: Coba ketik *"Buatkan draft jawaban forum diskusi"*
-• 💡 **Penjelasan Konsep**: Tanyakan teori, algoritma, atau konsep kuliah yang ingin Anda pahami lebih dalam.
-
-Silakan pilih topik cepat di bawah atau tulis pertanyaan Anda secara spesifik!''',
-      isUser: false,
-      timestamp: DateTime.now(),
-      type: AiMessageType.text,
-      relatedCourseName: course,
-    );
-  }
-
-  List<QuizItem> _buildSimulatedQuiz(String course) {
-    return [
-      QuizItem(
-        question: 'Dalam pengembangan aplikasi berorientasi objek di $course, apa tujuan utama penerapan enkapsulasi (*encapsulation*)?',
-        options: [
-          'Menyembunyikan detail implementasi internal dan melindungi integritas state data objek',
-          'Membuat semua variabel dapat diakses secara publik dari file manapun',
-          'Mempercepat proses kompilasi tanpa perlu pembuatan getter atau setter',
-          'Menggabungkan semua fungsi menjadi satu fungsi global raksasa',
-        ],
-        correctIndex: 0,
-        explanation: 'Enkapsulasi membungkus data dan metode ke dalam satu unit, membatasi akses langsung dari luar objek untuk mencegah manipulasi data yang tidak valid.',
-      ),
-      QuizItem(
-        question: 'Manakah prinsip penanganan error yang direkomendasikan saat mengakses REST API atau Database?',
-        options: [
-          'Menggunakan blok catch kosong agar aplikasi tidak menampilkan pesan error',
-          'Menerapkan timeout, try-catch bertipe, dan memberikan feedback jelas kepada user',
-          'Membiarkan aplikasi crash jika koneksi internet terputus',
-          'Menyimpan token autentikasi di URL query parameter secara terbuka',
-        ],
-        correctIndex: 1,
-        explanation: 'Penanganan error yang baik wajib menangani timeout, menangkap exception secara spesifik, dan menampilkan pesan yang ramah pengguna.',
-      ),
-      QuizItem(
-        question: 'Apa fungsi utama status "Completion" pada setiap sub-section di LMS Sakura UNPAM?',
-        options: [
-          'Menghapus materi dari server pusat setelah selesai dibaca',
-          'Mencatat ketercapaian dan pemenuhan syarat kelulusan absensi aktivitas mahasiswa',
-          'Mengirimkan email otomatis ke seluruh dosen fakultas',
-          'Mengunci mahasiswa agar tidak dapat mengakses pertemuan berikutnya',
-        ],
-        correctIndex: 1,
-        explanation: 'Completion di LMS mencatat keikutsertaan mahasiswa dalam mengakses materi, menyelesaikan kuis, atau mengirimkan tugas pada pertemuan terkait.',
-      ),
-    ];
   }
 }
