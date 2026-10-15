@@ -33,6 +33,8 @@ class _PortalWebViewScreenState extends State<PortalWebViewScreen> {
   String _currentUrl = '';
   bool _canGoBack = false;
   DateTime? _lastBackPressTime;
+  Offset? _fabOffset;
+  bool _isDraggingFab = false;
 
   static const String mentariUrl = 'https://mentari.unpam.ac.id/';
   static const String sakuraUrl = 'https://sakura.unpam.ac.id/';
@@ -247,90 +249,170 @@ class _PortalWebViewScreenState extends State<PortalWebViewScreen> {
                 valueColor: const AlwaysStoppedAnimation<Color>(AppTheme.accentGold),
               ),
 
-            // Konten Utama: WebView atau Error Fallback
+            // Konten Utama: WebView atau Error Fallback & Draggable AI Button
             Expanded(
-              child: Stack(
-                children: [
-                  RefreshIndicator(
-                    onRefresh: () async {
-                      await _controller.reload();
-                    },
-                    child: WebViewWidget(controller: _controller),
-                  ),
+              child: LayoutBuilder(
+                builder: (context, constraints) {
+                  const double buttonWidth = 210.0;
+                  const double buttonHeight = 44.0;
+                  final double maxW = constraints.maxWidth;
+                  final double maxH = constraints.maxHeight;
 
-                  // Tampilan Offline / Gagal Muat
-                  if (_hasError)
-                    Container(
-                      color: Colors.white,
-                      width: double.infinity,
-                      height: double.infinity,
-                      padding: const EdgeInsets.all(28),
-                      child: Column(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          Container(
-                            padding: const EdgeInsets.all(20),
-                            decoration: BoxDecoration(
-                              color: Colors.red.shade50,
-                              shape: BoxShape.circle,
-                            ),
-                            child: Icon(Icons.wifi_off_rounded, size: 52, color: Colors.red.shade400),
-                          ),
-                          const SizedBox(height: 18),
-                          const Text(
-                            'Gagal Memuat Halaman',
-                            style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: AppTheme.textDark),
-                          ),
-                          const SizedBox(height: 8),
-                          Text(
-                            _errorMessage.isNotEmpty ? _errorMessage : 'Periksa koneksi internet Anda atau coba muat ulang.',
-                            textAlign: TextAlign.center,
-                            style: const TextStyle(fontSize: 13, color: AppTheme.textMuted),
-                          ),
-                          const SizedBox(height: 24),
-                          Wrap(
-                            spacing: 12,
-                            runSpacing: 10,
-                            alignment: WrapAlignment.center,
+                  _fabOffset ??= Offset(
+                    (maxW - buttonWidth - 16.0).clamp(8.0, maxW),
+                    (maxH - buttonHeight - 16.0).clamp(8.0, maxH),
+                  );
+
+                  final safeX = _fabOffset!.dx.clamp(8.0, (maxW - buttonWidth - 8.0).clamp(8.0, maxW));
+                  final safeY = _fabOffset!.dy.clamp(8.0, (maxH - buttonHeight - 8.0).clamp(8.0, maxH));
+
+                  return Stack(
+                    children: [
+                      RefreshIndicator(
+                        onRefresh: () async {
+                          await _controller.reload();
+                        },
+                        child: WebViewWidget(controller: _controller),
+                      ),
+
+                      // Tampilan Offline / Gagal Muat
+                      if (_hasError)
+                        Container(
+                          color: Colors.white,
+                          width: double.infinity,
+                          height: double.infinity,
+                          padding: const EdgeInsets.all(28),
+                          child: Column(
+                            mainAxisAlignment: MainAxisAlignment.center,
                             children: [
-                              ElevatedButton.icon(
-                                onPressed: () {
-                                  setState(() => _hasError = false);
-                                  _controller.reload();
-                                },
-                                icon: const Icon(Icons.refresh_rounded, size: 18),
-                                label: const Text('Muat Ulang'),
-                                style: ElevatedButton.styleFrom(
-                                  backgroundColor: AppTheme.primaryBlue,
-                                  foregroundColor: Colors.white,
-                                  padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+                              Container(
+                                padding: const EdgeInsets.all(20),
+                                decoration: BoxDecoration(
+                                  color: Colors.red.shade50,
+                                  shape: BoxShape.circle,
                                 ),
+                                child: Icon(Icons.wifi_off_rounded, size: 52, color: Colors.red.shade400),
                               ),
-                              OutlinedButton.icon(
-                                onPressed: () => _navigateToUrl(mentariUrl),
-                                icon: const Icon(Icons.home_rounded, size: 18),
-                                label: const Text('Ke Beranda Mentari'),
+                              const SizedBox(height: 18),
+                              const Text(
+                                'Gagal Memuat Halaman',
+                                style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: AppTheme.textDark),
+                              ),
+                              const SizedBox(height: 8),
+                              Text(
+                                _errorMessage.isNotEmpty ? _errorMessage : 'Periksa koneksi internet Anda atau coba muat ulang.',
+                                textAlign: TextAlign.center,
+                                style: const TextStyle(fontSize: 13, color: AppTheme.textMuted),
+                              ),
+                              const SizedBox(height: 24),
+                              Wrap(
+                                spacing: 12,
+                                runSpacing: 10,
+                                alignment: WrapAlignment.center,
+                                children: [
+                                  ElevatedButton.icon(
+                                    onPressed: () {
+                                      setState(() => _hasError = false);
+                                      _controller.reload();
+                                    },
+                                    icon: const Icon(Icons.refresh_rounded, size: 18),
+                                    label: const Text('Muat Ulang'),
+                                    style: ElevatedButton.styleFrom(
+                                      backgroundColor: AppTheme.primaryBlue,
+                                      foregroundColor: Colors.white,
+                                      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+                                    ),
+                                  ),
+                                  OutlinedButton.icon(
+                                    onPressed: () => _navigateToUrl(mentariUrl),
+                                    icon: const Icon(Icons.home_rounded, size: 18),
+                                    label: const Text('Ke Beranda Mentari'),
+                                  ),
+                                ],
                               ),
                             ],
                           ),
-                        ],
+                        ),
+
+                      // Tombol Mengambang Tanya AI (Dapat Digeser Bebas ke Mana Saja)
+                      Positioned(
+                        left: safeX,
+                        top: safeY,
+                        child: GestureDetector(
+                          onPanStart: (_) {
+                            setState(() => _isDraggingFab = true);
+                          },
+                          onPanUpdate: (details) {
+                            setState(() {
+                              final nextX = (_fabOffset!.dx + details.delta.dx)
+                                  .clamp(8.0, (maxW - buttonWidth - 8.0).clamp(8.0, maxW));
+                              final nextY = (_fabOffset!.dy + details.delta.dy)
+                                  .clamp(8.0, (maxH - buttonHeight - 8.0).clamp(8.0, maxH));
+                              _fabOffset = Offset(nextX, nextY);
+                            });
+                          },
+                          onPanEnd: (_) {
+                            setState(() => _isDraggingFab = false);
+                          },
+                          onPanCancel: () {
+                            setState(() => _isDraggingFab = false);
+                          },
+                          onTap: _consultWithAi,
+                          child: AnimatedScale(
+                            scale: _isDraggingFab ? 1.05 : 1.0,
+                            duration: const Duration(milliseconds: 150),
+                            child: Material(
+                              elevation: _isDraggingFab ? 10 : 4,
+                              borderRadius: BorderRadius.circular(24),
+                              shadowColor: AppTheme.primaryBlue.withOpacity(0.5),
+                              color: AppTheme.primaryBlue,
+                              child: Container(
+                                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 11),
+                                decoration: BoxDecoration(
+                                  borderRadius: BorderRadius.circular(24),
+                                  border: Border.all(
+                                    color: _isDraggingFab
+                                        ? AppTheme.accentGold
+                                        : AppTheme.accentGold.withOpacity(0.5),
+                                    width: _isDraggingFab ? 1.5 : 1.0,
+                                  ),
+                                ),
+                                child: Row(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    Icon(
+                                      Icons.drag_indicator_rounded,
+                                      size: 16,
+                                      color: Colors.white.withOpacity(0.7),
+                                    ),
+                                    const SizedBox(width: 4),
+                                    const Icon(
+                                      Icons.auto_awesome,
+                                      color: AppTheme.accentGold,
+                                      size: 18,
+                                    ),
+                                    const SizedBox(width: 8),
+                                    const Text(
+                                      'Tanya AI Halaman Ini',
+                                      style: TextStyle(
+                                        color: Colors.white,
+                                        fontWeight: FontWeight.bold,
+                                        fontSize: 13,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ),
+                          ),
+                        ),
                       ),
-                    ),
-                ],
+                    ],
+                  );
+                },
               ),
             ),
           ],
-        ),
-        floatingActionButton: FloatingActionButton.extended(
-          onPressed: _consultWithAi,
-          backgroundColor: AppTheme.primaryBlue,
-          foregroundColor: Colors.white,
-          elevation: 4,
-          icon: const Icon(Icons.auto_awesome, color: AppTheme.accentGold, size: 20),
-          label: const Text(
-            'Tanya AI Halaman Ini',
-            style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
-          ),
         ),
         bottomNavigationBar: _buildBottomNav(),
       ),
