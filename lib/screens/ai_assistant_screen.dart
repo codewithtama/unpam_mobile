@@ -179,7 +179,7 @@ class _AiAssistantScreenState extends State<AiAssistantScreen> {
                 Expanded(
                   child: Text(
                     aiProv.hasCustomApiKey
-                        ? 'Engine: Google Gemini 1.5 Flash (Vision OCR Aktif)'
+                        ? 'Engine: Google Gemini Flash (Vision OCR Aktif)'
                         : 'Engine: Cloud AI Standar (Bebas Kuota, Tanpa API Key)',
                     style: TextStyle(
                       fontSize: 11,
@@ -869,7 +869,7 @@ class _AiAssistantScreenState extends State<AiAssistantScreen> {
                           setDialogState(() {
                             isSaving = false;
                             if (ok) {
-                              statusMessage = '✅ Kunci API Valid! Gemini 1.5 Flash Aktif.';
+                              statusMessage = '✅ Kunci API Valid! Gemini Flash Aktif.';
                               isSuccess = true;
                             } else {
                               statusMessage = '❌ Kunci API tidak valid atau gagal terhubung.';

@@ -19,29 +19,21 @@ class AiService {
     );
   }
 
-  /// Memvalidasi Gemini API Key dengan memanggil model list atau ping ringan
+  /// Memvalidasi keaslian Gemini API Key via endpoint models resmi Google tanpa menghabiskan kuota token
   Future<bool> validateGeminiApiKey(String key) async {
     final cleanKey = key.trim();
     if (cleanKey.isEmpty) return false;
 
     final url =
-        'https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=$cleanKey';
+        'https://generativelanguage.googleapis.com/v1beta/models?key=$cleanKey';
 
     try {
-      final res = await _dio.post<Map<String, dynamic>>(
+      final res = await _dio.get<Map<String, dynamic>>(
         url,
-        data: {
-          'contents': [
-            {
-              'parts': [
-                {'text': 'Ping'}
-              ]
-            }
-          ],
-          'generationConfig': {
-            'maxOutputTokens': 5,
-          }
-        },
+        options: Options(
+          sendTimeout: const Duration(seconds: 10),
+          receiveTimeout: const Duration(seconds: 15),
+        ),
       );
       return res.statusCode == 200;
     } catch (_) {
@@ -188,7 +180,16 @@ class AiService {
     return result;
   }
 
-  /// Engine Google Gemini 1.5 Flash (Resmi Google AI)
+  static const List<String> _geminiCandidateModels = [
+    'gemini-3.5-flash-lite',
+    'gemini-3.5-flash',
+    'gemini-3.8-flash',
+    'gemini-flash-latest',
+    'gemini-2.5-flash',
+    'gemini-1.5-flash',
+  ];
+
+  /// Engine Google Gemini (Multimodal Vision OCR & Fast Text)
   Future<AiMessage> _askGemini({
     required String apiKey,
     required String prompt,
@@ -196,9 +197,6 @@ class AiService {
     Uint8List? imageBytes,
     String? mimeType,
   }) async {
-    final url =
-        'https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=$apiKey';
-
     final systemPrompt =
         'Anda adalah UNPAM AI Study Assistant, asisten akademik cerdas untuk mahasiswa Universitas Pamulang. '
         'Jawab pertanyaan atau tugas mahasiswa secara tepat, mendalam, akurat, to-the-point, dan edukatif dalam Bahasa Indonesia yang profesional dan ramah. '
@@ -233,26 +231,48 @@ class AiService {
       }
     };
 
-    final response = await _dio.post<Map<String, dynamic>>(
-      url,
-      data: body,
-      options: Options(
-        headers: {
-          'Content-Type': 'application/json',
-          'x-goog-api-key': apiKey,
-        },
-      ),
-    );
+    DioException? lastDioError;
 
-    final candidates = response.data?['candidates'] as List<dynamic>?;
-    if (candidates == null || candidates.isEmpty) {
-      throw Exception('Respons Gemini kosong.');
+    for (final model in _geminiCandidateModels) {
+      final url =
+          'https://generativelanguage.googleapis.com/v1beta/models/$model:generateContent?key=$apiKey';
+
+      try {
+        final response = await _dio.post<Map<String, dynamic>>(
+          url,
+          data: body,
+          options: Options(
+            headers: {
+              'Content-Type': 'application/json',
+            },
+          ),
+        );
+
+        final candidates = response.data?['candidates'] as List<dynamic>?;
+        if (candidates != null && candidates.isNotEmpty) {
+          final text = candidates.first['content']?['parts']?[0]?['text']?.toString() ?? '';
+          if (text.isNotEmpty) {
+            return _parseQuizAndBuildMessage(text, courseName);
+          }
+        }
+      } on DioException catch (e) {
+        lastDioError = e;
+        final code = e.response?.statusCode;
+        if (code == 400 || code == 403) {
+          rethrow;
+        }
+        if (code == 429) {
+          rethrow;
+        }
+        continue;
+      }
     }
 
-    final text = candidates.first['content']?['parts']?[0]?['text']?.toString() ??
-        'Tidak ada respons dari model.';
+    if (lastDioError != null) {
+      throw lastDioError;
+    }
 
-    return _parseQuizAndBuildMessage(text, courseName);
+    throw Exception('Tidak ada model Gemini yang merespons.');
   }
 
   /// Engine Real Cloud LLM (OpenAI / LLaMA) Bebas API Key
