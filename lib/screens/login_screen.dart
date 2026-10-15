@@ -13,15 +13,6 @@ class LoginScreen extends StatefulWidget {
 }
 
 class _LoginScreenState extends State<LoginScreen> {
-  final _tokenController = TextEditingController();
-  bool _showTokenInput = false;
-
-  @override
-  void dispose() {
-    _tokenController.dispose();
-    super.dispose();
-  }
-
   void _goHome() {
     Navigator.pushReplacement(
       context,
@@ -38,18 +29,6 @@ class _LoginScreenState extends State<LoginScreen> {
       ),
     );
     if (ok == true && mounted) _goHome();
-  }
-
-  Future<void> _handleTokenLogin() async {
-    final token = _tokenController.text.trim();
-    if (token.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Token wajib diisi.')),
-      );
-      return;
-    }
-    final ok = await context.read<AuthProvider>().loginWithToken(token);
-    if (ok && mounted) _goHome();
   }
 
   @override
@@ -133,60 +112,6 @@ class _LoginScreenState extends State<LoginScreen> {
                             label: const Text('Masuk lewat Mentari'),
                           ),
                         ),
-                        const SizedBox(height: 12),
-                        InkWell(
-                          onTap: () => setState(() => _showTokenInput = !_showTokenInput),
-                          borderRadius: BorderRadius.circular(8),
-                          child: Padding(
-                            padding: const EdgeInsets.symmetric(vertical: 4.0),
-                            child: Row(
-                              children: [
-                                Icon(
-                                  _showTokenInput
-                                      ? Icons.check_box_rounded
-                                      : Icons.check_box_outline_blank_rounded,
-                                  size: 18,
-                                  color: AppTheme.primaryLight,
-                                ),
-                                const SizedBox(width: 8),
-                                const Text(
-                                  'Gunakan Bearer Token Manual',
-                                  style: TextStyle(
-                                    fontSize: 12,
-                                    fontWeight: FontWeight.w600,
-                                    color: AppTheme.primaryLight,
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ),
-                        ),
-                        if (_showTokenInput) ...[
-                          const SizedBox(height: 10),
-                          TextField(
-                            controller: _tokenController,
-                            maxLines: 2,
-                            decoration: const InputDecoration(
-                              labelText: 'Paste Bearer Token di sini',
-                              hintText: 'eyJh...',
-                              prefixIcon: Icon(Icons.vpn_key_outlined, color: AppTheme.accentGold),
-                            ),
-                          ),
-                          const SizedBox(height: 10),
-                          SizedBox(
-                            width: double.infinity,
-                            child: OutlinedButton(
-                              onPressed: auth.isLoading ? null : _handleTokenLogin,
-                              child: auth.isLoading
-                                  ? const SizedBox(
-                                      height: 20,
-                                      width: 20,
-                                      child: CircularProgressIndicator(strokeWidth: 2),
-                                    )
-                                  : const Text('Masuk dengan Token'),
-                            ),
-                          ),
-                        ],
                         if (auth.errorMessage != null) ...[
                           const SizedBox(height: 12),
                           Text(

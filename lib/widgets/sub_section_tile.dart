@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:url_launcher/url_launcher.dart';
 import '../models/course_detail_model.dart';
 import '../theme/app_theme.dart';
+import '../screens/ai_assistant_screen.dart';
 import 'quiz_dialog.dart';
 
 class SubSectionTile extends StatelessWidget {
@@ -278,6 +279,41 @@ class SubSectionTile extends StatelessWidget {
                 ),
               ),
             ],
+
+            // Context-Aware Screen Reader: Tanya Jawaban & Pembahasan AI
+            const SizedBox(height: 8),
+            SizedBox(
+              width: double.infinity,
+              child: ElevatedButton.icon(
+                onPressed: () {
+                  final prompt =
+                      'Saya sedang membuka modul perkuliahan ini di layar:\n'
+                      '• Bagian Pertemuan: ${sectionTitle ?? "Pertemuan Kuliah"}\n'
+                      '• Tipe Aktivitas: ${item.typeLabel}\n'
+                      '• Judul: ${item.judul}\n'
+                      '${item.warningAlert != null ? "• Catatan/Instruksi Dosen: ${item.warningAlert}\n" : ""}'
+                      '\nMohon bantu saya memahami materi/soal ini, berikan analisis, langkah penyelesaian, atau draft jawaban yang tepat.';
+
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (_) => AiAssistantScreen(initialPrompt: prompt),
+                    ),
+                  );
+                },
+                icon: const Icon(Icons.auto_awesome, size: 15, color: Colors.white),
+                label: const Text(
+                  'Tanya Jawaban & Pembahasan AI',
+                  style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold),
+                ),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: AppTheme.primaryBlue,
+                  foregroundColor: Colors.white,
+                  padding: const EdgeInsets.symmetric(vertical: 8),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                ),
+              ),
+            ),
           ],
         ),
       ),

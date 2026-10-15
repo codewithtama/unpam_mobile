@@ -44,6 +44,17 @@ class StorageService {
     return _preferences?.getString(ApiConstants.studentNameKey) ?? '';
   }
 
+  Future<void> saveGeminiApiKey(String apiKey) async {
+    await _preferences?.setString(ApiConstants.geminiApiKey, apiKey.trim());
+  }
+
+  String? getGeminiApiKey() {
+    final stored = _preferences?.getString(ApiConstants.geminiApiKey);
+    if (stored != null && stored.isNotEmpty) return stored;
+    const envKey = String.fromEnvironment('GEMINI_API_KEY');
+    return envKey.isNotEmpty ? envKey : null;
+  }
+
   Future<void> clearSession() async {
     await _preferences?.remove(ApiConstants.tokenKey);
     await _preferences?.remove(ApiConstants.nimKey);

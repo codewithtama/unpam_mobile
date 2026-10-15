@@ -3,8 +3,10 @@ import 'package:provider/provider.dart';
 import '../models/user_course_model.dart';
 import '../models/course_detail_model.dart';
 import '../providers/course_provider.dart';
+import '../providers/ai_provider.dart';
 import '../theme/app_theme.dart';
 import '../widgets/sub_section_tile.dart';
+import 'ai_assistant_screen.dart';
 
 class CourseDetailScreen extends StatefulWidget {
   final CourseItem course;
@@ -45,6 +47,19 @@ class _CourseDetailScreenState extends State<CourseDetailScreen>
     return Scaffold(
       appBar: AppBar(
         title: Text(widget.course.namaMataKuliah),
+        actions: [
+          IconButton(
+            tooltip: 'Tanya AI seputar matkul ini',
+            icon: const Icon(Icons.auto_awesome, color: AppTheme.accentGold),
+            onPressed: () {
+              context.read<AiProvider>().setSelectedCourse(widget.course.namaMataKuliah);
+              Navigator.push(
+                context,
+                MaterialPageRoute(builder: (_) => const AiAssistantScreen()),
+              );
+            },
+          ),
+        ],
         bottom: TabBar(
           controller: _tabController,
           indicatorColor: AppTheme.accentGold,

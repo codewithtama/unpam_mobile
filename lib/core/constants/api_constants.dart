@@ -11,4 +11,5 @@ class ApiConstants {
   static const String tokenKey = 'unpam_bearer_token';
   static const String nimKey = 'unpam_student_nim';
   static const String studentNameKey = 'unpam_student_name';
+  static const String geminiApiKey = 'unpam_gemini_api_key';
 }

@@ -1,11 +1,14 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 import '../providers/auth_provider.dart';
 import '../providers/course_provider.dart';
 import '../theme/app_theme.dart';
 import '../widgets/course_card.dart';
+import '../widgets/sub_section_tile.dart';
 import 'course_detail_screen.dart';
-import 'all_pending_tasks_screen.dart';
+import 'ai_assistant_screen.dart';
+import 'profile_screen.dart';
 import 'login_screen.dart';
 
 class HomeScreen extends StatefulWidget {
@@ -16,49 +19,119 @@ class HomeScreen extends StatefulWidget {
 }
 
 class _HomeScreenState extends State<HomeScreen> {
+  int _currentIndex = 0;
+  DateTime? _lastBackPressTime;
+  String _courseSearchQuery = '';
+
   @override
   void initState() {
     super.initState();
-    // Load courses on start
     WidgetsBinding.instance.addPostFrameCallback((_) {
       context.read<CourseProvider>().loadUserCourses();
     });
   }
 
-  void _handleLogout() async {
-    final shouldLogout = await showDialog<bool>(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Text('Konfirmasi Keluar'),
-        content: const Text('Apakah Anda yakin ingin keluar dari akun mahasiswa?'),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx, false),
-            child: const Text('Batal'),
-          ),
-          ElevatedButton(
-            onPressed: () => Navigator.pop(ctx, true),
-            style: ElevatedButton.styleFrom(backgroundColor: AppTheme.dangerRed),
-            child: const Text('Keluar'),
-          ),
-        ],
-      ),
-    );
+  /// Menangani gesture swipe back / tombol kembali agar TIDAK tiba-tiba keluar aplikasi atau logout
+  void _handleBackGesture(bool didPop, dynamic result) {
+    if (didPop) return;
 
-    if (shouldLogout == true && mounted) {
-      await context.read<AuthProvider>().logout();
-      if (!mounted) return;
-      Navigator.pushReplacement(
-        context,
-        MaterialPageRoute(builder: (_) => const LoginScreen()),
-      );
+    // Jika sedang di tab lain (Tugas, AI, atau Profil), kembalikan dulu ke tab Beranda
+    if (_currentIndex != 0) {
+      setState(() => _currentIndex = 0);
+      return;
     }
+
+    // Jika sudah di tab Beranda, minta konfirmasi swipe/tekan kedua dalam 2 detik
+    final now = DateTime.now();
+    if (_lastBackPressTime == null ||
+        now.difference(_lastBackPressTime!) > const Duration(seconds: 2)) {
+      _lastBackPressTime = now;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Tekan atau geser sekali lagi untuk keluar dari aplikasi'),
+          duration: Duration(seconds: 2),
+        ),
+      );
+      return;
+    }
+
+    // Hanya keluar dari aplikasi jika sengaja ditekan 2x (tidak logout)
+    SystemNavigator.pop();
   }
 
   @override
   Widget build(BuildContext context) {
+    final courseProv = context.watch<CourseProvider>();
+    final pendingCount = courseProv.pendingTasks.length;
+
+    return PopScope(
+      canPop: false,
+      onPopInvokedWithResult: _handleBackGesture,
+      child: Scaffold(
+        body: IndexedStack(
+          index: _currentIndex,
+          children: [
+            _buildCoursesDashboardTab(),
+            _buildPendingTasksTab(),
+            const AiAssistantScreen(),
+            const ProfileScreen(),
+          ],
+        ),
+        bottomNavigationBar: NavigationBar(
+          selectedIndex: _currentIndex,
+          onDestinationSelected: (idx) => setState(() => _currentIndex = idx),
+          elevation: 4,
+          backgroundColor: Colors.white,
+          indicatorColor: AppTheme.primaryLight.withOpacity(0.15),
+          destinations: [
+            const NavigationRequestDestination(
+              icon: Icon(Icons.dashboard_outlined),
+              selectedIcon: Icon(Icons.dashboard_rounded, color: AppTheme.primaryBlue),
+              label: 'Beranda',
+            ),
+            NavigationRequestDestination(
+              icon: pendingCount > 0
+                  ? Badge(
+                      label: Text('$pendingCount'),
+                      backgroundColor: AppTheme.accentGold,
+                      child: const Icon(Icons.assignment_outlined),
+                    )
+                  : const Icon(Icons.assignment_outlined),
+              selectedIcon: pendingCount > 0
+                  ? Badge(
+                      label: Text('$pendingCount'),
+                      backgroundColor: AppTheme.accentGold,
+                      child: const Icon(Icons.assignment_rounded, color: AppTheme.primaryBlue),
+                    )
+                  : const Icon(Icons.assignment_rounded, color: AppTheme.primaryBlue),
+              label: 'Tugas & Kuis',
+            ),
+            const NavigationRequestDestination(
+              icon: Icon(Icons.auto_awesome_outlined),
+              selectedIcon: Icon(Icons.auto_awesome, color: AppTheme.primaryBlue),
+              label: 'Asisten AI',
+            ),
+            const NavigationRequestDestination(
+              icon: Icon(Icons.person_outline_rounded),
+              selectedIcon: Icon(Icons.person_rounded, color: AppTheme.primaryBlue),
+              label: 'Profil',
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  // ================= TAB 0: BERANDA / DASHBOARD =================
+  Widget _buildCoursesDashboardTab() {
     final auth = context.watch<AuthProvider>();
     final courseProv = context.watch<CourseProvider>();
+
+    final filteredCourses = courseProv.courses.where((c) {
+      if (_courseSearchQuery.isEmpty) return true;
+      return c.namaMataKuliah.toLowerCase().contains(_courseSearchQuery.toLowerCase()) ||
+          c.namaDosen.toLowerCase().contains(_courseSearchQuery.toLowerCase());
+    }).toList();
 
     return Scaffold(
       appBar: AppBar(
@@ -66,14 +139,14 @@ class _HomeScreenState extends State<HomeScreen> {
           children: [
             Icon(Icons.school_rounded, color: AppTheme.accentGold, size: 22),
             SizedBox(width: 8),
-            Text('Mentari & Sakura Mobile'),
+            Text('UNPAM LMS Mobile'),
           ],
         ),
         actions: [
           IconButton(
-            tooltip: 'Keluar',
-            icon: const Icon(Icons.logout_rounded),
-            onPressed: _handleLogout,
+            tooltip: 'Refresh Data',
+            icon: const Icon(Icons.refresh_rounded),
+            onPressed: () => courseProv.loadUserCourses(),
           ),
         ],
       ),
@@ -89,12 +162,32 @@ class _HomeScreenState extends State<HomeScreen> {
                     // Profile Header Card
                     _buildStudentProfileHeader(auth, courseProv),
 
-                    // Quick Banner "Lihat Semua Tugas Pending"
-                    _buildPendingTasksBanner(context),
+                    // Quick Banner: Beralih ke Tab Tugas & Kuis
+                    _buildPendingTasksBanner(courseProv),
+
+                    // Search Mata Kuliah
+                    Padding(
+                      padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
+                      child: TextField(
+                        onChanged: (val) => setState(() => _courseSearchQuery = val),
+                        decoration: InputDecoration(
+                          hintText: 'Cari mata kuliah atau nama dosen...',
+                          prefixIcon: const Icon(Icons.search_rounded, size: 20),
+                          isDense: true,
+                          contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                          fillColor: Colors.white,
+                          filled: true,
+                          border: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(12),
+                            borderSide: const BorderSide(color: AppTheme.cardBorder),
+                          ),
+                        ),
+                      ),
+                    ),
 
                     // Section Title: Daftar Mata Kuliah
                     Padding(
-                      padding: const EdgeInsets.fromLTRB(16, 20, 16, 8),
+                      padding: const EdgeInsets.fromLTRB(16, 12, 16, 8),
                       child: Row(
                         mainAxisAlignment: MainAxisAlignment.spaceBetween,
                         children: [
@@ -113,7 +206,7 @@ class _HomeScreenState extends State<HomeScreen> {
                               borderRadius: BorderRadius.circular(6),
                             ),
                             child: Text(
-                              '${courseProv.courses.length} MK',
+                              '${filteredCourses.length} MK',
                               style: const TextStyle(
                                 fontSize: 12,
                                 fontWeight: FontWeight.bold,
@@ -128,20 +221,20 @@ class _HomeScreenState extends State<HomeScreen> {
                     // List Kartu Mata Kuliah
                     if (courseProv.errorMessage != null)
                       _buildErrorState(courseProv)
-                    else if (courseProv.courses.isEmpty)
+                    else if (filteredCourses.isEmpty)
                       const Center(
                         child: Padding(
                           padding: EdgeInsets.all(40.0),
-                          child: Text('Tidak ada mata kuliah yang terdaftar.'),
+                          child: Text('Tidak ada mata kuliah yang cocok.'),
                         ),
                       )
                     else
                       ListView.builder(
                         shrinkWrap: true,
                         physics: const NeverScrollableScrollPhysics(),
-                        itemCount: courseProv.courses.length,
+                        itemCount: filteredCourses.length,
                         itemBuilder: (ctx, index) {
-                          final course = courseProv.courses[index];
+                          final course = filteredCourses[index];
                           return CourseCard(
                             course: course,
                             onTap: () {
@@ -160,43 +253,6 @@ class _HomeScreenState extends State<HomeScreen> {
                 ),
               ),
       ),
-    );
-  }
-
-  String _scheduleDays(CourseProvider courseProv) {
-    final days = courseProv.courses
-        .map((c) => c.namaHari)
-        .where((d) => d.isNotEmpty)
-        .toSet();
-    return days.isEmpty ? '-' : days.join(', ');
-  }
-
-  Widget _buildErrorState(CourseProvider courseProv) {
-    return Center(
-      child: Padding(
-        padding: const EdgeInsets.all(32.0),
-        child: Column(
-          children: [
-            const Icon(Icons.cloud_off_rounded, size: 48, color: AppTheme.dangerRed),
-            const SizedBox(height: 12),
-            Text(courseProv.errorMessage!, textAlign: TextAlign.center),
-            const SizedBox(height: 16),
-            ElevatedButton(
-              onPressed: courseProv.isUnauthorized ? _forceRelogin : courseProv.loadUserCourses,
-              child: Text(courseProv.isUnauthorized ? 'Login Ulang' : 'Coba Lagi'),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Future<void> _forceRelogin() async {
-    await context.read<AuthProvider>().logout();
-    if (!mounted) return;
-    Navigator.pushReplacement(
-      context,
-      MaterialPageRoute(builder: (_) => const LoginScreen()),
     );
   }
 
@@ -263,8 +319,6 @@ class _HomeScreenState extends State<HomeScreen> {
             ],
           ),
           const SizedBox(height: 16),
-
-          // Stat Ringkas: Total SKS & Hari Kuliah
           Container(
             padding: const EdgeInsets.all(12),
             decoration: BoxDecoration(
@@ -278,7 +332,7 @@ class _HomeScreenState extends State<HomeScreen> {
                 Container(height: 24, width: 1, color: Colors.white24),
                 _buildStatItem('Beban SKS', '${courseProv.totalSks} SKS'),
                 Container(height: 24, width: 1, color: Colors.white24),
-                _buildStatItem('Hari Kuliah', _scheduleDays(courseProv)),
+                _buildStatItem('Tugas Aktif', '${courseProv.pendingTasks.length} Pending'),
               ],
             ),
           ),
@@ -310,7 +364,7 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
-  Widget _buildPendingTasksBanner(BuildContext context) {
+  Widget _buildPendingTasksBanner(CourseProvider courseProv) {
     return Container(
       margin: const EdgeInsets.fromLTRB(16, 16, 16, 0),
       decoration: BoxDecoration(
@@ -333,10 +387,7 @@ class _HomeScreenState extends State<HomeScreen> {
         child: InkWell(
           borderRadius: BorderRadius.circular(16),
           onTap: () {
-            Navigator.push(
-              context,
-              MaterialPageRoute(builder: (_) => const AllPendingTasksScreen()),
-            );
+            setState(() => _currentIndex = 1);
           },
           child: Padding(
             padding: const EdgeInsets.all(16.0),
@@ -351,11 +402,11 @@ class _HomeScreenState extends State<HomeScreen> {
                   child: const Icon(Icons.assignment_late_rounded, color: Colors.white, size: 26),
                 ),
                 const SizedBox(width: 14),
-                const Expanded(
+                Expanded(
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text(
+                      const Text(
                         'Ringkasan Tugas & Kuis',
                         style: TextStyle(
                           fontSize: 15,
@@ -363,10 +414,12 @@ class _HomeScreenState extends State<HomeScreen> {
                           color: Colors.white,
                         ),
                       ),
-                      SizedBox(height: 2),
+                      const SizedBox(height: 2),
                       Text(
-                        'Cek semua kuis & tugas yang belum diselesaikan',
-                        style: TextStyle(
+                        courseProv.pendingTasks.isNotEmpty
+                            ? '${courseProv.pendingTasks.length} aktivitas belum diselesaikan'
+                            : 'Buka daftar tugas & aktivitas modul',
+                        style: const TextStyle(
                           fontSize: 12,
                           color: Colors.white70,
                         ),
@@ -382,4 +435,133 @@ class _HomeScreenState extends State<HomeScreen> {
       ),
     );
   }
+
+  Widget _buildErrorState(CourseProvider courseProv) {
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.all(32.0),
+        child: Column(
+          children: [
+            const Icon(Icons.cloud_off_rounded, size: 48, color: AppTheme.dangerRed),
+            const SizedBox(height: 12),
+            Text(courseProv.errorMessage!, textAlign: TextAlign.center),
+            const SizedBox(height: 16),
+            ElevatedButton(
+              onPressed: courseProv.isUnauthorized ? _forceRelogin : courseProv.loadUserCourses,
+              child: Text(courseProv.isUnauthorized ? 'Login Ulang' : 'Coba Lagi'),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Future<void> _forceRelogin() async {
+    await context.read<AuthProvider>().logout();
+    if (!mounted) return;
+    Navigator.pushReplacement(
+      context,
+      MaterialPageRoute(builder: (_) => const LoginScreen()),
+    );
+  }
+
+  // ================= TAB 1: TUGAS & KUIS =================
+  Widget _buildPendingTasksTab() {
+    final courseProv = context.watch<CourseProvider>();
+    final pending = courseProv.pendingTasks;
+
+    return Scaffold(
+      appBar: AppBar(
+        title: const Text('Daftar Tugas & Kuis'),
+      ),
+      body: Column(
+        children: [
+          Container(
+            padding: const EdgeInsets.all(16),
+            color: const Color(0xFFFFFBEB),
+            child: Row(
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(8),
+                  decoration: BoxDecoration(
+                    color: AppTheme.accentGold.withOpacity(0.2),
+                    shape: BoxShape.circle,
+                  ),
+                  child: const Icon(Icons.info_outline_rounded, color: AppTheme.accentGold, size: 20),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Text(
+                    pending.isNotEmpty
+                        ? 'Ditemukan ${pending.length} aktivitas kuis & tugas yang perlu Anda kerjakan.'
+                        : 'Buka mata kuliah di beranda untuk memuat seluruh aktivitas pertemuan.',
+                    style: const TextStyle(
+                      fontSize: 13,
+                      fontWeight: FontWeight.w600,
+                      color: Color(0xFF92400E),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+          Expanded(
+            child: pending.isEmpty
+                ? Center(
+                    child: Padding(
+                      padding: const EdgeInsets.all(24.0),
+                      child: Column(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          const Icon(Icons.check_circle_rounded, color: AppTheme.successGreen, size: 64),
+                          const SizedBox(height: 16),
+                          const Text(
+                            'Semua Tugas Selesai!',
+                            style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+                          ),
+                          const SizedBox(height: 6),
+                          const Text(
+                            'Tidak ada kuis atau tugas yang tertunda pada mata kuliah yang dibuka.',
+                            style: TextStyle(color: AppTheme.textMuted),
+                            textAlign: TextAlign.center,
+                          ),
+                          const SizedBox(height: 16),
+                          ElevatedButton.icon(
+                            onPressed: () => setState(() => _currentIndex = 0),
+                            icon: const Icon(Icons.dashboard_rounded, size: 18),
+                            label: const Text('Lihat Mata Kuliah'),
+                          ),
+                        ],
+                      ),
+                    ),
+                  )
+                : ListView.builder(
+                    padding: const EdgeInsets.symmetric(vertical: 10),
+                    itemCount: pending.length,
+                    itemBuilder: (ctx, index) {
+                      final item = pending[index];
+                      return SubSectionTile(
+                        item: item.subSection,
+                        sectionTitle:
+                            '${item.sectionTitle}${item.meetingTitle != null ? ' - ${item.meetingTitle}' : ''}',
+                        onToggleCompletion: (_) {
+                          courseProv.toggleTaskCompletion(item.subSection);
+                        },
+                      );
+                    },
+                  ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class NavigationRequestDestination extends NavigationDestination {
+  const NavigationRequestDestination({
+    super.key,
+    required super.icon,
+    super.selectedIcon,
+    required super.label,
+  });
 }

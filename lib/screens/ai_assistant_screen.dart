@@ -1,0 +1,645 @@
+import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
+import 'package:image_picker/image_picker.dart';
+import 'package:provider/provider.dart';
+import '../providers/ai_provider.dart';
+import '../providers/course_provider.dart';
+import '../models/ai_message_model.dart';
+import '../theme/app_theme.dart';
+
+class AiAssistantScreen extends StatefulWidget {
+  final String? initialPrompt;
+
+  const AiAssistantScreen({super.key, this.initialPrompt});
+
+  @override
+  State<AiAssistantScreen> createState() => _AiAssistantScreenState();
+}
+
+class _AiAssistantScreenState extends State<AiAssistantScreen> {
+  final TextEditingController _textController = TextEditingController();
+  final ScrollController _scrollController = ScrollController();
+  final ImagePicker _imagePicker = ImagePicker();
+
+  Uint8List? _selectedImageBytes;
+  String? _selectedImageMime;
+
+  @override
+  void initState() {
+    super.initState();
+    if (widget.initialPrompt != null && widget.initialPrompt!.isNotEmpty) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        _handleSend(widget.initialPrompt);
+      });
+    }
+  }
+
+  @override
+  void dispose() {
+    _textController.dispose();
+    _scrollController.dispose();
+    super.dispose();
+  }
+
+  void _scrollToBottom() {
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (_scrollController.hasClients) {
+        _scrollController.animateTo(
+          _scrollController.position.maxScrollExtent,
+          duration: const Duration(milliseconds: 300),
+          curve: Curves.easeOut,
+        );
+      }
+    });
+  }
+
+  Future<void> _pickScreenshot() async {
+    try {
+      final picked = await _imagePicker.pickImage(
+        source: ImageSource.gallery,
+        maxWidth: 1024,
+        maxHeight: 1024,
+        imageQuality: 80,
+      );
+
+      if (picked != null) {
+        final bytes = await picked.readAsBytes();
+        setState(() {
+          _selectedImageBytes = bytes;
+          _selectedImageMime = picked.mimeType ?? 'image/jpeg';
+        });
+      }
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Gagal memilih screenshot: $e')),
+      );
+    }
+  }
+
+  void _handleSend([String? presetText]) {
+    final text = presetText ?? _textController.text.trim();
+    final hasImg = _selectedImageBytes != null && _selectedImageBytes!.isNotEmpty;
+    if (text.isEmpty && !hasImg) return;
+
+    final courseProv = context.read<CourseProvider>();
+    final courses = courseProv.courses.map((c) => c.namaMataKuliah).toList();
+
+    final imgBytes = _selectedImageBytes;
+    final imgMime = _selectedImageMime;
+
+    setState(() {
+      _selectedImageBytes = null;
+      _selectedImageMime = null;
+    });
+
+    context.read<AiProvider>().sendMessage(
+      text,
+      availableCourses: courses,
+      imageBytes: imgBytes,
+      mimeType: imgMime,
+    );
+    _textController.clear();
+    _scrollToBottom();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final aiProv = context.watch<AiProvider>();
+    final courseProv = context.watch<CourseProvider>();
+    final courseList = courseProv.courses.map((c) => c.namaMataKuliah).toList();
+
+    return Scaffold(
+      appBar: AppBar(
+        title: const Row(
+          children: [
+            Icon(Icons.auto_awesome, color: AppTheme.accentGold, size: 22),
+            SizedBox(width: 8),
+            Text('UNPAM AI Study Assistant'),
+          ],
+        ),
+        actions: [
+          IconButton(
+            tooltip: 'Bersihkan Riwayat Chat',
+            icon: const Icon(Icons.delete_outline_rounded),
+            onPressed: () {
+              aiProv.clearChat();
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(content: Text('Riwayat percakapan dibersihkan.')),
+              );
+            },
+          ),
+        ],
+      ),
+      body: Column(
+        children: [
+          // Course Context Selector
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+            color: Colors.white,
+            child: Row(
+              children: [
+                const Icon(Icons.school_outlined, size: 18, color: AppTheme.primaryLight),
+                const SizedBox(width: 8),
+                const Text(
+                  'Fokus MK:',
+                  style: TextStyle(
+                    fontSize: 12,
+                    fontWeight: FontWeight.bold,
+                    color: AppTheme.textDark,
+                  ),
+                ),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: DropdownButtonHideUnderline(
+                    child: DropdownButton<String?>(
+                      value: aiProv.selectedCourseName,
+                      isExpanded: true,
+                      hint: const Text('Semua Mata Kuliah (Umum)', style: TextStyle(fontSize: 12)),
+                      items: [
+                        const DropdownMenuItem<String?>(
+                          value: null,
+                          child: Text('Semua Mata Kuliah (Umum)', style: TextStyle(fontSize: 12)),
+                        ),
+                        ...courseList.map(
+                          (c) => DropdownMenuItem<String?>(
+                            value: c,
+                            child: Text(
+                              c,
+                              style: const TextStyle(fontSize: 12),
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ),
+                        ),
+                      ],
+                      onChanged: (val) {
+                        aiProv.setSelectedCourse(val);
+                      },
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const Divider(height: 1, color: AppTheme.cardBorder),
+
+          // Quick Action Prompt Chips
+          Container(
+            height: 48,
+            color: AppTheme.bgGrey,
+            child: ListView(
+              scrollDirection: Axis.horizontal,
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+              children: [
+                _buildQuickChip('📷 Tanya dari Screenshot', _pickScreenshot),
+                _buildQuickChip('📝 Buat Kuis Latihan', () {
+                  final mk = aiProv.selectedCourseName ?? 'Mata Kuliah';
+                  _handleSend('Buatkan kuis latihan 3 soal pilihan ganda untuk $mk');
+                }),
+                _buildQuickChip('📚 Rangkum Materi Kuliah', () {
+                  final mk = aiProv.selectedCourseName ?? 'Mata Kuliah';
+                  _handleSend('Rangkum materi utama untuk mata kuliah $mk');
+                }),
+                _buildQuickChip('💬 Draft Forum Diskusi', () {
+                  final mk = aiProv.selectedCourseName ?? 'Mata Kuliah';
+                  _handleSend('Buatkan draft jawaban forum diskusi LMS untuk $mk');
+                }),
+                _buildQuickChip('💡 Tips Belajar Kuis & Ujian', () {
+                  _handleSend('Berikan tips strategi belajar efektif menghadapi Pretest dan Post-test di UNPAM');
+                }),
+              ],
+            ),
+          ),
+
+          // Messages List
+          Expanded(
+            child: ListView.builder(
+              controller: _scrollController,
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+              itemCount: aiProv.messages.length,
+              itemBuilder: (ctx, index) {
+                final msg = aiProv.messages[index];
+                return _buildMessageItem(ctx, msg, aiProv);
+              },
+            ),
+          ),
+
+          // Loading Indicator
+          if (aiProv.isLoading)
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
+              color: Colors.white,
+              child: const Row(
+                children: [
+                  SizedBox(
+                    width: 14,
+                    height: 14,
+                    child: CircularProgressIndicator(strokeWidth: 2),
+                  ),
+                  SizedBox(width: 10),
+                  Text(
+                    'AI sedang menganalisis soal/layar & menyusun jawaban...',
+                    style: TextStyle(fontSize: 12, color: AppTheme.textMuted),
+                  ),
+                ],
+              ),
+            ),
+
+          // Preview Thumbnail jika screenshot dipilih
+          if (_selectedImageBytes != null)
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+              color: const Color(0xFFF1F5F9),
+              child: Row(
+                children: [
+                  ClipRRect(
+                    borderRadius: BorderRadius.circular(8),
+                    child: Image.memory(
+                      _selectedImageBytes!,
+                      width: 50,
+                      height: 50,
+                      fit: BoxFit.cover,
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  const Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          'Screenshot Soal Terlampir',
+                          style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: AppTheme.textDark),
+                        ),
+                        Text(
+                          'Tekan kirim agar AI membaca teks dan menjawab soal pada gambar',
+                          style: TextStyle(fontSize: 11, color: AppTheme.textMuted),
+                        ),
+                      ],
+                    ),
+                  ),
+                  IconButton(
+                    icon: const Icon(Icons.cancel_rounded, color: AppTheme.dangerRed, size: 20),
+                    tooltip: 'Hapus Screenshot',
+                    onPressed: () => setState(() {
+                      _selectedImageBytes = null;
+                      _selectedImageMime = null;
+                    }),
+                  ),
+                ],
+              ),
+            ),
+
+          // Bottom Input Bar
+          Container(
+            padding: const EdgeInsets.fromLTRB(12, 8, 12, 16),
+            decoration: const BoxDecoration(
+              color: Colors.white,
+              border: Border(top: BorderSide(color: AppTheme.cardBorder)),
+            ),
+            child: SafeArea(
+              top: false,
+              child: Row(
+                children: [
+                  // Tombol lampirkan foto/screenshot
+                  IconButton(
+                    tooltip: 'Lampirkan Screenshot Soal',
+                    icon: const Icon(Icons.add_photo_alternate_rounded, color: AppTheme.primaryLight, size: 24),
+                    onPressed: aiProv.isLoading ? null : _pickScreenshot,
+                  ),
+                  Expanded(
+                    child: TextField(
+                      controller: _textController,
+                      minLines: 1,
+                      maxLines: 4,
+                      textInputAction: TextInputAction.send,
+                      onSubmitted: (_) => _handleSend(),
+                      decoration: InputDecoration(
+                        hintText: _selectedImageBytes != null
+                            ? 'Beri pertanyaan tambahan (opsional)...'
+                            : 'Tanyakan materi kuliah, kuis, atau tugas...',
+                        contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                        isDense: true,
+                        border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(24),
+                          borderSide: const BorderSide(color: AppTheme.cardBorder),
+                        ),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  Container(
+                    decoration: const BoxDecoration(
+                      color: AppTheme.primaryBlue,
+                      shape: BoxShape.circle,
+                    ),
+                    child: IconButton(
+                      icon: const Icon(Icons.send_rounded, color: Colors.white, size: 18),
+                      onPressed: aiProv.isLoading ? null : () => _handleSend(),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildQuickChip(String label, VoidCallback onTap) {
+    return Padding(
+      padding: const EdgeInsets.only(right: 8),
+      child: ActionChip(
+        label: Text(
+          label,
+          style: const TextStyle(
+            fontSize: 12,
+            fontWeight: FontWeight.w600,
+            color: AppTheme.primaryLight,
+          ),
+        ),
+        backgroundColor: Colors.white,
+        side: const BorderSide(color: AppTheme.cardBorder),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        onPressed: onTap,
+      ),
+    );
+  }
+
+  Widget _buildMessageItem(BuildContext context, AiMessage msg, AiProvider aiProv) {
+    if (msg.isUser) {
+      return Align(
+        alignment: Alignment.centerRight,
+        child: Container(
+          margin: const EdgeInsets.symmetric(vertical: 4),
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+          constraints: BoxConstraints(
+            maxWidth: MediaQuery.of(context).size.width * 0.8,
+          ),
+          decoration: const BoxDecoration(
+            color: AppTheme.primaryBlue,
+            borderRadius: BorderRadius.only(
+              topLeft: Radius.circular(16),
+              topRight: Radius.circular(4),
+              bottomLeft: Radius.circular(16),
+              bottomRight: Radius.circular(16),
+            ),
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.end,
+            children: [
+              if (msg.imageBytes != null) ...[
+                ClipRRect(
+                  borderRadius: BorderRadius.circular(10),
+                  child: Image.memory(
+                    msg.imageBytes!,
+                    width: 200,
+                    height: 130,
+                    fit: BoxFit.cover,
+                  ),
+                ),
+                const SizedBox(height: 6),
+              ],
+              Text(
+                msg.content,
+                style: const TextStyle(color: Colors.white, fontSize: 14),
+              ),
+            ],
+          ),
+        ),
+      );
+    }
+
+    // Assistant Message Bubble
+    return Align(
+      alignment: Alignment.centerLeft,
+      child: Container(
+        margin: const EdgeInsets.symmetric(vertical: 6),
+        constraints: BoxConstraints(
+          maxWidth: MediaQuery.of(context).size.width * 0.88,
+        ),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: const BorderRadius.only(
+            topLeft: Radius.circular(4),
+            topRight: Radius.circular(16),
+            bottomLeft: Radius.circular(16),
+            bottomRight: Radius.circular(16),
+          ),
+          border: Border.all(color: AppTheme.cardBorder),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withOpacity(0.02),
+              blurRadius: 4,
+              offset: const Offset(0, 2),
+            ),
+          ],
+        ),
+        child: Padding(
+          padding: const EdgeInsets.all(12),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              // Header Assistant
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Row(
+                    children: [
+                      Container(
+                        padding: const EdgeInsets.all(4),
+                        decoration: BoxDecoration(
+                          color: AppTheme.accentGold.withOpacity(0.15),
+                          shape: BoxShape.circle,
+                        ),
+                        child: const Icon(Icons.auto_awesome, size: 14, color: AppTheme.accentGold),
+                      ),
+                      const SizedBox(width: 6),
+                      const Text(
+                        'UNPAM AI Assistant',
+                        style: TextStyle(
+                          fontSize: 12,
+                          fontWeight: FontWeight.bold,
+                          color: AppTheme.primaryLight,
+                        ),
+                      ),
+                    ],
+                  ),
+                  IconButton(
+                    icon: const Icon(Icons.copy_rounded, size: 16, color: AppTheme.textMuted),
+                    tooltip: 'Salin Jawaban',
+                    padding: EdgeInsets.zero,
+                    constraints: const BoxConstraints(),
+                    onPressed: () {
+                      Clipboard.setData(ClipboardData(text: msg.content));
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(content: Text('Teks berhasil disalin ke clipboard!')),
+                      );
+                    },
+                  ),
+                ],
+              ),
+              const SizedBox(height: 8),
+
+              // Content Body
+              Text(
+                msg.content,
+                style: const TextStyle(fontSize: 13.5, color: AppTheme.textDark, height: 1.45),
+              ),
+
+              // Interactive Quiz Cards (jika respons berisi latihan kuis)
+              if (msg.quizItems != null && msg.quizItems!.isNotEmpty) ...[
+                const SizedBox(height: 12),
+                ...msg.quizItems!.asMap().entries.map((entry) {
+                  final qIdx = entry.key;
+                  final q = entry.value;
+                  return _buildQuizCard(msg.id, qIdx, q, aiProv);
+                }),
+              ],
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildQuizCard(
+    String messageId,
+    int qIdx,
+    QuizItem quiz,
+    AiProvider aiProv,
+  ) {
+    return Container(
+      margin: const EdgeInsets.only(top: 10),
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: AppTheme.bgGrey,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: AppTheme.cardBorder),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                decoration: BoxDecoration(
+                  color: AppTheme.primaryLight,
+                  borderRadius: BorderRadius.circular(4),
+                ),
+                child: Text(
+                  'Soal ${qIdx + 1}',
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontSize: 11,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 6),
+          Text(
+            quiz.question,
+            style: const TextStyle(
+              fontSize: 13,
+              fontWeight: FontWeight.bold,
+              color: AppTheme.textDark,
+            ),
+          ),
+          const SizedBox(height: 10),
+
+          // Options
+          ...quiz.options.asMap().entries.map((optEntry) {
+            final optIdx = optEntry.key;
+            final optText = optEntry.value;
+            final isSelected = quiz.userSelectedIndex == optIdx;
+            final isAnswered = quiz.isAnswered;
+            final isCorrect = optIdx == quiz.correctIndex;
+
+            Color bgColor = Colors.white;
+            Color borderColor = AppTheme.cardBorder;
+            Color textColor = AppTheme.textDark;
+
+            if (isAnswered) {
+              if (isCorrect) {
+                bgColor = AppTheme.successGreen.withOpacity(0.12);
+                borderColor = AppTheme.successGreen;
+                textColor = AppTheme.successGreen;
+              } else if (isSelected && !isCorrect) {
+                bgColor = AppTheme.dangerRed.withOpacity(0.1);
+                borderColor = AppTheme.dangerRed;
+                textColor = AppTheme.dangerRed;
+              }
+            }
+
+            return Container(
+              margin: const EdgeInsets.only(bottom: 6),
+              child: InkWell(
+                onTap: isAnswered
+                    ? null
+                    : () {
+                        aiProv.answerQuizOption(
+                          messageId: messageId,
+                          questionIndex: qIdx,
+                          selectedIndex: optIdx,
+                        );
+                      },
+                borderRadius: BorderRadius.circular(8),
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                  decoration: BoxDecoration(
+                    color: bgColor,
+                    borderRadius: BorderRadius.circular(8),
+                    border: Border.all(color: borderColor, width: 1.2),
+                  ),
+                  child: Row(
+                    children: [
+                      Icon(
+                        isAnswered
+                            ? (isCorrect
+                                ? Icons.check_circle_rounded
+                                : (isSelected ? Icons.cancel_rounded : Icons.radio_button_unchecked))
+                            : Icons.radio_button_unchecked,
+                        size: 16,
+                        color: textColor,
+                      ),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: Text(
+                          optText,
+                          style: TextStyle(
+                            fontSize: 12,
+                            fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
+                            color: textColor,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            );
+          }),
+
+          // Penjelasan setelah dijawab
+          if (quiz.isAnswered) ...[
+            const SizedBox(height: 6),
+            Container(
+              padding: const EdgeInsets.all(8),
+              decoration: BoxDecoration(
+                color: const Color(0xFFEFF6FF),
+                borderRadius: BorderRadius.circular(6),
+              ),
+              child: Text(
+                '💡 Pembahasan: ${quiz.explanation}',
+                style: const TextStyle(fontSize: 11, color: AppTheme.primaryLight),
+              ),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+}
