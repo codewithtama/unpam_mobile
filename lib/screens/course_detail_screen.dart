@@ -6,6 +6,7 @@ import '../providers/course_provider.dart';
 import '../providers/ai_provider.dart';
 import '../theme/app_theme.dart';
 import '../widgets/sub_section_tile.dart';
+import '../widgets/mentari_course_sync_sheet.dart';
 import 'ai_assistant_screen.dart';
 
 class CourseDetailScreen extends StatefulWidget {
@@ -39,6 +40,16 @@ class _CourseDetailScreenState extends State<CourseDetailScreen>
     super.dispose();
   }
 
+  void _openSyncSheet() {
+    MentariCourseSyncSheet.show(
+      context,
+      course: widget.course,
+      onCourseSynced: (detail) {
+        context.read<CourseProvider>().setCourseDetailDirectly(widget.course, detail);
+      },
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final courseProv = context.watch<CourseProvider>();
@@ -48,6 +59,11 @@ class _CourseDetailScreenState extends State<CourseDetailScreen>
       appBar: AppBar(
         title: Text(widget.course.namaMataKuliah),
         actions: [
+          IconButton(
+            tooltip: 'Sinkronkan Data Kelas (Mentari)',
+            icon: const Icon(Icons.sync_rounded),
+            onPressed: _openSyncSheet,
+          ),
           IconButton(
             tooltip: 'Tanya AI seputar matkul ini',
             icon: const Icon(Icons.auto_awesome, color: AppTheme.accentGold),
@@ -86,19 +102,7 @@ class _CourseDetailScreenState extends State<CourseDetailScreen>
       body: courseProv.isLoading && detail == null
           ? const Center(child: CircularProgressIndicator())
           : detail == null
-              ? Center(
-                  child: Column(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      const Text('Gagal memuat data kelas.'),
-                      const SizedBox(height: 12),
-                      ElevatedButton(
-                        onPressed: () => courseProv.loadCourseDetail(widget.course),
-                        child: const Text('Coba Lagi'),
-                      ),
-                    ],
-                  ),
-                )
+              ? _buildErrorState(courseProv)
               : Column(
                   children: [
                     // Course Header Summary & Progress Bar
@@ -122,6 +126,77 @@ class _CourseDetailScreenState extends State<CourseDetailScreen>
                     ),
                   ],
                 ),
+    );
+  }
+
+  Widget _buildErrorState(CourseProvider courseProv) {
+    return Center(
+      child: SingleChildScrollView(
+        padding: const EdgeInsets.symmetric(horizontal: 28, vertical: 24),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Container(
+              padding: const EdgeInsets.all(20),
+              decoration: BoxDecoration(
+                color: Colors.red.shade50,
+                shape: BoxShape.circle,
+              ),
+              child: Icon(Icons.cloud_off_rounded, size: 48, color: Colors.red.shade400),
+            ),
+            const SizedBox(height: 18),
+            const Text(
+              'Gagal Memuat Data Kelas',
+              style: TextStyle(
+                fontSize: 18,
+                fontWeight: FontWeight.bold,
+                color: AppTheme.textDark,
+              ),
+            ),
+            const SizedBox(height: 8),
+            Text(
+              courseProv.errorMessage ??
+                  'Akses langsung dibatasi oleh sistem proteksi Cloudflare UNPAM. Sinkronkan data menggunakan sesi browser Mentari.',
+              textAlign: TextAlign.center,
+              style: const TextStyle(fontSize: 13, color: AppTheme.textMuted, height: 1.4),
+            ),
+            const SizedBox(height: 24),
+            SizedBox(
+              width: double.infinity,
+              height: 48,
+              child: ElevatedButton.icon(
+                onPressed: _openSyncSheet,
+                icon: const Icon(Icons.sync_rounded, size: 20),
+                label: const Text(
+                  'Sinkronkan via Web Mentari',
+                  style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
+                ),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: AppTheme.primaryBlue,
+                  foregroundColor: Colors.white,
+                  elevation: 2,
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                ),
+              ),
+            ),
+            const SizedBox(height: 12),
+            SizedBox(
+              width: double.infinity,
+              height: 44,
+              child: OutlinedButton.icon(
+                onPressed: () => courseProv.loadCourseDetail(widget.course, forceRefresh: true),
+                icon: const Icon(Icons.refresh_rounded, size: 18),
+                label: const Text('Coba Lagi Langsung'),
+                style: OutlinedButton.styleFrom(
+                  foregroundColor: AppTheme.textDark,
+                  side: const BorderSide(color: AppTheme.cardBorder),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
     );
   }
 
@@ -249,6 +324,8 @@ class _CourseDetailScreenState extends State<CourseDetailScreen>
         final task = pending[index];
         return SubSectionTile(
           item: task.subSection,
+          courseKode: widget.course.kodeCourse,
+          courseName: widget.course.namaMataKuliah,
           sectionTitle: '${task.sectionTitle}${task.meetingTitle != null ? ' - ${task.meetingTitle}' : ''}',
           onToggleCompletion: (_) {
             courseProv.toggleTaskCompletion(task.subSection);
@@ -311,6 +388,9 @@ class _CourseDetailScreenState extends State<CourseDetailScreen>
             children: section.subSection.map((sub) {
               return SubSectionTile(
                 item: sub,
+                sectionTitle: section.namaPertemuan ?? section.namaSection,
+                courseKode: widget.course.kodeCourse,
+                courseName: widget.course.namaMataKuliah,
                 onToggleCompletion: (_) {
                   courseProv.toggleTaskCompletion(sub);
                 },

@@ -3,17 +3,22 @@ import 'package:url_launcher/url_launcher.dart';
 import '../models/course_detail_model.dart';
 import '../theme/app_theme.dart';
 import '../screens/ai_assistant_screen.dart';
+import '../screens/mentari_activity_screen.dart';
 import 'quiz_dialog.dart';
 
 class SubSectionTile extends StatelessWidget {
   final SubSection item;
   final String? sectionTitle;
+  final String? courseKode;
+  final String? courseName;
   final ValueChanged<bool?>? onToggleCompletion;
 
   const SubSectionTile({
     super.key,
     required this.item,
     this.sectionTitle,
+    this.courseKode,
+    this.courseName,
     this.onToggleCompletion,
   });
 
@@ -64,15 +69,22 @@ class SubSectionTile extends StatelessWidget {
   }
 
   Future<void> _handleAction(BuildContext context) async {
+    // 1. Jika kuis: buka dialog info kuis (bisa langsung lanjut ke webview activity)
     if (item.settingQuiz != null) {
       showDialog(
         context: context,
-        builder: (ctx) => QuizDialog(item: item),
+        builder: (ctx) => QuizDialog(
+          item: item,
+          courseKode: courseKode,
+          courseName: courseName,
+          sectionTitle: sectionTitle,
+        ),
       );
       return;
     }
 
-    if (item.link != null && item.link!.isNotEmpty) {
+    // 2. Jika Link VCON (Google Meet / Zoom), buka aplikasi external
+    if (item.kodeTemplate == 'LINK_VCON' && item.link != null && item.link!.isNotEmpty) {
       final uri = Uri.parse(item.link!);
       if (await canLaunchUrl(uri)) {
         await launchUrl(uri, mode: LaunchMode.externalApplication);
@@ -82,14 +94,22 @@ class SubSectionTile extends StatelessWidget {
           SnackBar(content: Text('Tidak dapat membuka link: ${item.link}')),
         );
       }
-    } else {
-      if (!context.mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(item.warningAlert ?? 'Konten belum tersedia atau belum dibuka oleh dosen.'),
-        ),
-      );
+      return;
     }
+
+    // 3. Untuk semua aktivitas lainnya (Tugas, Forum, Materi, File Sakura, Kuesioner):
+    // Buka MentariActivityScreen di dalam sesi Chromium agar tidak terblokir Cloudflare!
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => MentariActivityScreen(
+          item: item,
+          courseKode: courseKode,
+          courseName: courseName,
+          sectionTitle: sectionTitle,
+        ),
+      ),
+    );
   }
 
   @override
@@ -245,8 +265,11 @@ class SubSectionTile extends StatelessWidget {
               ),
             ],
 
-            // Action Button (Buka Kuis, Unduh File, atau Masuk Meet)
-            if (item.settingQuiz != null || (item.link != null && item.link!.isNotEmpty)) ...[
+            // Action Button (Buka Kuis, Tugas, Forum, File Materi, atau Google Meet)
+            if (item.settingQuiz != null ||
+                (item.link != null && item.link!.isNotEmpty) ||
+                (item.file != null && item.file!.isNotEmpty) ||
+                item.isTask) ...[
               const SizedBox(height: 10),
               SizedBox(
                 width: double.infinity,
@@ -257,7 +280,11 @@ class SubSectionTile extends StatelessWidget {
                         ? Icons.play_arrow_rounded
                         : (item.kodeTemplate == 'LINK_VCON'
                             ? Icons.videocam_rounded
-                            : Icons.open_in_new_rounded),
+                            : (item.tipe == 'ASSIGNMENT'
+                                ? Icons.edit_note_rounded
+                                : (item.tipe == 'FORUM'
+                                    ? Icons.forum_rounded
+                                    : Icons.open_in_new_rounded))),
                     size: 16,
                   ),
                   label: Text(
@@ -265,7 +292,13 @@ class SubSectionTile extends StatelessWidget {
                         ? 'Kerjakan Kuis'
                         : (item.kodeTemplate == 'LINK_VCON'
                             ? 'Buka Google Meet'
-                            : 'Buka File / Link Materi'),
+                            : (item.tipe == 'ASSIGNMENT'
+                                ? 'Buka & Kerjakan Tugas'
+                                : (item.tipe == 'FORUM'
+                                    ? 'Buka Forum Diskusi'
+                                    : (item.tipe == 'QUESIONER'
+                                        ? 'Isi Kuesioner'
+                                        : 'Buka File / Materi')))),
                     style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold),
                   ),
                   style: OutlinedButton.styleFrom(

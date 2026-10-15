@@ -145,28 +145,83 @@ class CourseProvider extends ChangeNotifier {
     }
   }
 
-  /// Ambil Detail Pertemuan 1 - 21 (Sakura)
-  Future<void> loadCourseDetail(CourseItem course) async {
+  /// Cek apakah detail kelas sudah tersimpan di cache lokal
+  bool hasCachedDetail(String kodeCourse) {
+    final raw = _storage.getCachedCourseDetailRaw(kodeCourse);
+    return raw != null && raw.isNotEmpty;
+  }
+
+  /// Ambil Detail Pertemuan 1 - 21 (Sakura/Mentari) dengan dukungan Offline-Cache
+  Future<void> loadCourseDetail(CourseItem course, {bool forceRefresh = false}) async {
     _selectedCourse = course;
-    _courseDetail = null;
+
+    // 1. Jika ada cache lokal dan tidak dipaksa refresh, tampilkan segera
+    if (!forceRefresh) {
+      final cachedRaw = _storage.getCachedCourseDetailRaw(course.kodeCourse);
+      if (cachedRaw != null && cachedRaw.isNotEmpty) {
+        try {
+          final decoded = jsonDecode(cachedRaw);
+          if (decoded is Map<String, dynamic>) {
+            _courseDetail = CourseDetailResponse.fromJson(decoded);
+            _errorMessage = null;
+            notifyListeners();
+            return;
+          }
+        } catch (_) {}
+      }
+    }
+
     _isLoading = true;
     _errorMessage = null;
     notifyListeners();
 
     try {
-      _courseDetail = await _apiClient.getCourseDetail(course.kodeCourse);
+      final detail = await _apiClient.getCourseDetail(course.kodeCourse);
+      _courseDetail = detail;
+      _errorMessage = null;
+      await _storage.saveCachedCourseDetail(
+        course.kodeCourse,
+        jsonEncode(detail.toJson()),
+      );
     } on ApiException catch (e) {
-      _errorMessage = e.message;
-      _unauthorized = e.isUnauthorized;
+      // Jika sudah ada data di layar dari cache, pertahankan data dan jangan buat layar kosong
+      if (_courseDetail == null) {
+        _errorMessage = e.message;
+        _unauthorized = e.isUnauthorized;
+      }
+    } catch (e) {
+      if (_courseDetail == null) {
+        _errorMessage = 'Terjadi kendala saat memuat kelas: $e';
+      }
     } finally {
       _isLoading = false;
       notifyListeners();
     }
   }
 
+  /// Tetapkan detail kelas langsung dari hasil sync Chromium WebView
+  void setCourseDetailDirectly(CourseItem course, CourseDetailResponse detail) {
+    _selectedCourse = course;
+    _courseDetail = detail;
+    _errorMessage = null;
+    _unauthorized = false;
+    _storage.saveCachedCourseDetail(
+      course.kodeCourse,
+      jsonEncode(detail.toJson()),
+    );
+    notifyListeners();
+  }
+
   /// Toggle status penyelesaian tugas (Interaktif untuk demo langsung ke dosen)
   void toggleTaskCompletion(SubSection subSection) {
     subSection.completion = !subSection.completion;
+    // Simpan progres ke cache jika kelas aktif sedang dibuka
+    if (_selectedCourse != null && _courseDetail != null) {
+      _storage.saveCachedCourseDetail(
+        _selectedCourse!.kodeCourse,
+        jsonEncode(_courseDetail!.toJson()),
+      );
+    }
     notifyListeners();
   }
 }

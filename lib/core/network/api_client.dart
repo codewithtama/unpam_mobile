@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'package:dio/dio.dart';
 import '../constants/api_constants.dart';
 import '../services/storage_service.dart';
+import '../services/chromium_session_service.dart';
 import '../../models/user_course_model.dart';
 import '../../models/course_detail_model.dart';
 
@@ -52,7 +53,13 @@ class ApiClient {
           if (cookies != null && cookies.isNotEmpty) {
             options.headers['Cookie'] = cookies;
           }
-          options.headers['Referer'] = 'https://mentari.unpam.ac.id/';
+          if (options.uri.host.contains('sakura')) {
+            options.headers['Origin'] = 'https://sakura.unpam.ac.id';
+            options.headers['Referer'] = 'https://sakura.unpam.ac.id/';
+          } else {
+            options.headers['Origin'] = 'https://mentari.unpam.ac.id';
+            options.headers['Referer'] = 'https://mentari.unpam.ac.id/';
+          }
           return handler.next(options);
         },
       ),
@@ -83,7 +90,7 @@ class ApiClient {
       return const ApiException('Sesi berakhir atau token tidak valid. Silakan login ulang.', statusCode: 401);
     }
     if (code == 403) {
-      return const ApiException('Akses ditolak server (403). Token salah atau permintaan diblokir.', statusCode: 403);
+      return const ApiException('Akses ditolak server (403). Diblokir oleh proteksi Cloudflare.', statusCode: 403);
     }
     if (code != null) {
       return ApiException('Server mengembalikan error $code.', statusCode: code);
@@ -92,6 +99,21 @@ class ApiClient {
   }
 
   Future<UserCourseResponse> getUserCourses() async {
+    // 1. Coba ambil lewat Chromium Session (melewati proteksi Cloudflare)
+    try {
+      final chromiumData = await ChromiumSessionService.instance.fetchJson(
+        '/api/user-course?page=1&limit=50',
+      );
+      if (chromiumData != null && chromiumData.isNotEmpty) {
+        final res = UserCourseResponse.fromJson(chromiumData);
+        if (res.data.isNotEmpty) {
+          await _storage.saveCachedCourses(jsonEncode(chromiumData));
+          return res;
+        }
+      }
+    } catch (_) {}
+
+    // 2. Fallback ke Dio
     final ts = DateTime.now().millisecondsSinceEpoch;
     final url =
         '${ApiConstants.mentariBaseUrl}${ApiConstants.userCourses}?page=1&limit=50&t=$ts';
@@ -104,8 +126,58 @@ class ApiClient {
   }
 
   Future<CourseDetailResponse> getCourseDetail(String kodeCourse) async {
-    final url = '${ApiConstants.sakuraBaseUrl}${ApiConstants.courseDetail(kodeCourse)}';
-    return CourseDetailResponse.fromJson(await _getJson(url));
+    // 1. Coba ambil lewat Chromium Session (melewati proteksi Cloudflare Turnstile)
+    try {
+      final encodedKode = Uri.encodeComponent(kodeCourse);
+      final chromiumData = await ChromiumSessionService.instance.fetchJson(
+        '/api/course/$encodedKode',
+      );
+      if (chromiumData != null &&
+          (chromiumData['data'] != null ||
+              chromiumData['peserta'] != null ||
+              chromiumData['kode_course'] != null)) {
+        return CourseDetailResponse.fromJson(chromiumData);
+      }
+    } catch (_) {}
+
+    try {
+      final encodedKode = Uri.encodeComponent(kodeCourse);
+      final sakuraChromiumData = await ChromiumSessionService.instance.fetchJson(
+        'https://sakura.unpam.ac.id/api/course/$encodedKode',
+      );
+      if (sakuraChromiumData != null &&
+          (sakuraChromiumData['data'] != null ||
+              sakuraChromiumData['peserta'] != null ||
+              sakuraChromiumData['kode_course'] != null)) {
+        return CourseDetailResponse.fromJson(sakuraChromiumData);
+      }
+    } catch (_) {}
+
+    // 2. Fallback ke Dio jika Chromium session belum terhubung
+    ApiException? lastError;
+
+    // Coba endpoint Sakura
+    try {
+      final sakuraUrl = '${ApiConstants.sakuraBaseUrl}${ApiConstants.courseDetail(kodeCourse)}';
+      final json = await _getJson(sakuraUrl);
+      return CourseDetailResponse.fromJson(json);
+    } on ApiException catch (e) {
+      lastError = e;
+    } catch (_) {}
+
+    // Coba endpoint Mentari
+    try {
+      final mentariUrl = '${ApiConstants.mentariBaseUrl}${ApiConstants.courseDetail(kodeCourse)}';
+      final json = await _getJson(mentariUrl);
+      return CourseDetailResponse.fromJson(json);
+    } on ApiException catch (e) {
+      lastError = e;
+    } catch (_) {}
+
+    throw lastError ??
+        const ApiException(
+          'Tidak dapat memuat data kelas dari server kampus (Proteksi Cloudflare aktif).',
+        );
   }
 
   /// Token divalidasi ke server sebelum sesi disimpan; simpan info JWT dan cookie WebView.

@@ -3,7 +3,9 @@ import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:webview_flutter/webview_flutter.dart';
 import '../core/network/api_client.dart';
+import '../core/services/storage_service.dart';
 import '../models/user_course_model.dart';
+import '../models/course_detail_model.dart';
 import '../theme/app_theme.dart';
 
 class MentariWebLoginScreen extends StatefulWidget {
@@ -74,6 +76,13 @@ class _MentariWebLoginScreenState extends State<MentariWebLoginScreen> {
               token: window._activeBearerToken || null
             });
           }
+        } else if (self._url && String(self._url).indexOf('course') !== -1) {
+          try {
+            var cJson = JSON.parse(self.responseText);
+            if (cJson && (cJson.data || cJson.peserta || cJson.kode_course)) {
+              postMsg({ type: 'live_course_detail', data: cJson });
+            }
+          } catch(e) {}
         }
       } catch(e) {}
     });
@@ -112,6 +121,13 @@ class _MentariWebLoginScreenState extends State<MentariWebLoginScreen> {
                 data: json,
                 token: window._activeBearerToken || null
               });
+            }
+          }).catch(function() {});
+        } else if (String(url).indexOf('course') !== -1) {
+          var clone2 = res.clone();
+          clone2.json().then(function(cJson) {
+            if (cJson && (cJson.data || cJson.peserta || cJson.kode_course)) {
+              postMsg({ type: 'live_course_detail', data: cJson });
             }
           }).catch(function() {});
         }
@@ -277,6 +293,23 @@ class _MentariWebLoginScreenState extends State<MentariWebLoginScreen> {
       if (decoded is! Map<String, dynamic>) return;
 
       final type = decoded['type']?.toString();
+
+      // Kasus 0: Detail mata kuliah tertangkap dari traffic WebView!
+      if (type == 'live_course_detail') {
+        final rawDetail = decoded['data'];
+        if (rawDetail is Map<String, dynamic>) {
+          try {
+            final detail = CourseDetailResponse.fromJson(rawDetail);
+            if (detail.kodeCourse.isNotEmpty) {
+              final storage = await StorageService.getInstance();
+              await storage.saveCachedCourseDetail(
+                detail.kodeCourse,
+                jsonEncode(rawDetail),
+              );
+            }
+          } catch (_) {}
+        }
+      }
 
       // Kasus A: Data Real Mata Kuliah langsung tertangkap dari traffic WebView!
       if (type == 'live_courses') {

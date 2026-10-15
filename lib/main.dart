@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'core/services/storage_service.dart';
 import 'core/services/ai_service.dart';
+import 'core/services/chromium_session_service.dart';
 import 'core/network/api_client.dart';
 import 'providers/auth_provider.dart';
 import 'providers/course_provider.dart';
@@ -42,6 +43,20 @@ class UnpamMobileApp extends StatelessWidget {
       debugShowCheckedModeBanner: false,
       theme: AppTheme.lightTheme,
       home: initialLoggedIn ? const HomeScreen() : const LoginScreen(),
+      builder: (context, child) {
+        return Stack(
+          children: [
+            if (child != null) child,
+            Positioned(
+              left: -9999,
+              top: -9999,
+              width: 1,
+              height: 1,
+              child: ChromiumSessionService.instance.buildHeadlessWidget(),
+            ),
+          ],
+        );
+      },
     );
   }
 }

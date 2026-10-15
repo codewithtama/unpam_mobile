@@ -73,7 +73,23 @@ class StorageService {
     return _preferences?.getString(coursesCacheKey);
   }
 
+  static String courseDetailKey(String kodeCourse) => 'unpam_course_detail_$kodeCourse';
+
+  Future<void> saveCachedCourseDetail(String kodeCourse, String jsonString) async {
+    await _preferences?.setString(courseDetailKey(kodeCourse), jsonString);
+  }
+
+  String? getCachedCourseDetailRaw(String kodeCourse) {
+    return _preferences?.getString(courseDetailKey(kodeCourse));
+  }
+
   Future<void> clearSession() async {
+    final keys = _preferences?.getKeys() ?? {};
+    for (final k in keys) {
+      if (k.startsWith('unpam_course_detail_')) {
+        await _preferences?.remove(k);
+      }
+    }
     await _preferences?.remove(ApiConstants.tokenKey);
     await _preferences?.remove(ApiConstants.nimKey);
     await _preferences?.remove(ApiConstants.studentNameKey);

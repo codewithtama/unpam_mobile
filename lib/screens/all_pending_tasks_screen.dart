@@ -75,6 +75,8 @@ class AllPendingTasksScreen extends StatelessWidget {
                       final item = pending[index];
                       return SubSectionTile(
                         item: item.subSection,
+                        courseKode: courseProv.selectedCourse?.kodeCourse,
+                        courseName: courseProv.selectedCourse?.namaMataKuliah,
                         sectionTitle: '${item.sectionTitle}${item.meetingTitle != null ? ' - ${item.meetingTitle}' : ''}',
                         onToggleCompletion: (_) {
                           courseProv.toggleTaskCompletion(item.subSection);

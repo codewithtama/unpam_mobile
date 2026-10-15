@@ -10,6 +10,7 @@ import 'course_detail_screen.dart';
 import 'ai_assistant_screen.dart';
 import 'profile_screen.dart';
 import 'login_screen.dart';
+import 'mentari_web_login_screen.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -37,6 +38,29 @@ class _HomeScreenState extends State<HomeScreen> {
   void dispose() {
     _pageController.dispose();
     super.dispose();
+  }
+
+  Future<void> _syncViaMentariWeb() async {
+    final auth = context.read<AuthProvider>();
+    final courseProv = context.read<CourseProvider>();
+    await Navigator.push<bool>(
+      context,
+      MaterialPageRoute(
+        builder: (_) => MentariWebLoginScreen(
+          onTokenFound: (token, {cookies, preloadCourses}) async {
+            final success = await auth.loginWithToken(
+              token,
+              cookies: cookies,
+              preloadCourses: preloadCourses,
+            );
+            if (success && preloadCourses != null && mounted) {
+              courseProv.setInitialCourses(preloadCourses);
+            }
+            return success;
+          },
+        ),
+      ),
+    );
   }
 
   /// Menangani gesture swipe back / tombol kembali agar TIDAK tiba-tiba keluar aplikasi atau logout
@@ -164,6 +188,11 @@ class _HomeScreenState extends State<HomeScreen> {
           ],
         ),
         actions: [
+          IconButton(
+            tooltip: 'Sinkronkan Sesi Web Mentari',
+            icon: const Icon(Icons.sync_rounded),
+            onPressed: _syncViaMentariWeb,
+          ),
           IconButton(
             tooltip: 'Refresh Data',
             icon: const Icon(Icons.refresh_rounded),
@@ -473,6 +502,15 @@ class _HomeScreenState extends State<HomeScreen> {
               alignment: WrapAlignment.center,
               children: [
                 ElevatedButton.icon(
+                  onPressed: _syncViaMentariWeb,
+                  icon: const Icon(Icons.sync_rounded, size: 18),
+                  label: const Text('Sinkronkan Sesi Web'),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: AppTheme.primaryBlue,
+                    foregroundColor: Colors.white,
+                  ),
+                ),
+                OutlinedButton.icon(
                   onPressed: courseProv.isUnauthorized ? _forceRelogin : courseProv.loadUserCourses,
                   icon: Icon(courseProv.isUnauthorized ? Icons.login_rounded : Icons.refresh_rounded, size: 18),
                   label: Text(courseProv.isUnauthorized ? 'Login Ulang (Web)' : 'Coba Lagi'),
@@ -648,6 +686,8 @@ class _HomeScreenState extends State<HomeScreen> {
                       final item = pending[index];
                       return SubSectionTile(
                         item: item.subSection,
+                        courseKode: courseProv.selectedCourse?.kodeCourse,
+                        courseName: courseProv.selectedCourse?.namaMataKuliah,
                         sectionTitle:
                             '${item.sectionTitle}${item.meetingTitle != null ? ' - ${item.meetingTitle}' : ''}',
                         onToggleCompletion: (_) {

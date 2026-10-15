@@ -1,11 +1,21 @@
 import 'package:flutter/material.dart';
 import '../models/course_detail_model.dart';
 import '../theme/app_theme.dart';
+import '../screens/mentari_activity_screen.dart';
 
 class QuizDialog extends StatelessWidget {
   final SubSection item;
+  final String? courseKode;
+  final String? courseName;
+  final String? sectionTitle;
 
-  const QuizDialog({super.key, required this.item});
+  const QuizDialog({
+    super.key,
+    required this.item,
+    this.courseKode,
+    this.courseName,
+    this.sectionTitle,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -50,21 +60,29 @@ class QuizDialog extends StatelessWidget {
           onPressed: () => Navigator.pop(context),
           child: const Text('Tutup', style: TextStyle(color: AppTheme.textMuted)),
         ),
-        ElevatedButton(
+        ElevatedButton.icon(
           onPressed: () {
             Navigator.pop(context);
-            ScaffoldMessenger.of(context).showSnackBar(
-              SnackBar(
-                backgroundColor: AppTheme.primaryBlue,
-                content: Text('Simulasi pengerjaan ${item.judul} berhasil dimulai!'),
+            Navigator.push(
+              context,
+              MaterialPageRoute(
+                builder: (_) => MentariActivityScreen(
+                  item: item,
+                  courseKode: courseKode,
+                  courseName: courseName,
+                  sectionTitle: sectionTitle,
+                ),
               ),
             );
           },
+          icon: const Icon(Icons.play_arrow_rounded, size: 18),
+          label: const Text('Mulai Kuis di Web'),
           style: ElevatedButton.styleFrom(
-            backgroundColor: AppTheme.accentGold,
+            backgroundColor: AppTheme.primaryBlue,
+            foregroundColor: Colors.white,
             padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
           ),
-          child: const Text('Mulai Kuis'),
         ),
       ],
     );
