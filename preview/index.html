@@ -1,0 +1,780 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>UNPAM LMS Mobile - Preview Interaktif</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --primary: #1E3A8A;
+      --primary-light: #2563EB;
+      --accent: #D97706;
+      --accent-light: #FEF3C7;
+      --bg: #0F172A;
+      --phone-bg: #F8FAFC;
+      --surface: #FFFFFF;
+      --text: #0F172A;
+      --muted: #64748B;
+      --border: #E2E8F0;
+      --success: #10B981;
+      --danger: #EF4444;
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; font-family: 'Plus Jakarta Sans', sans-serif; -webkit-tap-highlight-color: transparent; }
+    
+    body {
+      background: var(--bg);
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      padding: 20px;
+      color: #fff;
+    }
+
+    .top-controls {
+      display: flex;
+      gap: 12px;
+      align-items: center;
+      margin-bottom: 16px;
+      flex-wrap: wrap;
+      justify-content: center;
+    }
+
+    .badge-info {
+      background: rgba(37, 99, 235, 0.2);
+      border: 1px solid rgba(37, 99, 235, 0.4);
+      color: #93C5FD;
+      padding: 6px 14px;
+      border-radius: 20px;
+      font-size: 13px;
+      font-weight: 600;
+    }
+
+    .btn-control {
+      background: #1E293B;
+      color: #F8FAFC;
+      border: 1px solid #334155;
+      padding: 8px 16px;
+      border-radius: 10px;
+      cursor: pointer;
+      font-size: 13px;
+      font-weight: 600;
+      transition: all 0.2s;
+    }
+    .btn-control:hover { background: #334155; }
+
+    /* Phone Device Mockup */
+    .phone-container {
+      width: 412px;
+      height: 860px;
+      background: var(--phone-bg);
+      border-radius: 46px;
+      box-shadow: 0 25px 60px rgba(0,0,0,0.6), 0 0 0 12px #1E293B, 0 0 0 14px #334155;
+      overflow: hidden;
+      display: flex;
+      flex-direction: column;
+      position: relative;
+      color: var(--text);
+    }
+
+    /* Status Bar */
+    .status-bar {
+      height: 38px;
+      background: var(--primary);
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 0 24px;
+      font-size: 12px;
+      font-weight: 700;
+      color: #fff;
+      z-index: 10;
+    }
+
+    .screen {
+      flex: 1;
+      overflow-y: auto;
+      display: none;
+      flex-direction: column;
+      background: var(--phone-bg);
+    }
+    .screen.active { display: flex; }
+
+    /* Screen: Login */
+    .login-box {
+      padding: 40px 24px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      text-align: center;
+    }
+
+    .logo-circle {
+      width: 80px;
+      height: 80px;
+      background: var(--primary);
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: var(--accent);
+      font-size: 38px;
+      box-shadow: 0 10px 25px rgba(30, 58, 138, 0.4);
+      margin-bottom: 16px;
+    }
+
+    .card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 16px;
+      padding: 16px;
+      margin: 8px 16px;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.03);
+    }
+
+    .form-group {
+      text-align: left;
+      margin-bottom: 14px;
+      width: 100%;
+    }
+    .form-group label {
+      font-size: 12px;
+      font-weight: 600;
+      color: var(--muted);
+      margin-bottom: 4px;
+      display: block;
+    }
+    .form-control {
+      width: 100%;
+      padding: 12px 14px;
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      font-size: 14px;
+      background: #FFF;
+      outline: none;
+    }
+    .form-control:focus { border-color: var(--primary-light); }
+
+    .btn-primary {
+      width: 100%;
+      background: var(--primary);
+      color: #fff;
+      border: none;
+      padding: 14px;
+      border-radius: 12px;
+      font-size: 14px;
+      font-weight: 700;
+      cursor: pointer;
+      margin-top: 8px;
+      box-shadow: 0 4px 12px rgba(30, 58, 138, 0.25);
+    }
+    .btn-secondary {
+      width: 100%;
+      background: transparent;
+      color: var(--text);
+      border: 1.5px solid var(--accent);
+      padding: 12px;
+      border-radius: 12px;
+      font-size: 13px;
+      font-weight: 700;
+      cursor: pointer;
+      margin-top: 10px;
+    }
+
+    /* Screen: Home */
+    .app-header {
+      background: var(--primary);
+      color: #fff;
+      padding: 16px 20px 24px;
+      border-bottom-left-radius: 26px;
+      border-bottom-right-radius: 26px;
+    }
+    .header-nav {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 16px;
+    }
+
+    .banner-tugas {
+      margin: 16px;
+      background: linear-gradient(135deg, #D97706, #F59E0B);
+      color: #fff;
+      padding: 16px;
+      border-radius: 16px;
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      cursor: pointer;
+      box-shadow: 0 8px 20px rgba(217, 119, 6, 0.3);
+    }
+
+    .course-card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 16px;
+      padding: 16px;
+      margin: 8px 16px;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+    .course-card:hover { transform: translateY(-2px); box-shadow: 0 6px 16px rgba(0,0,0,0.06); }
+
+    /* Tabs */
+    .tab-bar {
+      display: flex;
+      background: #fff;
+      border-bottom: 1px solid var(--border);
+      position: sticky;
+      top: 0;
+      z-index: 5;
+    }
+    .tab-item {
+      flex: 1;
+      padding: 12px 6px;
+      text-align: center;
+      font-size: 12px;
+      font-weight: 700;
+      color: var(--muted);
+      cursor: pointer;
+      border-bottom: 3px solid transparent;
+    }
+    .tab-item.active {
+      color: var(--primary);
+      border-bottom-color: var(--accent);
+    }
+
+    .task-item {
+      background: #fff;
+      border: 1px solid var(--border);
+      border-radius: 14px;
+      padding: 14px;
+      margin: 8px 16px;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+    .task-item.completed {
+      border-color: rgba(16, 185, 129, 0.4);
+      background: #F0FDF4;
+    }
+
+    .task-row {
+      display: flex;
+      align-items: flex-start;
+      gap: 12px;
+    }
+
+    .task-icon {
+      width: 36px;
+      height: 36px;
+      border-radius: 50%;
+      background: rgba(37, 99, 235, 0.1);
+      color: var(--primary-light);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 18px;
+      flex-shrink: 0;
+    }
+
+    .task-checkbox {
+      width: 24px;
+      height: 24px;
+      border-radius: 50%;
+      border: 2px solid var(--muted);
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      flex-shrink: 0;
+      transition: all 0.2s;
+    }
+    .task-checkbox.checked {
+      background: var(--success);
+      border-color: var(--success);
+      color: white;
+      font-size: 14px;
+    }
+
+    .warning-box {
+      background: #FFFBEB;
+      border: 1px solid #FDE68A;
+      color: #92400E;
+      padding: 8px 12px;
+      border-radius: 8px;
+      font-size: 11px;
+      font-weight: 600;
+    }
+
+    /* Modal */
+    .modal-overlay {
+      position: absolute;
+      top: 0; left: 0; right: 0; bottom: 0;
+      background: rgba(0,0,0,0.5);
+      backdrop-filter: blur(3px);
+      display: none;
+      align-items: center;
+      justify-content: center;
+      padding: 20px;
+      z-index: 50;
+    }
+    .modal-overlay.active { display: flex; }
+    .modal-box {
+      background: #fff;
+      width: 100%;
+      border-radius: 20px;
+      padding: 20px;
+      box-shadow: 0 10px 30px rgba(0,0,0,0.25);
+    }
+  </style>
+</head>
+<body>
+
+  <div class="top-controls">
+    <div class="badge-info">📱 Mode Preview Interaktif UNPAM Mobile</div>
+    <button class="btn-control" onclick="resetToHome()">🔄 Reset ke Dashboard</button>
+  </div>
+
+  <div class="phone-container">
+    <!-- Status Bar -->
+    <div class="status-bar">
+      <span>13:55</span>
+      <span>4G • 98% 🔋</span>
+    </div>
+
+    <!-- SCREEN 1: LOGIN -->
+    <div id="screen-login" class="screen active">
+      <div class="login-box">
+        <div class="logo-circle">🎓</div>
+        <h2 style="font-size: 20px; font-weight: 800; color: var(--primary);">UNPAM LMS MOBILE</h2>
+        <p style="font-size: 12px; color: var(--muted); margin-top: 4px;">Portal Mentari & Sakura Terpadu</p>
+
+        <div class="card" style="width: 100%; margin-top: 24px; text-align: left;">
+          <div class="form-group">
+            <label>Nomor Induk Mahasiswa (NIM)</label>
+            <input type="text" id="input-nim" class="form-control" value="241011750041">
+          </div>
+          <div class="form-group">
+            <label>Password</label>
+            <input type="password" class="form-control" value="password123">
+          </div>
+
+          <div style="display: flex; align-items: center; gap: 8px; margin: 10px 0;">
+            <input type="checkbox" id="check-token" onchange="toggleTokenInput()">
+            <label for="check-token" style="font-size: 12px; font-weight: 600; color: var(--primary-light); cursor: pointer;">
+              Input Bearer Token Manual
+            </label>
+          </div>
+
+          <div id="box-token" style="display: none; margin-bottom: 14px;">
+            <label style="font-size: 11px; color: var(--muted); font-weight: 600;">Bearer Token (JWT)</label>
+            <textarea class="form-control" rows="2" placeholder="eyJh..."></textarea>
+          </div>
+
+          <button class="btn-primary" onclick="goToHome()">MASUK KE PORTAL</button>
+          <button class="btn-secondary" onclick="goToHome()">🚀 Demo Instan (Data Asli Dosen)</button>
+        </div>
+
+        <p style="font-size: 11px; color: var(--muted); margin-top: 20px;">
+          Tugas Mobile Programming • Dosen: SAMSO SUPRIYATNA M.Kom
+        </p>
+      </div>
+    </div>
+
+    <!-- SCREEN 2: HOME DASHBOARD -->
+    <div id="screen-home" class="screen">
+      <div class="app-header">
+        <div class="header-nav">
+          <div style="display: flex; align-items: center; gap: 8px;">
+            <span style="font-size: 20px;">🎓</span>
+            <span style="font-weight: 800; font-size: 15px;">Mentari & Sakura</span>
+          </div>
+          <button onclick="goToLogin()" style="background: rgba(255,255,255,0.15); border: none; color: #fff; padding: 4px 10px; border-radius: 8px; font-size: 11px; cursor: pointer; font-weight: 600;">Keluar</button>
+        </div>
+
+        <div style="display: flex; align-items: center; gap: 12px;">
+          <div style="width: 44px; height: 44px; border-radius: 50%; background: rgba(255,255,255,0.2); display: flex; align-items: center; justify-content: center; font-size: 20px;">
+            👤
+          </div>
+          <div>
+            <div style="font-size: 15px; font-weight: 800;">DIMAS ALFA PRATAMA</div>
+            <div style="font-size: 12px; opacity: 0.85;">NIM: 241011750041 • Kelas 04SIFE001</div>
+          </div>
+        </div>
+
+        <div style="display: flex; justify-content: space-around; margin-top: 16px; background: rgba(255,255,255,0.1); padding: 10px; border-radius: 12px; text-align: center;">
+          <div><div style="font-weight: 800; font-size: 14px;">8 MK</div><div style="font-size: 10px; opacity: 0.7;">Mata Kuliah</div></div>
+          <div style="width: 1px; background: rgba(255,255,255,0.2);"></div>
+          <div><div style="font-weight: 800; font-size: 14px;">20 SKS</div><div style="font-size: 10px; opacity: 0.7;">Beban Studi</div></div>
+          <div style="width: 1px; background: rgba(255,255,255,0.2);"></div>
+          <div><div style="font-weight: 800; font-size: 14px;">Sabtu (Shift E)</div><div style="font-size: 10px; opacity: 0.7;">Jadwal</div></div>
+        </div>
+      </div>
+
+      <!-- Quick Banner Tugas Pending -->
+      <div class="banner-tugas" onclick="goToCourseDetail()">
+        <div style="font-size: 26px;">📝</div>
+        <div style="flex: 1;">
+          <div style="font-weight: 800; font-size: 14px;">Tugas & Kuis Pending</div>
+          <div style="font-size: 11px; opacity: 0.9;">Ada tugas di Jaringan Komputer & kuis yang belum diselesaikan</div>
+        </div>
+        <span style="font-size: 18px;">➔</span>
+      </div>
+
+      <!-- Section Title -->
+      <div style="padding: 6px 18px; display: flex; justify-content: space-between; align-items: center;">
+        <span style="font-weight: 800; font-size: 14px; color: var(--text);">Mata Kuliah Semester Ini</span>
+        <span style="font-size: 11px; font-weight: 700; background: #DBEAFE; color: #1D4ED8; padding: 2px 8px; border-radius: 6px;">Smstr 20261</span>
+      </div>
+
+      <div id="course-list">
+        <!-- Rendered via JS -->
+      </div>
+    </div>
+
+    <!-- SCREEN 3: COURSE DETAIL -->
+    <div id="screen-detail" class="screen">
+      <!-- Navbar -->
+      <div style="background: var(--primary); color: #fff; padding: 12px 16px; display: flex; align-items: center; gap: 12px;">
+        <button onclick="goToHome()" style="background: transparent; border: none; color: #fff; font-size: 20px; cursor: pointer;">⬅</button>
+        <div style="flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 800; font-size: 15px;">
+          JARINGAN KOMPUTER
+        </div>
+      </div>
+
+      <!-- Course Summary -->
+      <div style="background: #fff; padding: 14px 16px; border-bottom: 1px solid var(--border);">
+        <div style="display: flex; justify-content: space-between; align-items: center;">
+          <div>
+            <div style="font-weight: 800; font-size: 13px;">[3] JARINGAN KOMPUTER # 04SIFE001</div>
+            <div style="font-size: 11px; color: var(--muted); margin-top: 2px;">Dosen: GUSMAYENI S.Kom., M.Kom.</div>
+          </div>
+          <span style="background: #EFF6FF; color: #1D4ED8; font-weight: 800; font-size: 11px; padding: 4px 8px; border-radius: 6px;">3 SKS</span>
+        </div>
+
+        <div style="margin-top: 12px;">
+          <div style="display: flex; justify-content: space-between; font-size: 11px; font-weight: 700; margin-bottom: 4px;">
+            <span>Progres Penyelesaian Tugas: <strong id="progress-text">14%</strong></span>
+            <span id="progress-fraction" style="color: var(--muted);">3/21 Selesai</span>
+          </div>
+          <div style="background: #E2E8F0; height: 8px; border-radius: 4px; overflow: hidden;">
+            <div id="progress-bar" style="background: var(--success); width: 14%; height: 100%; transition: width 0.3s;"></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Tab Bar -->
+      <div class="tab-bar">
+        <div class="tab-item active" onclick="switchDetailTab(0)">Pending (<span id="count-pending">0</span>)</div>
+        <div class="tab-item" onclick="switchDetailTab(1)">Pertemuan (1-21)</div>
+        <div class="tab-item" onclick="switchDetailTab(2)">Peserta (41)</div>
+      </div>
+
+      <!-- TAB 1: PENDING TASKS -->
+      <div id="tab-pending" style="display: block; padding-bottom: 20px;">
+        <div id="pending-tasks-list"></div>
+      </div>
+
+      <!-- TAB 2: SECTIONS 1-21 -->
+      <div id="tab-sections" style="display: none; padding-bottom: 20px;">
+        <div id="sections-list"></div>
+      </div>
+
+      <!-- TAB 3: STUDENTS -->
+      <div id="tab-students" style="display: none; padding: 12px 16px;">
+        <input type="text" id="search-student" class="form-control" placeholder="Cari nama atau NIM..." oninput="filterStudents(this.value)">
+        <div id="students-list" style="margin-top: 12px;"></div>
+      </div>
+    </div>
+
+    <!-- QUIZ MODAL -->
+    <div id="quiz-modal" class="modal-overlay">
+      <div class="modal-box">
+        <div style="display: flex; gap: 10px; align-items: center; margin-bottom: 12px;">
+          <div style="background: rgba(217,119,6,0.15); width: 38px; height: 38px; border-radius: 10px; display: flex; align-items: center; justify-content: center; font-size: 20px;">⏱️</div>
+          <div>
+            <div id="modal-title" style="font-weight: 800; font-size: 15px;">Pretest</div>
+            <div style="font-size: 11px; color: var(--muted);">Ujian Kuis Online</div>
+          </div>
+        </div>
+        <div style="font-size: 12px; color: var(--text); line-height: 1.6; border-top: 1px solid var(--border); padding-top: 10px;">
+          <div>⏱️ <strong>Durasi:</strong> 60 Menit</div>
+          <div>📑 <strong>Format Soal:</strong> Pilihan Ganda</div>
+          <div>🔀 <strong>Acak Jawaban:</strong> Ya</div>
+          <div>📄 <strong>Tampilan:</strong> 1 Soal Per Halaman</div>
+        </div>
+        <div id="modal-warning" class="warning-box" style="margin-top: 12px; display: none;"></div>
+        <div style="display: flex; gap: 10px; margin-top: 18px;">
+          <button class="btn-control" style="flex: 1;" onclick="closeModal()">Tutup</button>
+          <button class="btn-primary" style="flex: 1; margin: 0; background: var(--accent);" onclick="startQuizSimulation()">Mulai Kuis</button>
+        </div>
+      </div>
+    </div>
+
+  </div>
+
+  <script>
+    // Data Riil Dosen
+    const userCourses = [
+      { nama: "JARINGAN KOMPUTER", sks: 3, dosen: "GUSMAYENI S.Kom., M.Kom.", kode: "22SIF0173", kelas: "04SIFE001", hari: "Sabtu", shift: "E" },
+      { nama: "PEMROGRAMAN BERORIENTASI OBYEK (JAVA II)", sks: 3, dosen: "IR AGUS SUHARTO M.KOM", kode: "22SIF0183", kelas: "04SIFE001", hari: "Sabtu", shift: "E" },
+      { nama: "SISTEM PENUNJANG KEPUTUSAN", sks: 3, dosen: "CHRISTIEN ROZALI S.Si., M.Kom.", kode: "22SIF0193", kelas: "04SIFE001", hari: "Sabtu", shift: "E" },
+      { nama: "PENGELOLAAN INSTALASI KOMPUTER", sks: 2, dosen: "ABDUL CHOLIQ S.Kom., M.Kom.", kode: "22SIF0202", kelas: "04SIFE001", hari: "Sabtu", shift: "E" },
+      { nama: "REKAYASA PERANGKAT LUNAK", sks: 3, dosen: "ANANDA SYARIF HIDAYATULLAH S,Kom., M.Kom.", kode: "22SIF0213", kelas: "04SIFE001", hari: "Sabtu", shift: "E" },
+      { nama: "KOMPUTER FORENSIK", sks: 2, dosen: "HANANING SUMANINGDIAH LARASATI S.Kom., M.Kom.", kode: "22SIF0222", kelas: "04SIFE001", hari: "Sabtu", shift: "E" },
+      { nama: "MEDIA SOSIAL DAN PERIKLANAN", sks: 2, dosen: "IKA SETIAWAN S.Kom., M.Kom.", kode: "22SIF0232", kelas: "04SIFE001", hari: "Sabtu", shift: "E" },
+      { nama: "MOBILE PROGRAMMING", sks: 2, dosen: "SAMSO SUPRIYATNA S.Kom., M.Kom.", kode: "22SIF0242", kelas: "04SIFE001", hari: "Sabtu", shift: "E" }
+    ];
+
+    const meetingsData = [
+      { pertemuan: "Pertemuan 1", judul: "PENGENALAN INTRANET DAN INTERNET", items: [
+        { tipe: "QUIZ", judul: "Pretest", durasi: 60, done: false, warning: null },
+        { tipe: "PPT", judul: "Slide Power Point", link: "https://sakura.unpam.ac.id/api/file/4aea0e7b", done: false },
+        { tipe: "MEET", judul: "LINK VCON Google Meet", link: "https://meet.google.com", done: false },
+        { tipe: "FORUM", judul: "Forum Diskusi Kelas", done: false, warning: "Soal forum belum tersedia dari dosen" },
+        { tipe: "QUIZ", judul: "Posttest", durasi: 60, done: false, warning: 'Silakan selesaikan "Pretest" terlebih dahulu' }
+      ]},
+      { pertemuan: "Pertemuan 2", judul: "TOPOLOGI JARINGAN KOMPUTER", items: [
+        { tipe: "QUIZ", judul: "Pretest Topologi", durasi: 60, done: false, warning: null },
+        { tipe: "PPT", judul: "Materi Topologi Jaringan", link: "https://sakura.unpam.ac.id/api/file/3e665764", done: false },
+        { tipe: "ASSIGNMENT", judul: "Penugasan Terstruktur Topologi", done: false },
+        { tipe: "QUIZ", judul: "Posttest Topologi", durasi: 60, done: false, warning: 'Silakan selesaikan "Pretest" terlebih dahulu' }
+      ]},
+      { pertemuan: "Pertemuan 3", judul: "PERANGKAT JARINGAN", items: [
+        { tipe: "QUIZ", judul: "Pretest", durasi: 60, done: true, warning: null },
+        { tipe: "PPT", judul: "Power Point Perangkat Jaringan", link: "https://sakura.unpam.ac.id/api/file/f57c315a", done: true },
+        { tipe: "QUIZ", judul: "Posttest", durasi: 60, done: true, warning: null },
+        { tipe: "QUESIONER", judul: "Kuesioner Evaluasi", done: true, warning: null }
+      ]},
+      { pertemuan: "Pertemuan 4", judul: "MEDIA TRANSMISI JARINGAN", items: [
+        { tipe: "QUIZ", judul: "Pretest Media Transmisi", durasi: 60, done: false, warning: null },
+        { tipe: "PPT", judul: "Power Point Kabel & Fiber", link: "https://sakura.unpam.ac.id/api/file/94107ee7", done: false },
+        { tipe: "ASSIGNMENT", judul: "Penugasan Terstruktur 4", done: false },
+        { tipe: "QUIZ", judul: "Posttest", durasi: 60, done: false, warning: 'Silakan selesaikan "Pretest" terlebih dahulu' }
+      ]},
+      { pertemuan: "Pertemuan 5", judul: "MEDIA TRANSMISI TANPA KABEL", items: [
+        { tipe: "QUIZ", judul: "Pretest Wireless", durasi: 60, done: false, warning: null },
+        { tipe: "PPT", judul: "Slide Wireless Network", link: "https://sakura.unpam.ac.id/api/file/8120fa32", done: false },
+        { tipe: "QUIZ", judul: "Posttest", durasi: 60, done: false, warning: 'Silakan selesaikan "Pretest" terlebih dahulu' }
+      ]},
+      { pertemuan: "Pertemuan 6", judul: "SISTEM OPERASI JARINGAN", items: [
+        { tipe: "QUIZ", judul: "Pretest OS", durasi: 60, done: true, warning: null },
+        { tipe: "PPT", judul: "Slide OS Jaringan", link: "https://sakura.unpam.ac.id/api/file/b0034719", done: true },
+        { tipe: "QUIZ", judul: "Posttest", durasi: 60, done: true, warning: null }
+      ]}
+    ];
+
+    const students = [
+      { nim: "241011750041", nama: "DIMAS ALFA PRATAMA", email: "d*****a@l*****.com" },
+      { nim: "241011750027", nama: "AGUN SAIFUL FAJAR", email: "a*****l@g****.com" },
+      { nim: "221011750175", nama: "AHMAD NURHIDAYAT", email: "a*****t@g****.com" },
+      { nim: "241011750005", nama: "ALLYA ROHALI", email: "a*****6@g****.com" },
+      { nim: "241011750184", nama: "AMAR MAHMUDI", email: "m*****5@g****.com" },
+      { nim: "241011750024", nama: "ANDREANSYAH", email: "t*****8@g****.com" },
+      { nim: "241011750262", nama: "ARIEF ALIFIAN", email: "a*****7@g****.com" },
+      { nim: "241011750202", nama: "BOBI REGIELMA GINTING", email: "b*****5@g****.com" },
+      { nim: "241011750055", nama: "CECEP RUKMANA", email: "c*****a@g****.com" },
+      { nim: "241011750035", nama: "EKA YUSI AYUNA", email: "e*****3@g****.com" },
+      { nim: "241011750033", nama: "FANDI AHMAD", email: "f*****9@g****.com" },
+      { nim: "241011750034", nama: "FARHAN AHDIAN", email: "f*****2@g****.com" },
+      { nim: "241011750004", nama: "FARHAN GEMILANG", email: "f*****4@g****.com" },
+      { nim: "241011750147", nama: "FAUZAN ADITYA", email: "f*****2@g****.com" },
+      { nim: "241011750158", nama: "FAUZI FALENTINO SAPUTRA", email: "f*****6@g****.com" },
+      { nim: "241011750283", nama: "INTAN PUTRI HAMUMPUNI", email: "i*****i@g****.com" },
+      { nim: "241011750218", nama: "IPRANSA TURNIP", email: "i*****p@g****.com" },
+      { nim: "241011750243", nama: "ISTIFA ZAHRA", email: "i*****6@g****.com" },
+      { nim: "241011750223", nama: "LULU FAUZIA", email: "l*****4@g****.com" },
+      { nim: "241011750057", nama: "MIA HARMIATI", email: "m*****8@g****.com" },
+      { nim: "241011750032", nama: "MUHAMAD ALAWI", email: "m*****5@g****.com" },
+      { nim: "221011700649", nama: "MUHAMMAD ILHAM", email: "m*****5@g****.com" },
+      { nim: "241011750090", nama: "MUKHAMMAD QAIDAL GHURRAL", email: "m*****l@g****.com" }
+    ];
+
+    // Navigation
+    function showScreen(id) {
+      document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
+      document.getElementById(id).classList.add('active');
+    }
+
+    function goToHome() { showScreen('screen-home'); renderCourses(); }
+    function goToLogin() { showScreen('screen-login'); }
+    function goToCourseDetail() { showScreen('screen-detail'); renderCourseDetail(); }
+    function resetToHome() { goToHome(); }
+
+    function toggleTokenInput() {
+      const checked = document.getElementById('check-token').checked;
+      document.getElementById('box-token').style.display = checked ? 'block' : 'none';
+    }
+
+    // Render Courses
+    function renderCourses() {
+      const container = document.getElementById('course-list');
+      container.innerHTML = userCourses.map(c => `
+        <div class="course-card" onclick="goToCourseDetail()">
+          <div style="display: flex; justify-content: space-between; align-items: center;">
+            <span style="background: ${c.sks === 3 ? '#EFF6FF' : '#F0FDF4'}; color: ${c.sks === 3 ? '#1D4ED8' : '#15803D'}; font-size: 11px; font-weight: 800; padding: 3px 8px; border-radius: 6px;">${c.sks} SKS</span>
+            <span style="font-size: 11px; color: var(--muted); font-weight: 600;">📅 ${c.hari} (${c.shift})</span>
+          </div>
+          <div style="font-weight: 800; font-size: 14px; margin: 8px 0 4px; color: var(--text);">${c.nama}</div>
+          <div style="font-size: 11px; color: var(--muted);">Kelas: ${c.kelas} • Kode: ${c.kode}</div>
+          <div style="border-top: 1px solid var(--border); margin-top: 12px; padding-top: 8px; display: flex; align-items: center; justify-content: space-between;">
+            <div style="display: flex; align-items: center; gap: 6px; font-size: 11px; font-weight: 700; color: var(--text);">
+              <span>👨‍🏫</span> <span>${c.dosen}</span>
+            </div>
+            <span style="font-size: 13px; color: var(--muted);">➔</span>
+          </div>
+        </div>
+      `).join('');
+    }
+
+    // Render Detail
+    function renderCourseDetail() {
+      renderPendingTasks();
+      renderSections();
+      renderStudents(students);
+      updateProgress();
+    }
+
+    function switchDetailTab(idx) {
+      document.querySelectorAll('.tab-item').forEach((t, i) => t.classList.toggle('active', i === idx));
+      document.getElementById('tab-pending').style.display = idx === 0 ? 'block' : 'none';
+      document.getElementById('tab-sections').style.display = idx === 1 ? 'block' : 'none';
+      document.getElementById('tab-students').style.display = idx === 2 ? 'block' : 'none';
+    }
+
+    function renderPendingTasks() {
+      const pending = [];
+      meetingsData.forEach((m, mIdx) => {
+        m.items.forEach((item, iIdx) => {
+          if (!item.done && (item.tipe === 'QUIZ' || item.tipe === 'ASSIGNMENT' || item.tipe === 'FORUM')) {
+            pending.push({ ...item, meeting: m.pertemuan, mIdx, iIdx });
+          }
+        });
+      });
+
+      document.getElementById('count-pending').innerText = pending.length;
+      const container = document.getElementById('pending-tasks-list');
+
+      if (pending.length === 0) {
+        container.innerHTML = `
+          <div style="text-align: center; padding: 40px 20px;">
+            <div style="font-size: 48px;">🎉</div>
+            <div style="font-weight: 800; font-size: 15px; margin-top: 8px;">Semua Tugas Selesai!</div>
+            <div style="font-size: 12px; color: var(--muted);">Tidak ada tugas atau kuis yang pending.</div>
+          </div>`;
+        return;
+      }
+
+      container.innerHTML = pending.map(p => `
+        <div class="task-item">
+          <div style="display: flex; justify-content: space-between; align-items: center;">
+            <span style="font-size: 10px; font-weight: 800; color: var(--primary-light);">${p.meeting}</span>
+            <span style="font-size: 10px; font-weight: 800; background: #FEF3C7; color: #B45309; padding: 2px 6px; border-radius: 4px;">${p.tipe}</span>
+          </div>
+          <div class="task-row">
+            <div class="task-icon">${p.tipe === 'QUIZ' ? '⏱️' : (p.tipe === 'ASSIGNMENT' ? '📋' : '💬')}</div>
+            <div style="flex: 1;">
+              <div style="font-weight: 800; font-size: 13px;">${p.judul}</div>
+              ${p.durasi ? `<div style="font-size: 11px; color: var(--muted); margin-top: 2px;">Durasi: ${p.durasi} Menit</div>` : ''}
+            </div>
+            <div class="task-checkbox" onclick="toggleTask(${p.mIdx}, ${p.iIdx})"></div>
+          </div>
+          ${p.warning ? `<div class="warning-box">⚠️ ${p.warning}</div>` : ''}
+          ${p.tipe === 'QUIZ' ? `<button class="btn-control" style="font-size: 11px; padding: 6px;" onclick="openQuizModal('${p.judul}', '${p.warning || ''}')">Kerjakan Kuis</button>` : ''}
+        </div>
+      `).join('');
+    }
+
+    function renderSections() {
+      const container = document.getElementById('sections-list');
+      container.innerHTML = meetingsData.map((m, mIdx) => `
+        <div class="card" style="margin: 8px 16px;">
+          <div style="font-weight: 800; font-size: 13px; color: var(--primary);">${m.pertemuan}</div>
+          <div style="font-size: 12px; font-weight: 700; margin-bottom: 8px;">${m.judul}</div>
+          <div style="display: flex; flex-direction: column; gap: 6px;">
+            ${m.items.map((item, iIdx) => `
+              <div style="display: flex; align-items: center; justify-content: space-between; padding: 6px 0; border-top: 1px solid var(--border);">
+                <div style="display: flex; align-items: center; gap: 8px;">
+                  <span style="font-size: 14px;">${item.tipe === 'QUIZ' ? '⏱️' : (item.tipe === 'PPT' ? '📊' : (item.tipe === 'MEET' ? '📹' : '📝'))}</span>
+                  <span style="font-size: 12px; font-weight: 600; ${item.done ? 'text-decoration: line-through; color: var(--muted);' : ''}">${item.judul}</span>
+                </div>
+                <div class="task-checkbox ${item.done ? 'checked' : ''}" onclick="toggleTask(${mIdx}, ${iIdx})">
+                  ${item.done ? '✓' : ''}
+                </div>
+              </div>
+            `).join('')}
+          </div>
+        </div>
+      `).join('');
+    }
+
+    function toggleTask(mIdx, iIdx) {
+      meetingsData[mIdx].items[iIdx].done = !meetingsData[mIdx].items[iIdx].done;
+      renderPendingTasks();
+      renderSections();
+      updateProgress();
+    }
+
+    function updateProgress() {
+      let total = 0, done = 0;
+      meetingsData.forEach(m => m.items.forEach(i => {
+        total++;
+        if (i.done) done++;
+      }));
+      const pct = Math.round((done / total) * 100);
+      document.getElementById('progress-bar').style.width = pct + '%';
+      document.getElementById('progress-text').innerText = pct + '%';
+      document.getElementById('progress-fraction').innerText = `${done}/${total} Selesai`;
+    }
+
+    function renderStudents(list) {
+      const container = document.getElementById('students-list');
+      container.innerHTML = list.map(s => `
+        <div style="display: flex; align-items: center; gap: 10px; padding: 8px 0; border-bottom: 1px solid var(--border);">
+          <div style="width: 32px; height: 32px; border-radius: 50%; background: #EFF6FF; color: #1D4ED8; font-weight: 800; font-size: 13px; display: flex; align-items: center; justify-content: center;">
+            ${s.nama.charAt(0)}
+          </div>
+          <div>
+            <div style="font-weight: 700; font-size: 12px;">${s.nama}</div>
+            <div style="font-size: 10px; color: var(--muted);">NIM: ${s.nim} • ${s.email}</div>
+          </div>
+        </div>
+      `).join('');
+    }
+
+    function filterStudents(q) {
+      const filtered = students.filter(s => s.nama.toLowerCase().includes(q.toLowerCase()) || s.nim.includes(q));
+      renderStudents(filtered);
+    }
+
+    // Modal
+    function openQuizModal(title, warning) {
+      document.getElementById('modal-title').innerText = title;
+      const wBox = document.getElementById('modal-warning');
+      if (warning) {
+        wBox.innerText = '⚠️ ' + warning;
+        wBox.style.display = 'block';
+      } else {
+        wBox.style.display = 'none';
+      }
+      document.getElementById('quiz-modal').classList.add('active');
+    }
+    function closeModal() {
+      document.getElementById('quiz-modal').classList.remove('active');
+    }
+    function startQuizSimulation() {
+      closeModal();
+      alert('🎉 Simulasi kuis dimulai! Timer 60 menit aktif.');
+    }
+
+    // Init
+    renderCourses();
+  </script>
+</body>
+</html>
