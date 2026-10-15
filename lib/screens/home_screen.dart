@@ -240,7 +240,7 @@ class _HomeScreenState extends State<HomeScreen> {
                     ),
 
                     // List Kartu Mata Kuliah
-                    if (courseProv.errorMessage != null)
+                    if (courseProv.errorMessage != null && courseProv.courses.isEmpty)
                       _buildErrorState(courseProv)
                     else if (filteredCourses.isEmpty)
                       const Center(

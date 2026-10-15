@@ -371,40 +371,50 @@ class _MentariWebLoginScreenState extends State<MentariWebLoginScreen> {
     setState(() => _validating = true);
 
     try {
-      // 1. Panggil pemanggilan aktif di browser
-      _triggerActiveFetch();
+      final cookies = await _getCookieHeader();
 
-      // Tunggu sebentar untuk respons channel
-      await Future.delayed(const Duration(milliseconds: 600));
-
-      if (!mounted) return;
-
-      // 2. Jika belum berpindah, baca paksa token dari storage
-      final result = await _controller.runJavaScriptReturningResult(
+      // 1. Eksekusi fetch langsung di dalam sesi Chromium WebView yang sudah lolos Cloudflare
+      final jsResult = await _controller.runJavaScriptReturningResult(
         r'''
-        (function() {
-          var all = [];
-          for (var i = 0; i < localStorage.length; i++) {
-            all.push(localStorage.getItem(localStorage.key(i)));
+        (async function() {
+          try {
+            var url = '/api/user-course?page=1&limit=50';
+            var headers = { 'Accept': 'application/json' };
+            if (window._activeBearerToken) {
+              headers['Authorization'] = 'Bearer ' + window._activeBearerToken;
+            }
+            var res = await fetch(url, { headers: headers, credentials: 'include' });
+            var json = await res.json();
+            return JSON.stringify({
+              ok: true,
+              data: json,
+              token: window._activeBearerToken || null
+            });
+          } catch(e) {
+            return JSON.stringify({ ok: false, error: String(e) });
           }
-          for (var j = 0; j < sessionStorage.length; j++) {
-            all.push(sessionStorage.getItem(sessionStorage.key(j)));
-          }
-          all.push(document.cookie);
-          return JSON.stringify(all);
         })()
         ''',
       );
 
-      final re = RegExp(r'eyJ[\w-]+\.[\w-]+\.[\w-]+');
-      final matches = re.allMatches(result.toString());
-      final cookies = await _getCookieHeader();
+      final str = jsResult.toString();
+      // Handle string escaping dari runJavaScriptReturningResult
+      String cleanJson = str;
+      if (cleanJson.startsWith('"') && cleanJson.endsWith('"')) {
+        cleanJson = jsonDecode(cleanJson);
+      }
 
-      for (final match in matches) {
-        final token = match.group(0);
-        if (token != null && ApiClient.isTokenFresh(token) && !_tried.contains(token)) {
-          _tried.add(token);
-          final ok = await widget.onTokenFound(token, cookies: cookies);
+      final Map<String, dynamic> parsed = jsonDecode(cleanJson) as Map<String, dynamic>;
+
+      if (parsed['ok'] == true && parsed['data'] != null) {
+        final courseRes = UserCourseResponse.fromJson(parsed['data'] as Map<String, dynamic>);
+        if (courseRes.data.isNotEmpty) {
+          final token = parsed['token']?.toString() ?? _lastCapturedToken ?? '';
+          final ok = await widget.onTokenFound(
+            token,
+            cookies: cookies,
+            preloadCourses: courseRes,
+          );
           if (ok && mounted) {
             _poller?.cancel();
             Navigator.of(context).pop(true);
@@ -413,10 +423,13 @@ class _MentariWebLoginScreenState extends State<MentariWebLoginScreen> {
         }
       }
 
+      // 2. Jika fetch belum berhasil (misal belum selesai login di web)
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
-            content: Text('Silakan login di halaman web hingga melihat dashboard/mata kuliah.'),
+            content: Text(
+              'Pastikan Anda sudah menyelesaikan login My Unpam di halaman web di atas hingga muncul daftar mata kuliah.',
+            ),
           ),
         );
       }

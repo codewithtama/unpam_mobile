@@ -132,10 +132,13 @@ class CourseProvider extends ChangeNotifier {
       _courses = response.data;
       _semester = response.semester;
       _unauthorized = false;
+      _errorMessage = null;
     } on ApiException catch (e) {
-      _errorMessage = e.message;
-      _unauthorized = e.isUnauthorized;
-      // Jika data cache sudah ada di layar, jangan kosongkan daftar
+      // Jika sudah ada data matkul dari sesi WebView/cache, jangan sembunyikan!
+      if (_courses.isEmpty) {
+        _errorMessage = e.message;
+        _unauthorized = e.isUnauthorized;
+      }
     } finally {
       _isLoading = false;
       notifyListeners();
