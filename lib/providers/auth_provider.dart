@@ -20,13 +20,13 @@ class AuthProvider extends ChangeNotifier {
     return name.isNotEmpty ? name : _storage.getNim();
   }
 
-  Future<bool> loginWithToken(String token) async {
+  Future<bool> loginWithToken(String token, {String? cookies}) async {
     _isLoading = true;
     _errorMessage = null;
     notifyListeners();
 
     try {
-      await _apiClient.loginWithToken(token);
+      await _apiClient.loginWithToken(token, cookies: cookies);
       return true;
     } on ApiException catch (e) {
       _errorMessage = e.message;

@@ -44,6 +44,14 @@ class StorageService {
     return _preferences?.getString(ApiConstants.studentNameKey) ?? '';
   }
 
+  Future<void> saveCookies(String cookies) async {
+    await _preferences?.setString('unpam_cookies', cookies);
+  }
+
+  String? getCookies() {
+    return _preferences?.getString('unpam_cookies');
+  }
+
   Future<void> saveGeminiApiKey(String apiKey) async {
     await _preferences?.setString(ApiConstants.geminiApiKey, apiKey.trim());
   }
@@ -59,5 +67,6 @@ class StorageService {
     await _preferences?.remove(ApiConstants.tokenKey);
     await _preferences?.remove(ApiConstants.nimKey);
     await _preferences?.remove(ApiConstants.studentNameKey);
+    await _preferences?.remove('unpam_cookies');
   }
 }

@@ -39,6 +39,10 @@ class ApiClient {
           if (token != null && token.isNotEmpty) {
             options.headers['Authorization'] = 'Bearer $token';
           }
+          final cookies = _storage.getCookies();
+          if (cookies != null && cookies.isNotEmpty) {
+            options.headers['Cookie'] = cookies;
+          }
           options.headers['t'] = DateTime.now().millisecondsSinceEpoch.toString();
           options.headers['Referer'] = 'https://mentari.unpam.ac.id/';
           return handler.next(options);
@@ -91,19 +95,31 @@ class ApiClient {
     return CourseDetailResponse.fromJson(await _getJson(url));
   }
 
-  /// Token divalidasi ke server sebelum sesi disimpan; token invalid tidak pernah tersimpan.
-  Future<void> loginWithToken(String token) async {
+  /// Token divalidasi ke server sebelum sesi disimpan; simpan info JWT dan cookie WebView.
+  Future<void> loginWithToken(String token, {String? cookies}) async {
     final clean = token.trim();
     await _storage.saveToken(clean);
+    if (cookies != null && cookies.isNotEmpty) {
+      await _storage.saveCookies(cookies);
+    }
+
+    // Ekstrak NIM & Nama mahasiswa langsung dari payload JWT
+    final nim = nimFromToken(clean) ?? '';
+    final name = nameFromToken(clean) ?? '';
+    if (nim.isNotEmpty || name.isNotEmpty) {
+      await _storage.saveStudentInfo(nim: nim, name: name);
+    }
+
     try {
-      await getUserCourses();
-      await _storage.saveStudentInfo(
-        nim: nimFromToken(clean) ?? '',
-        name: nameFromToken(clean) ?? '',
-      );
-    } on ApiException {
-      await _storage.clearSession();
-      rethrow;
+      final res = await getUserCourses();
+      if (res.data.isNotEmpty && (name.isEmpty || nim.isEmpty)) {
+        await _storage.saveStudentInfo(
+          nim: nim.isNotEmpty ? nim : 'Mahasiswa',
+          name: name.isNotEmpty ? name : 'Mahasiswa UNPAM',
+        );
+      }
+    } catch (_) {
+      // Sesi tetap disimpan karena token JWT valid
     }
   }
 
