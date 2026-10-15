@@ -1,6 +1,5 @@
 class ApiConstants {
   static const String mentariBaseUrl = 'https://mentari.unpam.ac.id';
-  static const String sakuraBaseUrl = 'https://sakura.unpam.ac.id';
 
   static const String tokenKey = 'unpam_bearer_token';
   static const String nimKey = 'unpam_student_nim';

@@ -225,7 +225,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
       builder: (ctx) => AlertDialog(
         title: const Text('Bersihkan Cache & Cookie?'),
         content: const Text(
-          'Tindakan ini akan menghapus sesi login dan cookie portal Mentari & Sakura dari web engine aplikasi.',
+          'Tindakan ini akan menghapus sesi login dan cookie portal Mentari UNPAM dari web engine aplikasi.',
         ),
         actions: [
           TextButton(

@@ -37,7 +37,6 @@ class _PortalWebViewScreenState extends State<PortalWebViewScreen> {
   bool _isDraggingFab = false;
 
   static const String mentariUrl = 'https://mentari.unpam.ac.id/';
-  static const String sakuraUrl = 'https://sakura.unpam.ac.id/';
 
   @override
   void initState() {
@@ -428,7 +427,6 @@ class _PortalWebViewScreenState extends State<PortalWebViewScreen> {
 
   PreferredSizeWidget _buildTopAppBar() {
     final bool isMentari = _currentUrl.contains('mentari');
-    final bool isSakura = _currentUrl.contains('sakura');
 
     return AppBar(
       elevation: 1,
@@ -466,9 +464,7 @@ class _PortalWebViewScreenState extends State<PortalWebViewScreen> {
         mainAxisSize: MainAxisSize.min,
         children: [
           Text(
-            isMentari
-                ? 'Mentari Portal'
-                : (isSakura ? 'Sakura LMS' : 'UNPAM Mobile'),
+            isMentari ? 'Mentari Portal' : 'UNPAM Mobile',
             style: const TextStyle(
               fontSize: 16,
               fontWeight: FontWeight.bold,
@@ -478,9 +474,7 @@ class _PortalWebViewScreenState extends State<PortalWebViewScreen> {
           ),
           const SizedBox(height: 1),
           Text(
-            isMentari
-                ? 'Portal Akademik Mahasiswa'
-                : (isSakura ? 'Learning Management System' : 'Universitas Pamulang'),
+            isMentari ? 'Portal Akademik Mahasiswa' : 'Universitas Pamulang',
             style: TextStyle(
               fontSize: 11,
               color: Colors.white.withOpacity(0.8),
@@ -532,8 +526,6 @@ class _PortalWebViewScreenState extends State<PortalWebViewScreen> {
           onSelected: (val) {
             if (val == 'mentari') {
               _navigateToUrl(mentariUrl);
-            } else if (val == 'sakura') {
-              _navigateToUrl(sakuraUrl);
             } else if (val == 'clear_cache') {
               _controller.clearCache();
               ScaffoldMessenger.of(context).showSnackBar(
@@ -554,16 +546,6 @@ class _PortalWebViewScreenState extends State<PortalWebViewScreen> {
                   Icon(Icons.dashboard_rounded, size: 18, color: AppTheme.primaryLight),
                   SizedBox(width: 10),
                   Text('Buka Mentari Portal'),
-                ],
-              ),
-            ),
-            const PopupMenuItem(
-              value: 'sakura',
-              child: Row(
-                children: [
-                  Icon(Icons.menu_book_rounded, size: 18, color: AppTheme.primaryLight),
-                  SizedBox(width: 10),
-                  Text('Buka Sakura LMS'),
                 ],
               ),
             ),
@@ -600,22 +582,22 @@ class _PortalWebViewScreenState extends State<PortalWebViewScreen> {
       backgroundColor: Colors.white,
       elevation: 3,
       indicatorColor: AppTheme.primaryLight.withOpacity(0.15),
-      onDestinationSelected: (idx) {
-        setState(() => _currentNavIndex = idx);
+      onDestinationSelected: (idx) async {
         if (idx == 0) {
+          setState(() => _currentNavIndex = 0);
           _navigateToUrl(mentariUrl);
         } else if (idx == 1) {
-          _navigateToUrl(sakuraUrl);
-        } else if (idx == 2) {
-          Navigator.push(
+          await Navigator.push(
             context,
             MaterialPageRoute(builder: (_) => const AiAssistantScreen()),
           );
-        } else if (idx == 3) {
-          Navigator.push(
+          if (mounted) setState(() => _currentNavIndex = 0);
+        } else if (idx == 2) {
+          await Navigator.push(
             context,
             MaterialPageRoute(builder: (_) => const ProfileScreen()),
           );
+          if (mounted) setState(() => _currentNavIndex = 0);
         }
       },
       destinations: const [
@@ -623,11 +605,6 @@ class _PortalWebViewScreenState extends State<PortalWebViewScreen> {
           icon: Icon(Icons.dashboard_outlined),
           selectedIcon: Icon(Icons.dashboard_rounded, color: AppTheme.primaryBlue),
           label: 'Mentari',
-        ),
-        NavigationDestination(
-          icon: Icon(Icons.school_outlined),
-          selectedIcon: Icon(Icons.school_rounded, color: AppTheme.primaryBlue),
-          label: 'Sakura LMS',
         ),
         NavigationDestination(
           icon: Icon(Icons.auto_awesome_outlined),
