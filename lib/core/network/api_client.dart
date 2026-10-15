@@ -26,9 +26,18 @@ class ApiClient {
       connectTimeout: const Duration(seconds: 15),
       receiveTimeout: const Duration(seconds: 20),
       headers: {
-        'Accept': 'application/json',
+        'Accept': 'application/json, text/plain, */*',
         'User-Agent':
             'Mozilla/5.0 (Linux; Android 14; Mobile) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Mobile Safari/537.36',
+        'Origin': 'https://mentari.unpam.ac.id',
+        'Referer': 'https://mentari.unpam.ac.id/',
+        'Sec-Fetch-Dest': 'empty',
+        'Sec-Fetch-Mode': 'cors',
+        'Sec-Fetch-Site': 'same-origin',
+        'Sec-Ch-Ua': '"Chromium";v="124", "Android WebView";v="124"',
+        'Sec-Ch-Ua-Mobile': '?1',
+        'Sec-Ch-Ua-Platform': '"Android"',
+        'Accept-Language': 'id-ID,id;q=0.9,en-US;q=0.8,en;q=0.7',
       },
     );
 
@@ -43,7 +52,6 @@ class ApiClient {
           if (cookies != null && cookies.isNotEmpty) {
             options.headers['Cookie'] = cookies;
           }
-          options.headers['t'] = DateTime.now().millisecondsSinceEpoch.toString();
           options.headers['Referer'] = 'https://mentari.unpam.ac.id/';
           return handler.next(options);
         },
@@ -87,7 +95,12 @@ class ApiClient {
     final ts = DateTime.now().millisecondsSinceEpoch;
     final url =
         '${ApiConstants.mentariBaseUrl}${ApiConstants.userCourses}?page=1&limit=50&t=$ts';
-    return UserCourseResponse.fromJson(await _getJson(url));
+    final json = await _getJson(url);
+    final response = UserCourseResponse.fromJson(json);
+    if (response.data.isNotEmpty) {
+      await _storage.saveCachedCourses(jsonEncode(json));
+    }
+    return response;
   }
 
   Future<CourseDetailResponse> getCourseDetail(String kodeCourse) async {
@@ -96,7 +109,8 @@ class ApiClient {
   }
 
   /// Token divalidasi ke server sebelum sesi disimpan; simpan info JWT dan cookie WebView.
-  Future<void> loginWithToken(String token, {String? cookies}) async {
+  /// Jika [preloadCourses] diberikan (diambil langsung dari browser/WebView), langsung simpan dan verifikasi!
+  Future<void> loginWithToken(String token, {String? cookies, UserCourseResponse? preloadCourses}) async {
     final clean = token.trim();
     await _storage.saveToken(clean);
     if (cookies != null && cookies.isNotEmpty) {
@@ -110,16 +124,22 @@ class ApiClient {
       await _storage.saveStudentInfo(nim: nim, name: name);
     }
 
-    try {
-      final res = await getUserCourses();
-      if (res.data.isNotEmpty && (name.isEmpty || nim.isEmpty)) {
+    if (preloadCourses != null && preloadCourses.data.isNotEmpty) {
+      // Data real sudah didapatkan dari sesi aktif WebView
+      await _storage.saveCachedCourses(jsonEncode(preloadCourses.toJson()));
+      return;
+    }
+
+    // Validasi langsung ke endpoint server UNPAM
+    final res = await getUserCourses();
+    if (res.data.isNotEmpty) {
+      await _storage.saveCachedCourses(jsonEncode(res.toJson()));
+      if (name.isEmpty || nim.isEmpty) {
         await _storage.saveStudentInfo(
           nim: nim.isNotEmpty ? nim : 'Mahasiswa',
           name: name.isNotEmpty ? name : 'Mahasiswa UNPAM',
         );
       }
-    } catch (_) {
-      // Sesi tetap disimpan karena token JWT valid
     }
   }
 

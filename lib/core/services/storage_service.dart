@@ -15,6 +15,8 @@ class StorageService {
     return _instance!;
   }
 
+  static const String coursesCacheKey = 'unpam_courses_cache';
+
   Future<void> saveToken(String token) async {
     await _preferences?.setString(ApiConstants.tokenKey, token);
   }
@@ -63,10 +65,19 @@ class StorageService {
     return envKey.isNotEmpty ? envKey : null;
   }
 
+  Future<void> saveCachedCourses(String jsonString) async {
+    await _preferences?.setString(coursesCacheKey, jsonString);
+  }
+
+  String? getCachedCoursesRaw() {
+    return _preferences?.getString(coursesCacheKey);
+  }
+
   Future<void> clearSession() async {
     await _preferences?.remove(ApiConstants.tokenKey);
     await _preferences?.remove(ApiConstants.nimKey);
     await _preferences?.remove(ApiConstants.studentNameKey);
     await _preferences?.remove('unpam_cookies');
+    await _preferences?.remove(coursesCacheKey);
   }
 }

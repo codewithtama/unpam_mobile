@@ -20,15 +20,23 @@ class HomeScreen extends StatefulWidget {
 
 class _HomeScreenState extends State<HomeScreen> {
   int _currentIndex = 0;
+  late final PageController _pageController;
   DateTime? _lastBackPressTime;
   String _courseSearchQuery = '';
 
   @override
   void initState() {
     super.initState();
+    _pageController = PageController(initialPage: _currentIndex);
     WidgetsBinding.instance.addPostFrameCallback((_) {
       context.read<CourseProvider>().loadUserCourses();
     });
+  }
+
+  @override
+  void dispose() {
+    _pageController.dispose();
+    super.dispose();
   }
 
   /// Menangani gesture swipe back / tombol kembali agar TIDAK tiba-tiba keluar aplikasi atau logout
@@ -37,7 +45,11 @@ class _HomeScreenState extends State<HomeScreen> {
 
     // Jika sedang di tab lain (Tugas, AI, atau Profil), kembalikan dulu ke tab Beranda
     if (_currentIndex != 0) {
-      setState(() => _currentIndex = 0);
+      _pageController.animateToPage(
+        0,
+        duration: const Duration(milliseconds: 250),
+        curve: Curves.easeInOut,
+      );
       return;
     }
 
@@ -68,8 +80,10 @@ class _HomeScreenState extends State<HomeScreen> {
       canPop: false,
       onPopInvokedWithResult: _handleBackGesture,
       child: Scaffold(
-        body: IndexedStack(
-          index: _currentIndex,
+        body: PageView(
+          controller: _pageController,
+          onPageChanged: (idx) => setState(() => _currentIndex = idx),
+          physics: const BouncingScrollPhysics(),
           children: [
             _buildCoursesDashboardTab(),
             _buildPendingTasksTab(),
@@ -79,7 +93,14 @@ class _HomeScreenState extends State<HomeScreen> {
         ),
         bottomNavigationBar: NavigationBar(
           selectedIndex: _currentIndex,
-          onDestinationSelected: (idx) => setState(() => _currentIndex = idx),
+          onDestinationSelected: (idx) {
+            setState(() => _currentIndex = idx);
+            _pageController.animateToPage(
+              idx,
+              duration: const Duration(milliseconds: 250),
+              curve: Curves.easeInOut,
+            );
+          },
           elevation: 4,
           backgroundColor: Colors.white,
           indicatorColor: AppTheme.primaryLight.withOpacity(0.15),
@@ -446,14 +467,99 @@ class _HomeScreenState extends State<HomeScreen> {
             const SizedBox(height: 12),
             Text(courseProv.errorMessage!, textAlign: TextAlign.center),
             const SizedBox(height: 16),
-            ElevatedButton(
-              onPressed: courseProv.isUnauthorized ? _forceRelogin : courseProv.loadUserCourses,
-              child: Text(courseProv.isUnauthorized ? 'Login Ulang' : 'Coba Lagi'),
+            Wrap(
+              spacing: 10,
+              runSpacing: 10,
+              alignment: WrapAlignment.center,
+              children: [
+                ElevatedButton.icon(
+                  onPressed: courseProv.isUnauthorized ? _forceRelogin : courseProv.loadUserCourses,
+                  icon: Icon(courseProv.isUnauthorized ? Icons.login_rounded : Icons.refresh_rounded, size: 18),
+                  label: Text(courseProv.isUnauthorized ? 'Login Ulang (Web)' : 'Coba Lagi'),
+                ),
+                OutlinedButton.icon(
+                  onPressed: _showManualTokenDialog,
+                  icon: const Icon(Icons.vpn_key_rounded, size: 18),
+                  label: const Text('Input Token Manual'),
+                ),
+              ],
             ),
           ],
         ),
       ),
     );
+  }
+
+  Future<void> _showManualTokenDialog() async {
+    final textCtrl = TextEditingController();
+    final auth = context.read<AuthProvider>();
+    final courseProv = context.read<CourseProvider>();
+
+    await showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Row(
+          children: [
+            Icon(Icons.vpn_key_rounded, color: AppTheme.primaryLight, size: 22),
+            SizedBox(width: 8),
+            Text('Input Token Manual', style: TextStyle(fontSize: 16)),
+          ],
+        ),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text(
+              'Jika server menolak sesi browser (403), tempel Bearer token dari Local Storage / DevTools Mentari di sini:',
+              style: TextStyle(fontSize: 12, color: AppTheme.textMuted),
+            ),
+            const SizedBox(height: 12),
+            TextField(
+              controller: textCtrl,
+              minLines: 1,
+              maxLines: 4,
+              decoration: InputDecoration(
+                hintText: 'Tempel token eyJhbGciOi...',
+                isDense: true,
+                suffixIcon: IconButton(
+                  tooltip: 'Tempel dari Clipboard',
+                  icon: const Icon(Icons.content_paste_rounded, size: 18),
+                  onPressed: () async {
+                    final data = await Clipboard.getData(Clipboard.kTextPlain);
+                    if (data?.text != null) {
+                      var t = data!.text!.trim();
+                      if (t.toLowerCase().startsWith('bearer ')) {
+                        t = t.substring(7).trim();
+                      }
+                      textCtrl.text = t;
+                    }
+                  },
+                ),
+              ),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('Batal'),
+          ),
+          ElevatedButton(
+            onPressed: () async {
+              final token = textCtrl.text.trim();
+              if (token.isEmpty) return;
+              Navigator.pop(ctx);
+              final ok = await auth.loginWithToken(token);
+              if (ok && mounted) {
+                await courseProv.loadUserCourses();
+              }
+            },
+            child: const Text('Validasi & Muat Data'),
+          ),
+        ],
+      ),
+    );
+    textCtrl.dispose();
   }
 
   Future<void> _forceRelogin() async {

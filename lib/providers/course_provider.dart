@@ -1,5 +1,7 @@
+import 'dart:convert';
 import 'package:flutter/material.dart';
 import '../core/network/api_client.dart';
+import '../core/services/storage_service.dart';
 import '../models/user_course_model.dart';
 import '../models/course_detail_model.dart';
 
@@ -17,6 +19,7 @@ class PendingTaskItem {
 
 class CourseProvider extends ChangeNotifier {
   final ApiClient _apiClient;
+  final StorageService _storage;
 
   List<CourseItem> _courses = [];
   CourseItem? _selectedCourse;
@@ -26,7 +29,33 @@ class CourseProvider extends ChangeNotifier {
   String _semester = '';
   String? _errorMessage;
 
-  CourseProvider(this._apiClient);
+  CourseProvider(this._apiClient, this._storage) {
+    _loadFromCache();
+  }
+
+  void _loadFromCache() {
+    final raw = _storage.getCachedCoursesRaw();
+    if (raw != null && raw.isNotEmpty) {
+      try {
+        final decoded = jsonDecode(raw);
+        if (decoded is Map<String, dynamic>) {
+          final res = UserCourseResponse.fromJson(decoded);
+          if (res.data.isNotEmpty) {
+            _courses = res.data;
+            _semester = res.semester;
+          }
+        }
+      } catch (_) {}
+    }
+  }
+
+  void setInitialCourses(UserCourseResponse response) {
+    _courses = response.data;
+    _semester = response.semester;
+    _errorMessage = null;
+    _unauthorized = false;
+    notifyListeners();
+  }
 
   List<CourseItem> get courses => _courses;
   CourseItem? get selectedCourse => _selectedCourse;
@@ -89,6 +118,11 @@ class CourseProvider extends ChangeNotifier {
 
   /// Ambil Daftar 8 Mata Kuliah Mahasiswa (Mentari)
   Future<void> loadUserCourses() async {
+    // Jika memori masih kosong, coba muat dari cache storage
+    if (_courses.isEmpty) {
+      _loadFromCache();
+    }
+
     _isLoading = true;
     _errorMessage = null;
     notifyListeners();
@@ -97,9 +131,11 @@ class CourseProvider extends ChangeNotifier {
       final response = await _apiClient.getUserCourses();
       _courses = response.data;
       _semester = response.semester;
+      _unauthorized = false;
     } on ApiException catch (e) {
       _errorMessage = e.message;
       _unauthorized = e.isUnauthorized;
+      // Jika data cache sudah ada di layar, jangan kosongkan daftar
     } finally {
       _isLoading = false;
       notifyListeners();

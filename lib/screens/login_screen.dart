@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 import '../providers/auth_provider.dart';
+import '../providers/course_provider.dart';
 import '../theme/app_theme.dart';
 import 'home_screen.dart';
 import 'mentari_web_login_screen.dart';
@@ -13,6 +15,15 @@ class LoginScreen extends StatefulWidget {
 }
 
 class _LoginScreenState extends State<LoginScreen> {
+  final TextEditingController _tokenController = TextEditingController();
+  bool _showManualInput = false;
+
+  @override
+  void dispose() {
+    _tokenController.dispose();
+    super.dispose();
+  }
+
   void _goHome() {
     Navigator.pushReplacement(
       context,
@@ -22,13 +33,54 @@ class _LoginScreenState extends State<LoginScreen> {
 
   Future<void> _handleWebLogin() async {
     final auth = context.read<AuthProvider>();
+    final courseProv = context.read<CourseProvider>();
+
     final ok = await Navigator.push<bool>(
       context,
       MaterialPageRoute(
-        builder: (_) => MentariWebLoginScreen(onTokenFound: auth.loginWithToken),
+        builder: (_) => MentariWebLoginScreen(
+          onTokenFound: (token, {cookies, preloadCourses}) async {
+            final success = await auth.loginWithToken(
+              token,
+              cookies: cookies,
+              preloadCourses: preloadCourses,
+            );
+            if (success && preloadCourses != null && mounted) {
+              courseProv.setInitialCourses(preloadCourses);
+            }
+            return success;
+          },
+        ),
       ),
     );
     if (ok == true && mounted) _goHome();
+  }
+
+  Future<void> _handleManualLogin() async {
+    final token = _tokenController.text.trim();
+    if (token.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Silakan tempel atau masukkan Bearer Token terlebih dahulu.')),
+      );
+      return;
+    }
+
+    final auth = context.read<AuthProvider>();
+    final ok = await auth.loginWithToken(token);
+    if (ok && mounted) {
+      _goHome();
+    }
+  }
+
+  Future<void> _pasteFromClipboard() async {
+    final data = await Clipboard.getData(Clipboard.kTextPlain);
+    if (data?.text != null) {
+      var raw = data!.text!.trim();
+      if (raw.toLowerCase().startsWith('bearer ')) {
+        raw = raw.substring(7).trim();
+      }
+      _tokenController.text = raw;
+    }
   }
 
   @override
@@ -81,7 +133,7 @@ class _LoginScreenState extends State<LoginScreen> {
                   style: TextStyle(fontSize: 13, color: AppTheme.textMuted),
                   textAlign: TextAlign.center,
                 ),
-                const SizedBox(height: 32),
+                const SizedBox(height: 28),
                 Card(
                   elevation: 2,
                   child: Padding(
@@ -99,8 +151,8 @@ class _LoginScreenState extends State<LoginScreen> {
                         ),
                         const SizedBox(height: 8),
                         const Text(
-                          'Login memakai akun My Unpam di halaman resmi Mentari. '
-                          'Verifikasi Cloudflare ditangani halaman tersebut.',
+                          'Login akun My Unpam di portal resmi Mentari. '
+                          'Data mata kuliah dan sesi disinkronkan otomatis.',
                           style: TextStyle(fontSize: 12, color: AppTheme.textMuted),
                         ),
                         const SizedBox(height: 16),
@@ -109,14 +161,77 @@ class _LoginScreenState extends State<LoginScreen> {
                           child: ElevatedButton.icon(
                             onPressed: auth.isLoading ? null : _handleWebLogin,
                             icon: const Icon(Icons.login_rounded, size: 18),
-                            label: const Text('Masuk lewat Mentari'),
+                            label: const Text('Masuk lewat Portal Mentari'),
                           ),
                         ),
+                        const SizedBox(height: 12),
+                        const Divider(color: AppTheme.cardBorder, height: 16),
+                        Center(
+                          child: TextButton.icon(
+                            onPressed: () => setState(() => _showManualInput = !_showManualInput),
+                            icon: Icon(
+                              _showManualInput ? Icons.keyboard_arrow_up_rounded : Icons.vpn_key_rounded,
+                              size: 16,
+                            ),
+                            label: Text(
+                              _showManualInput ? 'Tutup Input Manual' : 'Punya Token? Masuk dengan Token Manual',
+                              style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600),
+                            ),
+                          ),
+                        ),
+                        if (_showManualInput) ...[
+                          const SizedBox(height: 8),
+                          TextField(
+                            controller: _tokenController,
+                            minLines: 1,
+                            maxLines: 3,
+                            decoration: InputDecoration(
+                              labelText: 'Bearer Token JWT',
+                              hintText: 'Tempel token eyJhbGciOi...',
+                              isDense: true,
+                              suffixIcon: IconButton(
+                                tooltip: 'Tempel dari Clipboard',
+                                icon: const Icon(Icons.content_paste_rounded, size: 20),
+                                onPressed: _pasteFromClipboard,
+                              ),
+                            ),
+                          ),
+                          const SizedBox(height: 12),
+                          SizedBox(
+                            width: double.infinity,
+                            child: OutlinedButton.icon(
+                              onPressed: auth.isLoading ? null : _handleManualLogin,
+                              icon: auth.isLoading
+                                  ? const SizedBox(
+                                      width: 14,
+                                      height: 14,
+                                      child: CircularProgressIndicator(strokeWidth: 2),
+                                    )
+                                  : const Icon(Icons.check_circle_outline_rounded, size: 18),
+                              label: Text(auth.isLoading ? 'Memverifikasi...' : 'Verifikasi & Masuk'),
+                            ),
+                          ),
+                        ],
                         if (auth.errorMessage != null) ...[
                           const SizedBox(height: 12),
-                          Text(
-                            auth.errorMessage!,
-                            style: const TextStyle(color: AppTheme.dangerRed, fontSize: 13),
+                          Container(
+                            padding: const EdgeInsets.all(10),
+                            decoration: BoxDecoration(
+                              color: AppTheme.dangerRed.withOpacity(0.08),
+                              borderRadius: BorderRadius.circular(8),
+                            ),
+                            child: Row(
+                              children: [
+                                const Icon(Icons.error_outline_rounded, size: 18, color: AppTheme.dangerRed),
+                                const SizedBox(width: 8),
+                                Expanded(
+                                  child: Text(
+                                    auth.errorMessage!,
+                                    style: const TextStyle(color: AppTheme.dangerRed, fontSize: 12),
+                                  ),
+                                ),
+                              ],
+                            ),
                           ),
                         ],
                       ],

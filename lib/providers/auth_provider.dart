@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import '../core/services/storage_service.dart';
 import '../core/network/api_client.dart';
 
+import '../models/user_course_model.dart';
+
 class AuthProvider extends ChangeNotifier {
   final StorageService _storage;
   final ApiClient _apiClient;
@@ -20,16 +22,27 @@ class AuthProvider extends ChangeNotifier {
     return name.isNotEmpty ? name : _storage.getNim();
   }
 
-  Future<bool> loginWithToken(String token, {String? cookies}) async {
+  Future<bool> loginWithToken(
+    String token, {
+    String? cookies,
+    UserCourseResponse? preloadCourses,
+  }) async {
     _isLoading = true;
     _errorMessage = null;
     notifyListeners();
 
     try {
-      await _apiClient.loginWithToken(token, cookies: cookies);
+      await _apiClient.loginWithToken(
+        token,
+        cookies: cookies,
+        preloadCourses: preloadCourses,
+      );
       return true;
     } on ApiException catch (e) {
       _errorMessage = e.message;
+      return false;
+    } catch (e) {
+      _errorMessage = 'Terjadi kesalahan autentikasi: $e';
       return false;
     } finally {
       _isLoading = false;

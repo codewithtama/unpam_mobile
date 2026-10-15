@@ -3,10 +3,15 @@ import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:webview_flutter/webview_flutter.dart';
 import '../core/network/api_client.dart';
+import '../models/user_course_model.dart';
 import '../theme/app_theme.dart';
 
 class MentariWebLoginScreen extends StatefulWidget {
-  final Future<bool> Function(String token, {String? cookies}) onTokenFound;
+  final Future<bool> Function(
+    String token, {
+    String? cookies,
+    UserCourseResponse? preloadCourses,
+  }) onTokenFound;
 
   const MentariWebLoginScreen({super.key, required this.onTokenFound});
 
@@ -17,67 +22,184 @@ class MentariWebLoginScreen extends StatefulWidget {
 class _MentariWebLoginScreenState extends State<MentariWebLoginScreen> {
   static const _loginUrl = 'https://mentari.unpam.ac.id/';
 
-  // Skrip injeksi untuk mencegat token di localStorage, sessionStorage, cookies, fetch, dan XHR
   static const _injectionScript = r'''
 (function () {
-  var re = /eyJ[\w-]+\.[\w-]+\.[\w-]+/g;
-  var found = [];
+  if (window._unpamScriptLoaded) {
+    if (window._unpamScan) window._unpamScan();
+    return;
+  }
+  window._unpamScriptLoaded = true;
 
-  function scan(s) {
-    if (!s) return;
-    var matches = String(s).match(re);
-    if (matches) {
-      for (var i = 0; i < matches.length; i++) {
-        if (found.indexOf(matches[i]) === -1) {
-          found.push(matches[i]);
-        }
+  function postMsg(data) {
+    try {
+      if (window.TokenChannel) {
+        window.TokenChannel.postMessage(JSON.stringify(data));
       }
-    }
+    } catch(e) {}
   }
 
-  // 1. Scan Storage
-  try {
-    [window.localStorage, window.sessionStorage].forEach(function (st) {
+  // 1. Intercept XMLHttpRequest
+  var origOpen = XMLHttpRequest.prototype.open;
+  var origSend = XMLHttpRequest.prototype.send;
+  var origSetHeader = XMLHttpRequest.prototype.setRequestHeader;
+
+  XMLHttpRequest.prototype.setRequestHeader = function(header, value) {
+    this._headers = this._headers || {};
+    this._headers[header.toLowerCase()] = value;
+    if (header && header.toLowerCase() === 'authorization') {
+      var t = String(value).replace(/^Bearer\s+/i, '').trim();
+      if (t) {
+        window._activeBearerToken = t;
+        postMsg({ type: 'captured_token', token: t, source: 'xhr_header' });
+      }
+    }
+    return origSetHeader.apply(this, arguments);
+  };
+
+  XMLHttpRequest.prototype.open = function(method, url) {
+    this._url = url;
+    return origOpen.apply(this, arguments);
+  };
+
+  XMLHttpRequest.prototype.send = function() {
+    var self = this;
+    this.addEventListener('load', function() {
+      try {
+        if (self._url && String(self._url).indexOf('user-course') !== -1) {
+          var json = JSON.parse(self.responseText);
+          if (json && (json.data || Array.isArray(json))) {
+            postMsg({
+              type: 'live_courses',
+              data: json,
+              token: window._activeBearerToken || null
+            });
+          }
+        }
+      } catch(e) {}
+    });
+    return origSend.apply(this, arguments);
+  };
+
+  // 2. Intercept Fetch API
+  var origFetch = window.fetch;
+  window.fetch = function(input, init) {
+    var url = typeof input === 'string' ? input : (input && input.url ? input.url : '');
+    var headers = (init && init.headers) || (input && input.headers);
+    var authHeader = null;
+    if (headers) {
+      if (typeof headers.get === 'function') {
+        authHeader = headers.get('Authorization') || headers.get('authorization');
+      } else if (typeof headers === 'object') {
+        authHeader = headers['Authorization'] || headers['authorization'] || headers['AUTHORIZATION'];
+      }
+    }
+    if (authHeader) {
+      var t = String(authHeader).replace(/^Bearer\s+/i, '').trim();
+      if (t) {
+        window._activeBearerToken = t;
+        postMsg({ type: 'captured_token', token: t, source: 'fetch_header' });
+      }
+    }
+
+    return origFetch.apply(this, arguments).then(function(res) {
+      try {
+        if (String(url).indexOf('user-course') !== -1) {
+          var clone = res.clone();
+          clone.json().then(function(json) {
+            if (json && (json.data || Array.isArray(json))) {
+              postMsg({
+                type: 'live_courses',
+                data: json,
+                token: window._activeBearerToken || null
+              });
+            }
+          }).catch(function() {});
+        }
+      } catch(e) {}
+      return res;
+    });
+  };
+
+  // 3. Storage Scanner
+  window._unpamScan = function() {
+    var priorityTokens = [];
+    var otherTokens = [];
+
+    function checkVal(val) {
+      if (!val) return;
+      try {
+        var parsed = JSON.parse(val);
+        if (parsed && typeof parsed === 'object') {
+          ['access_token', 'token', 'accessToken', 'bearer'].forEach(function(k) {
+            if (parsed[k] && typeof parsed[k] === 'string' && parsed[k].length > 20) {
+              priorityTokens.push(parsed[k].replace(/^Bearer\s+/i, '').trim());
+            }
+          });
+          if (parsed.id_token && typeof parsed.id_token === 'string') {
+            otherTokens.push(parsed.id_token);
+          }
+        }
+      } catch(e) {}
+
+      var re = /eyJ[\w-]+\.[\w-]+\.[\w-]+/g;
+      var matches = String(val).match(re);
+      if (matches) {
+        for (var i = 0; i < matches.length; i++) {
+          if (priorityTokens.indexOf(matches[i]) === -1 && otherTokens.indexOf(matches[i]) === -1) {
+            otherTokens.push(matches[i]);
+          }
+        }
+      }
+    }
+
+    [window.localStorage, window.sessionStorage].forEach(function(st) {
       if (!st) return;
       for (var i = 0; i < st.length; i++) {
-        scan(st.getItem(st.key(i)));
+        var key = st.key(i);
+        var val = st.getItem(key);
+        checkVal(val);
       }
     });
-    scan(document.cookie);
-  } catch (e) {}
 
-  // 2. Intercept Fetch & XHR
-  try {
-    if (!window._tokenIntercepted) {
-      window._tokenIntercepted = true;
-      var origFetch = window.fetch;
-      window.fetch = function() {
-        try {
-          var h = arguments[1] && arguments[1].headers;
-          if (h) {
-            var auth = h['Authorization'] || h['authorization'] || (h.get && h.get('Authorization'));
-            scan(auth);
-          }
-        } catch(e) {}
-        return origFetch.apply(this, arguments);
-      };
+    checkVal(document.cookie);
 
-      var origSetHeader = XMLHttpRequest.prototype.setRequestHeader;
-      XMLHttpRequest.prototype.setRequestHeader = function(header, value) {
-        if (header && header.toLowerCase() === 'authorization') {
-          scan(value);
-        }
-        return origSetHeader.apply(this, arguments);
-      };
+    postMsg({
+      type: 'scan_tokens',
+      priority: priorityTokens,
+      others: otherTokens
+    });
+  };
+
+  // 4. Active Live Course Fetcher (Berjalan di dalam sesi Chromium aktif)
+  window._unpamFetchLiveCourses = function() {
+    var url = '/api/user-course?page=1&limit=50';
+    var headers = { 'Accept': 'application/json' };
+    if (window._activeBearerToken) {
+      headers['Authorization'] = 'Bearer ' + window._activeBearerToken;
     }
-  } catch (e) {}
+    fetch(url, { headers: headers, credentials: 'include' })
+      .then(function(r) { return r.json(); })
+      .then(function(json) {
+        if (json && (json.data || Array.isArray(json))) {
+          postMsg({
+            type: 'live_courses',
+            data: json,
+            token: window._activeBearerToken || null
+          });
+        }
+      })
+      .catch(function() {
+        window._unpamScan();
+      });
+  };
 
-  TokenChannel.postMessage(JSON.stringify(found));
+  window._unpamScan();
 })();
 ''';
 
   late final WebViewController _controller;
   final Set<String> _tried = {};
+  String? _lastCapturedToken;
   Timer? _poller;
   bool _validating = false;
   int _progress = 0;
@@ -88,16 +210,19 @@ class _MentariWebLoginScreenState extends State<MentariWebLoginScreen> {
     super.initState();
     _controller = WebViewController()
       ..setJavaScriptMode(JavaScriptMode.unrestricted)
-      ..addJavaScriptChannel('TokenChannel', onMessageReceived: _onScanResult)
+      ..addJavaScriptChannel('TokenChannel', onMessageReceived: _onChannelMessage)
       ..setNavigationDelegate(
         NavigationDelegate(
           onProgress: (p) => setState(() => _progress = p),
           onPageStarted: (_) => _inject(),
           onPageFinished: (url) {
             _inject();
-            // Jika user sudah masuk ke dashboard atau url bukan halaman login kosong, munculkan tombol masuk
             if (url.contains('dashboard') || !url.endsWith('.id/')) {
               if (mounted) setState(() => _canShowManualButton = true);
+              // Jalankan pemanggilan aktif live data setelah halaman selesai
+              Future.delayed(const Duration(seconds: 1), () {
+                _triggerActiveFetch();
+              });
             }
           },
         ),
@@ -108,7 +233,6 @@ class _MentariWebLoginScreenState extends State<MentariWebLoginScreen> {
       _inject();
     });
 
-    // Munculkan tombol bantuan otomatis setelah 4 detik agar pengguna tidak terjebak
     Future.delayed(const Duration(seconds: 4), () {
       if (mounted) setState(() => _canShowManualButton = true);
     });
@@ -126,6 +250,12 @@ class _MentariWebLoginScreenState extends State<MentariWebLoginScreen> {
     }
   }
 
+  void _triggerActiveFetch() {
+    _controller.runJavaScript(
+      'if (window._unpamFetchLiveCourses) { window._unpamFetchLiveCourses(); } else { if (window._unpamScan) window._unpamScan(); }',
+    );
+  }
+
   Future<String> _getCookieHeader() async {
     try {
       final raw = await _controller.runJavaScriptReturningResult('document.cookie');
@@ -139,39 +269,117 @@ class _MentariWebLoginScreenState extends State<MentariWebLoginScreen> {
     }
   }
 
-  Future<void> _onScanResult(JavaScriptMessage message) async {
+  Future<void> _onChannelMessage(JavaScriptMessage message) async {
     if (_validating) return;
 
     try {
-      final List<dynamic> raw = jsonDecode(message.message) as List<dynamic>;
-      final candidates = raw
-          .whereType<String>()
-          .toSet()
-          .where((t) => !_tried.contains(t) && ApiClient.isTokenFresh(t));
+      final decoded = jsonDecode(message.message);
+      if (decoded is! Map<String, dynamic>) return;
 
-      for (final token in candidates) {
-        _tried.add(token);
-        _validating = true;
-        final cookies = await _getCookieHeader();
-        final ok = await widget.onTokenFound(token, cookies: cookies);
-        if (ok && mounted) {
-          _poller?.cancel();
-          Navigator.of(context).pop(true);
-          return;
+      final type = decoded['type']?.toString();
+
+      // Kasus A: Data Real Mata Kuliah langsung tertangkap dari traffic WebView!
+      if (type == 'live_courses') {
+        final rawData = decoded['data'];
+        if (rawData is Map<String, dynamic>) {
+          final courseRes = UserCourseResponse.fromJson(rawData);
+          if (courseRes.data.isNotEmpty) {
+            _validating = true;
+            final token = decoded['token']?.toString() ?? _lastCapturedToken ?? '';
+            final cookies = await _getCookieHeader();
+
+            final ok = await widget.onTokenFound(
+              token,
+              cookies: cookies,
+              preloadCourses: courseRes,
+            );
+
+            if (ok && mounted) {
+              _poller?.cancel();
+              Navigator.of(context).pop(true);
+              return;
+            }
+            _validating = false;
+          }
         }
-        _validating = false;
+      }
+
+      // Kasus B: Bearer token aktif tertangkap dari request fetch/XHR
+      if (type == 'captured_token') {
+        final token = decoded['token']?.toString();
+        if (token != null && token.isNotEmpty) {
+          _lastCapturedToken = token;
+          if (!_tried.contains(token) && ApiClient.isTokenFresh(token)) {
+            _tried.add(token);
+            _validating = true;
+            final cookies = await _getCookieHeader();
+            final ok = await widget.onTokenFound(token, cookies: cookies);
+            if (ok && mounted) {
+              _poller?.cancel();
+              Navigator.of(context).pop(true);
+              return;
+            }
+            _validating = false;
+          }
+        }
+      }
+
+      // Kasus C: Hasil pemindaian storage
+      if (type == 'scan_tokens') {
+        final priority = (decoded['priority'] as List<dynamic>?)?.cast<String>() ?? [];
+        final others = (decoded['others'] as List<dynamic>?)?.cast<String>() ?? [];
+
+        // Uji token prioritas (access_token) terlebih dahulu!
+        for (final token in priority) {
+          if (!_tried.contains(token) && ApiClient.isTokenFresh(token)) {
+            _tried.add(token);
+            _validating = true;
+            final cookies = await _getCookieHeader();
+            final ok = await widget.onTokenFound(token, cookies: cookies);
+            if (ok && mounted) {
+              _poller?.cancel();
+              Navigator.of(context).pop(true);
+              return;
+            }
+            _validating = false;
+          }
+        }
+
+        // Uji kandidat lainnya
+        for (final token in others) {
+          if (!_tried.contains(token) && ApiClient.isTokenFresh(token)) {
+            _tried.add(token);
+            _validating = true;
+            final cookies = await _getCookieHeader();
+            final ok = await widget.onTokenFound(token, cookies: cookies);
+            if (ok && mounted) {
+              _poller?.cancel();
+              Navigator.of(context).pop(true);
+              return;
+            }
+            _validating = false;
+          }
+        }
       }
     } catch (_) {
       _validating = false;
     }
   }
 
-  /// Tombol Manual: Membaca paksa localStorage & cookies dan langsung masuk ke aplikasi
+  /// Tombol Manual: Membaca paksa sesi WebView dan langsung memuat data ke aplikasi native
   Future<void> _manualVerifyAndEnter() async {
     setState(() => _validating = true);
 
     try {
-      // 1. Baca semua isi localStorage via JavaScript
+      // 1. Panggil pemanggilan aktif di browser
+      _triggerActiveFetch();
+
+      // Tunggu sebentar untuk respons channel
+      await Future.delayed(const Duration(milliseconds: 600));
+
+      if (!mounted) return;
+
+      // 2. Jika belum berpindah, baca paksa token dari storage
       final result = await _controller.runJavaScriptReturningResult(
         r'''
         (function() {
@@ -190,12 +398,12 @@ class _MentariWebLoginScreenState extends State<MentariWebLoginScreen> {
 
       final re = RegExp(r'eyJ[\w-]+\.[\w-]+\.[\w-]+');
       final matches = re.allMatches(result.toString());
-
       final cookies = await _getCookieHeader();
 
       for (final match in matches) {
         final token = match.group(0);
-        if (token != null && ApiClient.isTokenFresh(token)) {
+        if (token != null && ApiClient.isTokenFresh(token) && !_tried.contains(token)) {
+          _tried.add(token);
           final ok = await widget.onTokenFound(token, cookies: cookies);
           if (ok && mounted) {
             _poller?.cancel();
@@ -205,20 +413,17 @@ class _MentariWebLoginScreenState extends State<MentariWebLoginScreen> {
         }
       }
 
-      // Jika belum ketemu token, coba scan lagi
-      _inject();
-
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
-            content: Text('Silakan login My Unpam terlebih dahulu di layar web ini hingga masuk ke dashboard.'),
+            content: Text('Silakan login di halaman web hingga melihat dashboard/mata kuliah.'),
           ),
         );
       }
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Kendala verifikasi: $e')),
+          SnackBar(content: Text('Kendala sinkronisasi: $e')),
         );
       }
     } finally {
@@ -246,7 +451,6 @@ class _MentariWebLoginScreenState extends State<MentariWebLoginScreen> {
         children: [
           WebViewWidget(controller: _controller),
 
-          // Tombol Masuk ke Aplikasi Mobile Native yang Selalu Siap Membantu
           if (_canShowManualButton)
             Positioned(
               left: 16,
@@ -262,7 +466,7 @@ class _MentariWebLoginScreenState extends State<MentariWebLoginScreen> {
                       )
                     : const Icon(Icons.arrow_forward_rounded, color: Colors.white),
                 label: Text(
-                  _validating ? 'Menyinkronkan Akun...' : 'Sudah Login? Masuk ke Aplikasi Mobile',
+                  _validating ? 'Menyinkronkan Akun & Data...' : 'Sudah Login? Masuk ke Aplikasi Mobile',
                   style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
                 ),
                 style: ElevatedButton.styleFrom(

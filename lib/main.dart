@@ -22,7 +22,7 @@ void main() async {
     MultiProvider(
       providers: [
         ChangeNotifierProvider(create: (_) => AuthProvider(storage, apiClient)),
-        ChangeNotifierProvider(create: (_) => CourseProvider(apiClient)),
+        ChangeNotifierProvider(create: (_) => CourseProvider(apiClient, storage)),
         ChangeNotifierProvider(create: (_) => AiProvider(aiService, storage)),
       ],
       child: UnpamMobileApp(initialLoggedIn: storage.hasToken),
