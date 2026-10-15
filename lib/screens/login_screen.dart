@@ -2,8 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../providers/auth_provider.dart';
 import '../theme/app_theme.dart';
-import '../core/constants/api_constants.dart';
 import 'home_screen.dart';
+import 'mentari_web_login_screen.dart';
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
@@ -13,35 +13,43 @@ class LoginScreen extends StatefulWidget {
 }
 
 class _LoginScreenState extends State<LoginScreen> {
-  final _nimController = TextEditingController(text: ApiConstants.defaultNim);
-  final _passwordController = TextEditingController(text: '••••••••');
   final _tokenController = TextEditingController();
-  bool _obscurePassword = true;
   bool _showTokenInput = false;
 
   @override
   void dispose() {
-    _nimController.dispose();
-    _passwordController.dispose();
     _tokenController.dispose();
     super.dispose();
   }
 
-  Future<void> _handleLogin({bool isDemo = false}) async {
-    final authProvider = context.read<AuthProvider>();
-
-    final success = await authProvider.login(
-      nim: _nimController.text.trim(),
-      password: _passwordController.text.trim(),
-      manualBearerToken: isDemo ? null : _tokenController.text.trim(),
+  void _goHome() {
+    Navigator.pushReplacement(
+      context,
+      MaterialPageRoute(builder: (_) => const HomeScreen()),
     );
+  }
 
-    if (success && mounted) {
-      Navigator.pushReplacement(
-        context,
-        MaterialPageRoute(builder: (_) => const HomeScreen()),
+  Future<void> _handleWebLogin() async {
+    final auth = context.read<AuthProvider>();
+    final ok = await Navigator.push<bool>(
+      context,
+      MaterialPageRoute(
+        builder: (_) => MentariWebLoginScreen(onTokenFound: auth.loginWithToken),
+      ),
+    );
+    if (ok == true && mounted) _goHome();
+  }
+
+  Future<void> _handleTokenLogin() async {
+    final token = _tokenController.text.trim();
+    if (token.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Token wajib diisi.')),
       );
+      return;
     }
+    final ok = await context.read<AuthProvider>().loginWithToken(token);
+    if (ok && mounted) _goHome();
   }
 
   @override
@@ -56,7 +64,6 @@ class _LoginScreenState extends State<LoginScreen> {
             child: Column(
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
-                // Logo & Header Kampus
                 Container(
                   width: 84,
                   height: 84,
@@ -92,15 +99,10 @@ class _LoginScreenState extends State<LoginScreen> {
                 const SizedBox(height: 6),
                 const Text(
                   'Portal Perkuliahan Terpadu • Mentari & Sakura',
-                  style: TextStyle(
-                    fontSize: 13,
-                    color: AppTheme.textMuted,
-                  ),
+                  style: TextStyle(fontSize: 13, color: AppTheme.textMuted),
                   textAlign: TextAlign.center,
                 ),
                 const SizedBox(height: 32),
-
-                // Card Form Login
                 Card(
                   elevation: 2,
                   child: Padding(
@@ -116,38 +118,22 @@ class _LoginScreenState extends State<LoginScreen> {
                             color: AppTheme.textDark,
                           ),
                         ),
-                        const SizedBox(height: 16),
-
-                        // Input NIM
-                        TextField(
-                          controller: _nimController,
-                          keyboardType: TextInputType.number,
-                          decoration: const InputDecoration(
-                            labelText: 'Nomor Induk Mahasiswa (NIM)',
-                            prefixIcon: Icon(Icons.badge_outlined, color: AppTheme.primaryLight),
-                          ),
+                        const SizedBox(height: 8),
+                        const Text(
+                          'Login memakai akun My Unpam di halaman resmi Mentari. '
+                          'Verifikasi Cloudflare ditangani halaman tersebut.',
+                          style: TextStyle(fontSize: 12, color: AppTheme.textMuted),
                         ),
-                        const SizedBox(height: 14),
-
-                        // Input Password
-                        TextField(
-                          controller: _passwordController,
-                          obscureText: _obscurePassword,
-                          decoration: InputDecoration(
-                            labelText: 'Password',
-                            prefixIcon: const Icon(Icons.lock_outline_rounded, color: AppTheme.primaryLight),
-                            suffixIcon: IconButton(
-                              icon: Icon(
-                                _obscurePassword ? Icons.visibility_outlined : Icons.visibility_off_outlined,
-                                color: AppTheme.textMuted,
-                              ),
-                              onPressed: () => setState(() => _obscurePassword = !_obscurePassword),
-                            ),
+                        const SizedBox(height: 16),
+                        SizedBox(
+                          width: double.infinity,
+                          child: ElevatedButton.icon(
+                            onPressed: auth.isLoading ? null : _handleWebLogin,
+                            icon: const Icon(Icons.login_rounded, size: 18),
+                            label: const Text('Masuk lewat Mentari'),
                           ),
                         ),
                         const SizedBox(height: 12),
-
-                        // Switcher Input Bearer Token Manual (Kebutuhan Dosen)
                         InkWell(
                           onTap: () => setState(() => _showTokenInput = !_showTokenInput),
                           borderRadius: BorderRadius.circular(8),
@@ -156,7 +142,9 @@ class _LoginScreenState extends State<LoginScreen> {
                             child: Row(
                               children: [
                                 Icon(
-                                  _showTokenInput ? Icons.check_box_rounded : Icons.check_box_outline_blank_rounded,
+                                  _showTokenInput
+                                      ? Icons.check_box_rounded
+                                      : Icons.check_box_outline_blank_rounded,
                                   size: 18,
                                   color: AppTheme.primaryLight,
                                 ),
@@ -173,8 +161,6 @@ class _LoginScreenState extends State<LoginScreen> {
                             ),
                           ),
                         ),
-
-                        // Field Token jika diaktifkan
                         if (_showTokenInput) ...[
                           const SizedBox(height: 10),
                           TextField(
@@ -186,58 +172,36 @@ class _LoginScreenState extends State<LoginScreen> {
                               prefixIcon: Icon(Icons.vpn_key_outlined, color: AppTheme.accentGold),
                             ),
                           ),
+                          const SizedBox(height: 10),
+                          SizedBox(
+                            width: double.infinity,
+                            child: OutlinedButton(
+                              onPressed: auth.isLoading ? null : _handleTokenLogin,
+                              child: auth.isLoading
+                                  ? const SizedBox(
+                                      height: 20,
+                                      width: 20,
+                                      child: CircularProgressIndicator(strokeWidth: 2),
+                                    )
+                                  : const Text('Masuk dengan Token'),
+                            ),
+                          ),
                         ],
-                        const SizedBox(height: 20),
-
-                        // Tombol Submit Login
-                        SizedBox(
-                          width: double.infinity,
-                          child: ElevatedButton(
-                            onPressed: auth.isLoading ? null : () => _handleLogin(isDemo: false),
-                            child: auth.isLoading
-                                ? const SizedBox(
-                                    height: 20,
-                                    width: 20,
-                                    child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
-                                  )
-                                : const Text('MASUK SEKARANG'),
+                        if (auth.errorMessage != null) ...[
+                          const SizedBox(height: 12),
+                          Text(
+                            auth.errorMessage!,
+                            style: const TextStyle(color: AppTheme.dangerRed, fontSize: 13),
                           ),
-                        ),
-                        const SizedBox(height: 12),
-
-                        // Tombol Masuk Demo Cepat (Data Dosen)
-                        SizedBox(
-                          width: double.infinity,
-                          child: OutlinedButton.icon(
-                            onPressed: auth.isLoading ? null : () => _handleLogin(isDemo: true),
-                            icon: const Icon(Icons.offline_bolt_rounded, size: 18, color: AppTheme.accentGold),
-                            label: const Text(
-                              'Masuk Mode Demo (Data Asli Dosen)',
-                              style: TextStyle(
-                                fontSize: 13,
-                                fontWeight: FontWeight.bold,
-                                color: AppTheme.textDark,
-                              ),
-                            ),
-                            style: OutlinedButton.styleFrom(
-                              side: const BorderSide(color: AppTheme.accentGold),
-                              padding: const EdgeInsets.symmetric(vertical: 12),
-                            ),
-                          ),
-                        ),
+                        ],
                       ],
                     ),
                   ),
                 ),
                 const SizedBox(height: 24),
-
-                // Info Footer
                 const Text(
                   'Tugas Project Mobile Programming • Teknik Informatika',
-                  style: TextStyle(
-                    fontSize: 11,
-                    color: AppTheme.textMuted,
-                  ),
+                  style: TextStyle(fontSize: 11, color: AppTheme.textMuted),
                 ),
               ],
             ),

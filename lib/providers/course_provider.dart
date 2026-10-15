@@ -22,6 +22,8 @@ class CourseProvider extends ChangeNotifier {
   CourseItem? _selectedCourse;
   CourseDetailResponse? _courseDetail;
   bool _isLoading = false;
+  bool _unauthorized = false;
+  String _semester = '';
   String? _errorMessage;
 
   CourseProvider(this._apiClient);
@@ -31,6 +33,8 @@ class CourseProvider extends ChangeNotifier {
   CourseDetailResponse? get courseDetail => _courseDetail;
   bool get isLoading => _isLoading;
   String? get errorMessage => _errorMessage;
+  bool get isUnauthorized => _unauthorized;
+  String get semester => _semester;
 
   int get totalSks => _courses.fold(0, (sum, item) => sum + item.sks);
 
@@ -84,38 +88,39 @@ class CourseProvider extends ChangeNotifier {
   }
 
   /// Ambil Daftar 8 Mata Kuliah Mahasiswa (Mentari)
-  Future<void> loadUserCourses({bool forceLive = false}) async {
+  Future<void> loadUserCourses() async {
     _isLoading = true;
     _errorMessage = null;
     notifyListeners();
 
     try {
-      final response = await _apiClient.getUserCourses(forceLive: forceLive);
+      final response = await _apiClient.getUserCourses();
       _courses = response.data;
+      _semester = response.semester;
+    } on ApiException catch (e) {
+      _errorMessage = e.message;
+      _unauthorized = e.isUnauthorized;
+    } finally {
       _isLoading = false;
-      notifyListeners();
-    } catch (e) {
-      _isLoading = false;
-      _errorMessage = 'Gagal memuat mata kuliah: $e';
       notifyListeners();
     }
   }
 
   /// Ambil Detail Pertemuan 1 - 21 (Sakura)
-  Future<void> loadCourseDetail(CourseItem course, {bool forceLive = false}) async {
+  Future<void> loadCourseDetail(CourseItem course) async {
     _selectedCourse = course;
+    _courseDetail = null;
     _isLoading = true;
     _errorMessage = null;
     notifyListeners();
 
     try {
-      final detail = await _apiClient.getCourseDetail(course.kodeCourse, forceLive: forceLive);
-      _courseDetail = detail;
+      _courseDetail = await _apiClient.getCourseDetail(course.kodeCourse);
+    } on ApiException catch (e) {
+      _errorMessage = e.message;
+      _unauthorized = e.isUnauthorized;
+    } finally {
       _isLoading = false;
-      notifyListeners();
-    } catch (e) {
-      _isLoading = false;
-      _errorMessage = 'Gagal memuat detail pertemuan: $e';
       notifyListeners();
     }
   }

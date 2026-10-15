@@ -15,7 +15,6 @@ class StorageService {
     return _instance!;
   }
 
-  // Token Management
   Future<void> saveToken(String token) async {
     await _preferences?.setString(ApiConstants.tokenKey, token);
   }
@@ -29,7 +28,6 @@ class StorageService {
     return token != null && token.isNotEmpty;
   }
 
-  // Student Info Management
   Future<void> saveStudentInfo({
     required String nim,
     required String name,
@@ -39,23 +37,13 @@ class StorageService {
   }
 
   String getNim() {
-    return _preferences?.getString(ApiConstants.nimKey) ?? ApiConstants.defaultNim;
+    return _preferences?.getString(ApiConstants.nimKey) ?? '';
   }
 
   String getStudentName() {
-    return _preferences?.getString(ApiConstants.studentNameKey) ?? ApiConstants.defaultNama;
+    return _preferences?.getString(ApiConstants.studentNameKey) ?? '';
   }
 
-  // Mock / Demo Mode Switcher
-  Future<void> setUseMock(bool useMock) async {
-    await _preferences?.setBool(ApiConstants.useMockKey, useMock);
-  }
-
-  bool isUseMock() {
-    return _preferences?.getBool(ApiConstants.useMockKey) ?? true;
-  }
-
-  // Clear Session (Logout)
   Future<void> clearSession() async {
     await _preferences?.remove(ApiConstants.tokenKey);
     await _preferences?.remove(ApiConstants.nimKey);

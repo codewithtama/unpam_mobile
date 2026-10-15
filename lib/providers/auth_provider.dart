@@ -15,43 +15,30 @@ class AuthProvider extends ChangeNotifier {
   String? get errorMessage => _errorMessage;
   bool get isLoggedIn => _storage.hasToken;
   String get studentNim => _storage.getNim();
-  String get studentName => _storage.getStudentName();
-  bool get isMockMode => _storage.isUseMock();
-  String? get currentToken => _storage.getToken();
+  String get studentName {
+    final name = _storage.getStudentName();
+    return name.isNotEmpty ? name : _storage.getNim();
+  }
 
-  Future<bool> login({
-    required String nim,
-    required String password,
-    String? manualBearerToken,
-  }) async {
+  Future<bool> loginWithToken(String token) async {
     _isLoading = true;
     _errorMessage = null;
     notifyListeners();
 
     try {
-      final success = await _apiClient.login(
-        nim: nim,
-        password: password,
-        manualBearerToken: manualBearerToken,
-      );
-      _isLoading = false;
-      notifyListeners();
-      return success;
-    } catch (e) {
-      _isLoading = false;
-      _errorMessage = 'Gagal masuk: $e';
-      notifyListeners();
+      await _apiClient.loginWithToken(token);
+      return true;
+    } on ApiException catch (e) {
+      _errorMessage = e.message;
       return false;
+    } finally {
+      _isLoading = false;
+      notifyListeners();
     }
   }
 
   Future<void> logout() async {
     await _storage.clearSession();
-    notifyListeners();
-  }
-
-  Future<void> toggleMockMode(bool val) async {
-    await _storage.setUseMock(val);
     notifyListeners();
   }
 }

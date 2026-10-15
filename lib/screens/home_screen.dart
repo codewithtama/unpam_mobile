@@ -78,7 +78,7 @@ class _HomeScreenState extends State<HomeScreen> {
         ],
       ),
       body: RefreshIndicator(
-        onRefresh: () => courseProv.loadUserCourses(forceLive: true),
+        onRefresh: () => courseProv.loadUserCourses(),
         child: courseProv.isLoading && courseProv.courses.isEmpty
             ? const Center(child: CircularProgressIndicator())
             : SingleChildScrollView(
@@ -126,7 +126,9 @@ class _HomeScreenState extends State<HomeScreen> {
                     ),
 
                     // List Kartu Mata Kuliah
-                    if (courseProv.courses.isEmpty)
+                    if (courseProv.errorMessage != null)
+                      _buildErrorState(courseProv)
+                    else if (courseProv.courses.isEmpty)
                       const Center(
                         child: Padding(
                           padding: EdgeInsets.all(40.0),
@@ -158,6 +160,43 @@ class _HomeScreenState extends State<HomeScreen> {
                 ),
               ),
       ),
+    );
+  }
+
+  String _scheduleDays(CourseProvider courseProv) {
+    final days = courseProv.courses
+        .map((c) => c.namaHari)
+        .where((d) => d.isNotEmpty)
+        .toSet();
+    return days.isEmpty ? '-' : days.join(', ');
+  }
+
+  Widget _buildErrorState(CourseProvider courseProv) {
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.all(32.0),
+        child: Column(
+          children: [
+            const Icon(Icons.cloud_off_rounded, size: 48, color: AppTheme.dangerRed),
+            const SizedBox(height: 12),
+            Text(courseProv.errorMessage!, textAlign: TextAlign.center),
+            const SizedBox(height: 16),
+            ElevatedButton(
+              onPressed: courseProv.isUnauthorized ? _forceRelogin : courseProv.loadUserCourses,
+              child: Text(courseProv.isUnauthorized ? 'Login Ulang' : 'Coba Lagi'),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Future<void> _forceRelogin() async {
+    await context.read<AuthProvider>().logout();
+    if (!mounted) return;
+    Navigator.pushReplacement(
+      context,
+      MaterialPageRoute(builder: (_) => const LoginScreen()),
     );
   }
 
@@ -197,7 +236,7 @@ class _HomeScreenState extends State<HomeScreen> {
                     ),
                     const SizedBox(height: 2),
                     Text(
-                      'NIM: ${auth.studentNim} • Kelas 04SIFE001',
+                      'NIM: ${auth.studentNim}',
                       style: TextStyle(
                         fontSize: 12,
                         color: Colors.white.withOpacity(0.8),
@@ -212,9 +251,9 @@ class _HomeScreenState extends State<HomeScreen> {
                   color: AppTheme.accentGold,
                   borderRadius: BorderRadius.circular(8),
                 ),
-                child: const Text(
-                  'Smstr 20261',
-                  style: TextStyle(
+                child: Text(
+                  courseProv.semester.isEmpty ? 'Semester -' : 'Smstr ${courseProv.semester}',
+                  style: const TextStyle(
                     fontSize: 11,
                     fontWeight: FontWeight.bold,
                     color: Colors.white,
@@ -239,7 +278,7 @@ class _HomeScreenState extends State<HomeScreen> {
                 Container(height: 24, width: 1, color: Colors.white24),
                 _buildStatItem('Beban SKS', '${courseProv.totalSks} SKS'),
                 Container(height: 24, width: 1, color: Colors.white24),
-                _buildStatItem('Jadwal', 'Sabtu (Shift E)'),
+                _buildStatItem('Hari Kuliah', _scheduleDays(courseProv)),
               ],
             ),
           ),
