@@ -609,7 +609,7 @@ class _PortalWebViewScreenState extends State<PortalWebViewScreen> {
         NavigationDestination(
           icon: Icon(Icons.auto_awesome_outlined),
           selectedIcon: Icon(Icons.auto_awesome, color: AppTheme.accentGold),
-          label: 'Asisten AI',
+          label: 'UNPAM AI',
         ),
         NavigationDestination(
           icon: Icon(Icons.person_outline_rounded),

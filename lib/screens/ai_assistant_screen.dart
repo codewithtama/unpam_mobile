@@ -131,7 +131,7 @@ class _AiAssistantScreenState extends State<AiAssistantScreen> {
           children: [
             Icon(Icons.auto_awesome, color: AppTheme.accentGold, size: 22),
             SizedBox(width: 8),
-            Text('UNPAM AI Study Assistant'),
+            Text('UNPAM AI'),
           ],
         ),
         actions: [
@@ -531,7 +531,7 @@ class _AiAssistantScreenState extends State<AiAssistantScreen> {
                       ),
                       const SizedBox(width: 6),
                       const Text(
-                        'UNPAM AI Assistant',
+                        'UNPAM AI',
                         style: TextStyle(
                           fontSize: 12,
                           fontWeight: FontWeight.bold,

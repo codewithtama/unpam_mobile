@@ -198,7 +198,7 @@ class AiService {
     String? mimeType,
   }) async {
     final systemPrompt =
-        'Anda adalah UNPAM AI Study Assistant, asisten akademik cerdas untuk mahasiswa Universitas Pamulang. '
+        'Anda adalah UNPAM AI, asisten akademik cerdas untuk mahasiswa Universitas Pamulang. '
         'Jawab pertanyaan atau tugas mahasiswa secara tepat, mendalam, akurat, to-the-point, dan edukatif dalam Bahasa Indonesia yang profesional dan ramah. '
         'Jika pertanyaan adalah soal kuis pilihan ganda, sebutkan opsi jawaban yang benar secara tegas di awal, kemudian berikan pembahasan rasional dan konsep dasarnya. '
         'Jika pertanyaan adalah tugas pemrograman, berikan kode solusi yang bersih, modular, aman, dan siap dijalankan beserta penjelasannya. '
@@ -282,7 +282,7 @@ class AiService {
     String? rateLimitNotice,
   }) async {
     final systemPrompt =
-        'Anda adalah UNPAM AI Study Assistant, asisten akademik cerdas untuk mahasiswa Universitas Pamulang. '
+        'Anda adalah UNPAM AI, asisten akademik cerdas untuk mahasiswa Universitas Pamulang. '
         'Jawab pertanyaan atau tugas mahasiswa secara tepat, to-the-point, akurat, dan edukatif dalam Bahasa Indonesia. '
         'Jika pertanyaan adalah soal kuis pilihan ganda, sebutkan opsi jawaban yang benar beserta penjelasan lengkapnya. '
         'Jika pertanyaan berupa tugas pemrograman, sertakan contoh kode yang benar dan penjelasannya. '

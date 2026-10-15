@@ -29,7 +29,7 @@ class AiProvider extends ChangeNotifier {
       AiMessage(
         id: 'welcome_msg',
         content:
-            'Halo! Saya **UNPAM AI Assistant**, siap mendampingi perkuliahan Anda. '
+            'Halo! Saya **UNPAM AI**, siap mendampingi perkuliahan Anda. '
             'Anda dapat menanyakan materi kuliah, meng-upload screenshot soal kuis/tugas, '
             'atau meminta rangkuman dan analisis jawaban langsung dari layar modul perkuliahan.',
         isUser: false,
