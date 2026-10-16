@@ -19,7 +19,6 @@ Aplikasi dirancang dengan arsitektur **Native Portal Wrapper** yang membungkus w
 ### 1. Native Mentari Portal Wrapper
 - **Chromium Web Engine Asli:** Menjalankan portal resmi `https://mentari.unpam.ac.id/` dengan performa penuh, rendering JavaScript lengkap, penanganan cookie sesi `httpOnly`, dan kepatuhan terhadap proteksi Cloudflare Turnstile CAPTCHA.
 - **Tampilan 100% Native:** Header aplikasi dirancang elegan dengan identitas universitas, title dinamis, tombol muat ulang cepat, dan avatar inisial mahasiswa tanpa bilah alamat peramban (URL address bar).
-- **Shortcut Instan Navigasi Mentari (Deep-Link Quick Actions):** Bar navigasi horizontal dan bottom sheet modal untuk lompat langsung sekali tap ke Dashboard Perkuliahan, Presensi & Kehadiran, Kalender & Deadline Tugas, Buku Nilai / KHS, Forum Diskusi, serta Halaman Utama Mentari tanpa navigasi menu bertingkat.
 - **Penanganan Tautan Eksternal:** Secara otomatis mendeteksi dan mengarahkan tautan Google Meet, Zoom, WhatsApp dosen/grup kelas, dan dokumen unduhan langsung ke aplikasi native di smartphone.
 - **Pull-to-Refresh & Navigasi Cerdas:** Mendukung gestur tarik ke bawah untuk memuat ulang halaman serta integrasi riwayat navigasi tombol kembali Android.
 

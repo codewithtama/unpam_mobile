@@ -52,3 +52,7 @@ app.*.map.json
 
 # Network HAR logs (contains sensitive session tokens)
 *.har
+
+# Kotlin daemon & caches
+.kotlin/
+*.salive

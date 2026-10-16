@@ -314,32 +314,6 @@ class _PortalWebViewScreenState extends State<PortalWebViewScreen> {
                     _consultWithAi();
                   },
                 ),
-
-                // Opsi 4: Shortcut Navigasi Mentari
-                ListTile(
-                  contentPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 4),
-                  leading: Container(
-                    padding: const EdgeInsets.all(10),
-                    decoration: BoxDecoration(
-                      color: AppTheme.accentGold.withOpacity(0.18),
-                      shape: BoxShape.circle,
-                    ),
-                    child: const Icon(Icons.flash_on_rounded, color: AppTheme.primaryBlue, size: 22),
-                  ),
-                  title: const Text(
-                    'Shortcut Navigasi Mentari',
-                    style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold),
-                  ),
-                  subtitle: const Text(
-                    'Lompat langsung ke Dashboard, Presensi, Deadline, Nilai, atau Forum',
-                    style: TextStyle(fontSize: 12, color: AppTheme.textMuted),
-                  ),
-                  trailing: const Icon(Icons.arrow_forward_ios_rounded, size: 14, color: AppTheme.textMuted),
-                  onTap: () {
-                    Navigator.pop(ctx);
-                    _showMentariShortcutsSheet();
-                  },
-                ),
               ],
             ),
           ),
@@ -348,222 +322,7 @@ class _PortalWebViewScreenState extends State<PortalWebViewScreen> {
     );
   }
 
-  void _showMentariShortcutsSheet() {
-    final shortcuts = [
-      {
-        'title': 'Dashboard Perkuliahan',
-        'desc': 'Daftar seluruh mata kuliah aktif semester berjalan',
-        'url': 'https://mentari.unpam.ac.id/my/',
-        'icon': Icons.dashboard_rounded,
-      },
-      {
-        'title': 'Presensi & Kehadiran',
-        'desc': 'Daftar sesi absensi perkuliahan mingguan',
-        'url': 'https://mentari.unpam.ac.id/mod/attendance/index.php',
-        'icon': Icons.how_to_reg_rounded,
-      },
-      {
-        'title': 'Kalender & Deadline Tugas',
-        'desc': 'Jadwal tenggat waktu kuis, tugas, dan ujian',
-        'url': 'https://mentari.unpam.ac.id/calendar/view.php',
-        'icon': Icons.calendar_month_rounded,
-      },
-      {
-        'title': 'Buku Nilai & KHS',
-        'desc': 'Rekapitulasi perolehan nilai mata kuliah',
-        'url': 'https://mentari.unpam.ac.id/grade/report/overview/index.php',
-        'icon': Icons.grading_rounded,
-      },
-      {
-        'title': 'Forum Diskusi',
-        'desc': 'Daftar seluruh utas forum diskusi pertemuan',
-        'url': 'https://mentari.unpam.ac.id/mod/forum/index.php',
-        'icon': Icons.forum_rounded,
-      },
-      {
-        'title': 'Profil Akun Portal',
-        'desc': 'Biodata akun dan riwayat aktivitas portal Mentari',
-        'url': 'https://mentari.unpam.ac.id/user/profile.php',
-        'icon': Icons.account_circle_outlined,
-      },
-      {
-        'title': 'Halaman Utama Mentari',
-        'desc': 'Beranda depan portal resmi mentari.unpam.ac.id',
-        'url': 'https://mentari.unpam.ac.id/',
-        'icon': Icons.home_work_rounded,
-      },
-    ];
 
-    showModalBottomSheet(
-      context: context,
-      isScrollControlled: true,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
-      ),
-      builder: (ctx) {
-        return DraggableScrollableSheet(
-          initialChildSize: 0.65,
-          minChildSize: 0.4,
-          maxChildSize: 0.9,
-          expand: false,
-          builder: (context, scrollController) {
-            return Column(
-              children: [
-                Center(
-                  child: Container(
-                    width: 40,
-                    height: 4,
-                    margin: const EdgeInsets.only(top: 10, bottom: 8),
-                    decoration: BoxDecoration(
-                      color: Colors.grey.shade300,
-                      borderRadius: BorderRadius.circular(2),
-                    ),
-                  ),
-                ),
-                Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
-                  child: Row(
-                    children: [
-                      Container(
-                        padding: const EdgeInsets.all(8),
-                        decoration: BoxDecoration(
-                          color: AppTheme.accentGold.withOpacity(0.2),
-                          shape: BoxShape.circle,
-                        ),
-                        child: const Icon(
-                          Icons.flash_on_rounded,
-                          color: AppTheme.primaryBlue,
-                          size: 22,
-                        ),
-                      ),
-                      const SizedBox(width: 12),
-                      const Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              'Shortcut Cepat Mentari',
-                              style: TextStyle(
-                                fontSize: 16,
-                                fontWeight: FontWeight.bold,
-                                color: AppTheme.textDark,
-                              ),
-                            ),
-                            Text(
-                              'Lompat langsung ke halaman portal tujuan Anda',
-                              style: TextStyle(fontSize: 12, color: AppTheme.textMuted),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-                const Divider(height: 1),
-                Expanded(
-                  child: ListView.separated(
-                    controller: scrollController,
-                    padding: const EdgeInsets.symmetric(vertical: 8),
-                    itemCount: shortcuts.length,
-                    separatorBuilder: (_, __) => const Divider(height: 1, indent: 68),
-                    itemBuilder: (context, idx) {
-                      final item = shortcuts[idx];
-                      final url = item['url'] as String;
-                      final isCurrent = _currentUrl.startsWith(url) || _currentUrl == url;
-
-                      return ListTile(
-                        contentPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 2),
-                        leading: Container(
-                          padding: const EdgeInsets.all(10),
-                          decoration: BoxDecoration(
-                            color: isCurrent
-                                ? AppTheme.primaryBlue.withOpacity(0.12)
-                                : const Color(0xFFF2F5FA),
-                            shape: BoxShape.circle,
-                          ),
-                          child: Icon(
-                            item['icon'] as IconData,
-                            color: isCurrent ? AppTheme.primaryBlue : AppTheme.textDark,
-                            size: 20,
-                          ),
-                        ),
-                        title: Text(
-                          item['title'] as String,
-                          style: TextStyle(
-                            fontSize: 14,
-                            fontWeight: isCurrent ? FontWeight.bold : FontWeight.w600,
-                            color: isCurrent ? AppTheme.primaryBlue : AppTheme.textDark,
-                          ),
-                        ),
-                        subtitle: Text(
-                          item['desc'] as String,
-                          style: const TextStyle(fontSize: 12, color: AppTheme.textMuted),
-                        ),
-                        trailing: isCurrent
-                            ? Container(
-                                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                                decoration: BoxDecoration(
-                                  color: AppTheme.primaryBlue.withOpacity(0.1),
-                                  borderRadius: BorderRadius.circular(10),
-                                ),
-                                child: const Text(
-                                  'Aktif',
-                                  style: TextStyle(
-                                    fontSize: 11,
-                                    fontWeight: FontWeight.bold,
-                                    color: AppTheme.primaryBlue,
-                                  ),
-                                ),
-                              )
-                            : const Icon(Icons.arrow_forward_ios_rounded, size: 14, color: AppTheme.textMuted),
-                        onTap: () {
-                          Navigator.pop(ctx);
-                          _navigateToUrl(url);
-                        },
-                      );
-                    },
-                  ),
-                ),
-              ],
-            );
-          },
-        );
-      },
-    );
-  }
-
-  Widget _buildQuickNavChip(String label, String url, IconData icon) {
-    final bool isCurrent = _currentUrl.startsWith(url) || (_currentUrl == url);
-    return Padding(
-      padding: const EdgeInsets.only(right: 6),
-      child: ActionChip(
-        avatar: Icon(
-          icon,
-          size: 15,
-          color: isCurrent ? Colors.white : AppTheme.primaryBlue,
-        ),
-        label: Text(
-          label,
-          style: TextStyle(
-            fontSize: 11.5,
-            fontWeight: isCurrent ? FontWeight.bold : FontWeight.w500,
-            color: isCurrent ? Colors.white : AppTheme.textDark,
-          ),
-        ),
-        backgroundColor: isCurrent ? AppTheme.primaryBlue : const Color(0xFFF0F4FA),
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(16),
-          side: BorderSide(
-            color: isCurrent ? AppTheme.primaryBlue : Colors.grey.shade300,
-            width: 0.8,
-          ),
-        ),
-        padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 0),
-        visualDensity: VisualDensity.compact,
-        onPressed: () => _navigateToUrl(url),
-      ),
-    );
-  }
 
   Future<void> _handleForumAutoDraft() async {
     if (!mounted) return;
@@ -1429,24 +1188,7 @@ class _PortalWebViewScreenState extends State<PortalWebViewScreen> {
                 valueColor: const AlwaysStoppedAnimation<Color>(AppTheme.accentGold),
               ),
 
-            // Bar Navigasi Shortcut Cepat Mentari
-            Container(
-              height: 38,
-              color: Colors.white,
-              child: ListView(
-                scrollDirection: Axis.horizontal,
-                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                children: [
-                  _buildQuickNavChip('Dashboard', 'https://mentari.unpam.ac.id/my/', Icons.dashboard_outlined),
-                  _buildQuickNavChip('Presensi', 'https://mentari.unpam.ac.id/mod/attendance/index.php', Icons.how_to_reg_outlined),
-                  _buildQuickNavChip('Deadline', 'https://mentari.unpam.ac.id/calendar/view.php', Icons.calendar_today_outlined),
-                  _buildQuickNavChip('Nilai / KHS', 'https://mentari.unpam.ac.id/grade/report/overview/index.php', Icons.grading_outlined),
-                  _buildQuickNavChip('Forum', 'https://mentari.unpam.ac.id/mod/forum/index.php', Icons.forum_outlined),
-                  _buildQuickNavChip('Beranda', 'https://mentari.unpam.ac.id/', Icons.home_outlined),
-                ],
-              ),
-            ),
-            const Divider(height: 1, thickness: 1, color: Color(0xFFEEEEEE)),
+
 
             // Konten Utama: WebView atau Error Fallback & Draggable AI Button
             Expanded(
@@ -1690,11 +1432,7 @@ class _PortalWebViewScreenState extends State<PortalWebViewScreen> {
         ],
       ),
       actions: [
-        IconButton(
-          tooltip: 'Shortcut Cepat Mentari',
-          icon: const Icon(Icons.flash_on_rounded, size: 22, color: AppTheme.accentGold),
-          onPressed: _showMentariShortcutsSheet,
-        ),
+
         IconButton(
           tooltip: 'Muat Ulang Halaman',
           icon: const Icon(Icons.refresh_rounded, size: 22, color: Colors.white),
