@@ -37,6 +37,9 @@ class _PortalWebViewScreenState extends State<PortalWebViewScreen> {
   Offset? _fabOffset;
   bool _isDraggingFab = false;
   bool _isLoginPageDetected = false;
+  bool _isLoggedOutDetected = false;
+  bool _hasAutoLoggedInCurrentSession = false;
+  bool _pendingAutoLoginAfterLoad = false;
 
   bool _isAtTop = true;
   bool _wasAtTopOnDown = true;
@@ -96,12 +99,16 @@ class _PortalWebViewScreenState extends State<PortalWebViewScreen> {
           },
           onPageStarted: (url) {
             if (mounted) {
+              final isLogin = url.toLowerCase().contains('login');
               setState(() {
                 _currentUrl = url;
                 _isLoading = true;
                 _hasError = false;
                 _isAtTop = true;
-                _isLoginPageDetected = false;
+                _isLoginPageDetected = isLogin;
+                if (!isLogin) {
+                  _hasAutoLoggedInCurrentSession = false;
+                }
               });
               _updateHistoryState();
             }
@@ -120,6 +127,9 @@ class _PortalWebViewScreenState extends State<PortalWebViewScreen> {
               _updateHistoryState();
             }
             _detectLoginForm();
+            Future.delayed(const Duration(milliseconds: 700), () {
+              if (mounted) _detectLoginForm();
+            });
             try {
               await _controller.runJavaScript('''
                 (function() {
@@ -476,22 +486,70 @@ class _PortalWebViewScreenState extends State<PortalWebViewScreen> {
   }
 
   Future<void> _detectLoginForm() async {
+    final bool urlHasLogin = _currentUrl.toLowerCase().contains('login');
+
     try {
-      final res = await _controller.runJavaScriptReturningResult('''
+      final res = await _controller.runJavaScriptReturningResult(r'''
         (function() {
-          var u = document.querySelector('input#username, input[name="username"]');
-          var p = document.querySelector('input#password, input[name="password"]');
-          return (u && p) ? 'true' : 'false';
+          var p = document.querySelector('input[type="password"]');
+          var form = p ? p.closest('form') : document.querySelector('form#login, form[action*="login"]');
+          var u = form 
+            ? form.querySelector('input#username, input[name="username"], input[type="text"], input[autocomplete*="user"]')
+            : document.querySelector('input#username, input[name="username"], input[autocomplete*="user"], input[type="text"]');
+          var isLoginUrl = window.location.href.toLowerCase().indexOf('login') !== -1;
+          var isLoggedOut = !!document.querySelector('a[href*="login/index.php"], .logininfo a[href*="login"], .usermenu a[href*="login"]');
+
+          return JSON.stringify({
+            hasLoginForm: !!(u && p),
+            isLoginUrl: isLoginUrl,
+            isLoggedOut: isLoggedOut
+          });
         })();
       ''');
-      final isLogin = res == 'true' || res == true || res == '"true"';
-      if (mounted && isLogin != _isLoginPageDetected) {
+
+      Map<String, dynamic> data = {};
+      if (res is String) {
+        try {
+          String clean = res;
+          if (clean.startsWith('"') && clean.endsWith('"') && clean.length >= 2) {
+            clean = clean.substring(1, clean.length - 1);
+            clean = clean.replaceAll(r'\"', '"');
+          }
+          data = jsonDecode(clean) as Map<String, dynamic>;
+        } catch (_) {}
+      }
+
+      final hasForm = data['hasLoginForm'] == true;
+      final isLoginUrl = data['isLoginUrl'] == true || urlHasLogin;
+      final isLoggedOut = data['isLoggedOut'] == true;
+      final isLoginDetected = hasForm || isLoginUrl;
+
+      if (mounted) {
         setState(() {
-          _isLoginPageDetected = isLogin;
+          _isLoginPageDetected = isLoginDetected;
+          _isLoggedOutDetected = isLoggedOut && !isLoginDetected;
         });
+
+        final bioProv = context.read<BiometricProvider>();
+        if (bioProv.hasSavedCredentials && bioProv.isAutoLoginEnabled) {
+          if (_pendingAutoLoginAfterLoad || (isLoginDetected && !_hasAutoLoggedInCurrentSession)) {
+            _hasAutoLoggedInCurrentSession = true;
+            _pendingAutoLoginAfterLoad = false;
+            Future.delayed(const Duration(milliseconds: 600), () {
+              if (mounted) {
+                _performBiometricLogin();
+              }
+            });
+          }
+        }
       }
     } catch (e) {
       debugPrint('Login form detection error: $e');
+      if (mounted && urlHasLogin && !_isLoginPageDetected) {
+        setState(() {
+          _isLoginPageDetected = true;
+        });
+      }
     }
   }
 
@@ -514,46 +572,210 @@ class _PortalWebViewScreenState extends State<PortalWebViewScreen> {
 
     try {
       final js = '''
-      (function() {
-        var u = document.querySelector('input#username, input[name="username"]');
-        var p = document.querySelector('input#password, input[name="password"]');
-        var btn = document.querySelector('button#loginbtn, input#loginbtn, form#login button[type="submit"], input[type="submit"]');
+      (function(nimVal, passVal) {
+        var p = document.querySelector('input[type="password"]');
+        var form = p ? p.closest('form') : document.querySelector('form#login, form[action*="login"]');
+        var u = form
+          ? form.querySelector('input#username, input[name="username"], input[type="text"], input[autocomplete*="user"]')
+          : document.querySelector('input#username, input[name="username"], input[autocomplete*="user"], input[type="text"]');
+
         if (u && p) {
-          u.value = ${jsonEncode(nim)};
+          u.focus();
+          u.value = nimVal;
           u.dispatchEvent(new Event('input', { bubbles: true }));
           u.dispatchEvent(new Event('change', { bubbles: true }));
-          p.value = ${jsonEncode(password)};
+
+          p.focus();
+          p.value = passVal;
           p.dispatchEvent(new Event('input', { bubbles: true }));
           p.dispatchEvent(new Event('change', { bubbles: true }));
+
+          var btn = (form ? form.querySelector('button[type="submit"], input[type="submit"], button#loginbtn, input#loginbtn') : null)
+            || document.querySelector('button#loginbtn, input#loginbtn, button[type="submit"], input[type="submit"]');
+
           if (btn) {
-            btn.click();
-            return 'submitted';
+            setTimeout(function() {
+              btn.click();
+            }, 120);
+            return 'submitted_by_click';
+          } else if (form) {
+            setTimeout(function() {
+              form.submit();
+            }, 120);
+            return 'submitted_by_form';
           }
-          return 'filled';
+          return 'filled_only';
         }
-        return 'not_found';
-      })();
+
+        window.location.href = 'https://mentari.unpam.ac.id/login/index.php';
+        return 'redirecting_to_login';
+      })(${jsonEncode(nim)}, ${jsonEncode(password)});
       ''';
 
-      await _controller.runJavaScript(js);
+      final res = await _controller.runJavaScriptReturningResult(js);
+      final resStr = res.toString();
+
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Mengisi kredensial dan memproses login Mentari...'),
-            backgroundColor: AppTheme.primaryBlue,
-            duration: Duration(seconds: 2),
-          ),
-        );
+        if (resStr.contains('redirecting')) {
+          setState(() {
+            _pendingAutoLoginAfterLoad = true;
+          });
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Mengarahkan ke halaman login Mentari...'),
+              backgroundColor: AppTheme.primaryBlue,
+              duration: Duration(seconds: 2),
+            ),
+          );
+        } else {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Mengisi kredensial dan memproses login Mentari...'),
+              backgroundColor: AppTheme.primaryBlue,
+              duration: Duration(seconds: 2),
+            ),
+          );
+        }
       }
     } catch (e) {
       debugPrint('Auto-login script injection error: $e');
     }
   }
 
+  void _handleBiometricButtonTap(BiometricProvider bioProv) {
+    if (!bioProv.hasSavedCredentials) {
+      BiometricVaultSheet.show(context);
+      return;
+    }
+
+    final isLogin = _isLoginPageDetected || _currentUrl.toLowerCase().contains('login');
+    if (isLogin) {
+      _performBiometricLogin();
+    } else {
+      _showBiometricQuickMenu(bioProv);
+    }
+  }
+
+  void _showBiometricQuickMenu(BiometricProvider bioProv) {
+    showModalBottomSheet(
+      context: context,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (ctx) {
+        return SafeArea(
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Center(
+                  child: Container(
+                    width: 40,
+                    height: 4,
+                    margin: const EdgeInsets.only(bottom: 16),
+                    decoration: BoxDecoration(
+                      color: Colors.grey.shade300,
+                      borderRadius: BorderRadius.circular(2),
+                    ),
+                  ),
+                ),
+                Row(
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.all(10),
+                      decoration: BoxDecoration(
+                        color: AppTheme.primaryBlue.withOpacity(0.1),
+                        shape: BoxShape.circle,
+                      ),
+                      child: const Icon(Icons.fingerprint_rounded, color: AppTheme.primaryBlue, size: 24),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          const Text(
+                            'UNPAM Auto-Login',
+                            style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: AppTheme.textDark),
+                          ),
+                          Text(
+                            'NIM Terdaftar: ${bioProv.savedNim ?? "-"}',
+                            style: const TextStyle(fontSize: 12, color: AppTheme.primaryBlue, fontWeight: FontWeight.w600),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 16),
+                const Divider(height: 1),
+                const SizedBox(height: 10),
+                ListTile(
+                  contentPadding: EdgeInsets.zero,
+                  leading: Container(
+                    padding: const EdgeInsets.all(8),
+                    decoration: BoxDecoration(color: AppTheme.accentGold.withOpacity(0.15), shape: BoxShape.circle),
+                    child: const Icon(Icons.login_rounded, color: AppTheme.accentGold, size: 20),
+                  ),
+                  title: const Text('Buka Halaman Login & Masuk Sekarang', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13.5)),
+                  subtitle: const Text('Arahkan langsung ke form login Mentari dan verifikasi sidik jari.', style: TextStyle(fontSize: 11.5, color: AppTheme.textMuted)),
+                  trailing: const Icon(Icons.arrow_forward_ios_rounded, size: 14, color: AppTheme.textMuted),
+                  onTap: () {
+                    Navigator.pop(ctx);
+                    setState(() {
+                      _pendingAutoLoginAfterLoad = true;
+                    });
+                    _navigateToUrl('https://mentari.unpam.ac.id/login/index.php');
+                  },
+                ),
+                ListTile(
+                  contentPadding: EdgeInsets.zero,
+                  leading: Container(
+                    padding: const EdgeInsets.all(8),
+                    decoration: BoxDecoration(color: AppTheme.primaryBlue.withOpacity(0.1), shape: BoxShape.circle),
+                    child: const Icon(Icons.refresh_rounded, color: AppTheme.primaryBlue, size: 20),
+                  ),
+                  title: const Text('Coba Isi Kredensial di Halaman Ini', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13.5)),
+                  subtitle: const Text('Isi form username & password jika sudah berada di tampilan login.', style: TextStyle(fontSize: 11.5, color: AppTheme.textMuted)),
+                  trailing: const Icon(Icons.arrow_forward_ios_rounded, size: 14, color: AppTheme.textMuted),
+                  onTap: () {
+                    Navigator.pop(ctx);
+                    _performBiometricLogin();
+                  },
+                ),
+                ListTile(
+                  contentPadding: EdgeInsets.zero,
+                  leading: Container(
+                    padding: const EdgeInsets.all(8),
+                    decoration: BoxDecoration(color: Colors.grey.shade100, shape: BoxShape.circle),
+                    child: const Icon(Icons.settings_outlined, color: AppTheme.textDark, size: 20),
+                  ),
+                  title: const Text('Kelola Akun & Pengaturan Biometrik', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13.5)),
+                  subtitle: const Text('Ubah NIM, ganti password, atau nonaktifkan auto-login.', style: TextStyle(fontSize: 11.5, color: AppTheme.textMuted)),
+                  trailing: const Icon(Icons.arrow_forward_ios_rounded, size: 14, color: AppTheme.textMuted),
+                  onTap: () {
+                    Navigator.pop(ctx);
+                    BiometricVaultSheet.show(context);
+                  },
+                ),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+  }
+
   Widget _buildBiometricLoginBanner() {
     return Consumer<BiometricProvider>(
       builder: (ctx, bioProv, _) {
         final hasCreds = bioProv.hasSavedCredentials;
+        if (!hasCreds) return const SizedBox.shrink();
+
+        final isLoginPage = _isLoginPageDetected;
+
         return Container(
           margin: const EdgeInsets.fromLTRB(16, 0, 16, 8),
           padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
@@ -589,7 +811,7 @@ class _PortalWebViewScreenState extends State<PortalWebViewScreen> {
                   mainAxisSize: MainAxisSize.min,
                   children: [
                     Text(
-                      hasCreds ? 'Halaman Login Terdeteksi' : 'Simpan Akun UNPAM',
+                      isLoginPage ? 'Form Login Mentari Terdeteksi' : 'Sesi Belum Masuk',
                       style: const TextStyle(
                         color: Colors.white,
                         fontWeight: FontWeight.bold,
@@ -597,9 +819,7 @@ class _PortalWebViewScreenState extends State<PortalWebViewScreen> {
                       ),
                     ),
                     Text(
-                      hasCreds
-                          ? 'NIM: ${bioProv.savedNim ?? ""}'
-                          : 'Masuk otomatis dengan sidik jari',
+                      'NIM: ${bioProv.savedNim ?? ""}',
                       style: TextStyle(
                         color: Colors.white.withOpacity(0.85),
                         fontSize: 11,
@@ -615,15 +835,22 @@ class _PortalWebViewScreenState extends State<PortalWebViewScreen> {
                   padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
                   minimumSize: const Size(48, 36),
                 ),
-                onPressed: hasCreds
-                    ? _performBiometricLogin
-                    : () => BiometricVaultSheet.show(context),
-                icon: Icon(
-                  hasCreds ? Icons.login_rounded : Icons.add_rounded,
+                onPressed: () {
+                  if (isLoginPage) {
+                    _performBiometricLogin();
+                  } else {
+                    setState(() {
+                      _pendingAutoLoginAfterLoad = true;
+                    });
+                    _navigateToUrl('https://mentari.unpam.ac.id/login/index.php');
+                  }
+                },
+                icon: const Icon(
+                  Icons.login_rounded,
                   size: 16,
                 ),
                 label: Text(
-                  hasCreds ? 'Login Sidik Jari' : 'Atur Akun',
+                  isLoginPage ? 'Login Sidik Jari' : 'Masuk Sekarang',
                   style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold),
                 ),
               ),
@@ -1878,7 +2105,7 @@ class _PortalWebViewScreenState extends State<PortalWebViewScreen> {
         bottomNavigationBar: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            if (_isLoginPageDetected) _buildBiometricLoginBanner(),
+            if (_isLoginPageDetected || _isLoggedOutDetected) _buildBiometricLoginBanner(),
             _buildBottomNav(),
           ],
         ),
@@ -1954,13 +2181,7 @@ class _PortalWebViewScreenState extends State<PortalWebViewScreen> {
                 color: bioProv.hasSavedCredentials ? AppTheme.accentGold : Colors.white70,
                 size: 22,
               ),
-              onPressed: () {
-                if (_isLoginPageDetected && bioProv.hasSavedCredentials) {
-                  _performBiometricLogin();
-                } else {
-                  BiometricVaultSheet.show(context);
-                }
-              },
+              onPressed: () => _handleBiometricButtonTap(bioProv),
             );
           },
         ),
