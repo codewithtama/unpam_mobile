@@ -103,6 +103,19 @@ class _PortalWebViewScreenState extends State<PortalWebViewScreen> {
               });
             }
           },
+          onUrlChange: (change) {
+            final nextUrl = change.url;
+            if (nextUrl != null && mounted) {
+              final isLogin = nextUrl.toLowerCase().contains('login');
+              setState(() {
+                _currentUrl = nextUrl;
+                if (!isLogin) {
+                  _isLoginPageDetected = false;
+                }
+              });
+              _detectLoginForm();
+            }
+          },
           onPageStarted: (url) {
             if (mounted) {
               final isLogin = url.toLowerCase().contains('login');
@@ -526,6 +539,20 @@ class _PortalWebViewScreenState extends State<PortalWebViewScreen> {
     try {
       final res = await _controller.runJavaScriptReturningResult(r'''
         (function() {
+          var isLoginUrl = window.location.href.toLowerCase().indexOf('login') !== -1;
+
+          // 1. Cek token login Mentari (JWT di localStorage)
+          var hasMentariToken = false;
+          try {
+            var acc = window.localStorage.getItem('access');
+            hasMentariToken = !!(acc && acc !== 'null' && acc !== 'undefined' && acc !== '""');
+          } catch(e) {}
+
+          // 2. Cek indikator akun aktif di Moodle / Mentari
+          var hasProfileIndicator = hasMentariToken || 
+            !!document.querySelector('.usermenu .userbutton, .userpicture, [data-testid="AccountCircleIcon"], [aria-label*="akun" i], [aria-label*="profile" i], .avatar');
+
+          // 3. Cek form login nyata (wajib ada elemen input password dan username)
           var p = document.querySelector('input[name="password"], input[type="password"], input#password');
           var u = document.querySelector('input[name="username"], input#username, input[autocomplete="username"], input[name="user"], input[name="nim"]');
           if (!u && p) {
@@ -534,13 +561,13 @@ class _PortalWebViewScreenState extends State<PortalWebViewScreen> {
               u = form.querySelector('input[type="text"], input:not([type])');
             }
           }
-          var isLoginUrl = window.location.href.toLowerCase().indexOf('login') !== -1;
-          var isLoggedOut = !document.querySelector('a[href*="login"], .logininfo a[href*="login"], .usermenu a[href*="login"]');
+
+          var hasLoginForm = !!(u && p);
 
           return JSON.stringify({
-            hasLoginForm: !(u && p),
+            hasLoginForm: hasLoginForm,
             isLoginUrl: isLoginUrl,
-            isLoggedOut: isLoggedOut
+            hasProfileIndicator: hasProfileIndicator
           });
         })();
       ''');
@@ -559,13 +586,15 @@ class _PortalWebViewScreenState extends State<PortalWebViewScreen> {
 
       final hasForm = data['hasLoginForm'] == true;
       final isLoginUrl = data['isLoginUrl'] == true || urlHasLogin;
-      final isLoggedOut = data['isLoggedOut'] == true;
-      final isLoginDetected = hasForm || isLoginUrl;
+      final hasProfile = data['hasProfileIndicator'] == true;
+
+      // Halaman login HANYA jika ada form login nyata atau url login, DAN user belum login
+      final isLoginDetected = (hasForm || isLoginUrl) && !hasProfile;
 
       if (mounted) {
         setState(() {
           _isLoginPageDetected = isLoginDetected;
-          _isLoggedOutDetected = isLoggedOut && !isLoginDetected;
+          _isLoggedOutDetected = false;
         });
 
         final bioProv = context.read<BiometricProvider>();
@@ -819,6 +848,13 @@ class _PortalWebViewScreenState extends State<PortalWebViewScreen> {
               duration: Duration(seconds: 2),
             ),
           );
+
+          // Pemicu verifikasi agar banner login langsung lenyap saat dashboard termuat
+          Future.delayed(const Duration(milliseconds: 1200), () {
+            if (mounted) {
+              _detectLoginForm();
+            }
+          });
         }
       }
     } catch (e) {
@@ -958,7 +994,10 @@ class _PortalWebViewScreenState extends State<PortalWebViewScreen> {
         final hasCreds = bioProv.hasSavedCredentials;
         if (!hasCreds) return const SizedBox.shrink();
 
-        final isLoginPage = _isLoginPageDetected;
+        // Banner HANYA muncul jika benar-benar berada di tampilan login dan belum masuk
+        if (!_isLoginPageDetected) {
+          return const SizedBox.shrink();
+        }
 
         return Container(
           margin: const EdgeInsets.fromLTRB(16, 0, 16, 8),
@@ -994,9 +1033,9 @@ class _PortalWebViewScreenState extends State<PortalWebViewScreen> {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    Text(
-                      isLoginPage ? 'Form Login Mentari Terdeteksi' : 'Sesi Belum Masuk',
-                      style: const TextStyle(
+                    const Text(
+                      'Form Login Mentari Terdeteksi',
+                      style: TextStyle(
                         color: Colors.white,
                         fontWeight: FontWeight.bold,
                         fontSize: 12.5,
@@ -1020,22 +1059,15 @@ class _PortalWebViewScreenState extends State<PortalWebViewScreen> {
                   minimumSize: const Size(48, 36),
                 ),
                 onPressed: () {
-                  if (isLoginPage) {
-                    _performBiometricLogin();
-                  } else {
-                    setState(() {
-                      _pendingAutoLoginAfterLoad = true;
-                    });
-                    _navigateToUrl('https://mentari.unpam.ac.id/login');
-                  }
+                  _performBiometricLogin();
                 },
                 icon: const Icon(
                   Icons.login_rounded,
                   size: 16,
                 ),
-                label: Text(
-                  isLoginPage ? 'Login Sidik Jari' : 'Masuk Sekarang',
-                  style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold),
+                label: const Text(
+                  'Login Sidik Jari',
+                  style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold),
                 ),
               ),
             ],
