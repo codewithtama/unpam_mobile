@@ -7,6 +7,7 @@ import 'package:url_launcher/url_launcher.dart';
 import '../providers/ai_provider.dart';
 import '../models/ai_message_model.dart';
 import '../theme/app_theme.dart';
+import 'ai_paraphrase_screen.dart';
 
 class AiAssistantScreen extends StatefulWidget {
   final String? initialPrompt;
@@ -229,6 +230,16 @@ class _AiAssistantScreenState extends State<AiAssistantScreen> {
           ],
         ),
         actions: [
+          IconButton(
+            tooltip: 'AI Parafrase Akademik',
+            icon: const Icon(Icons.auto_fix_high_rounded, color: Colors.white, size: 20),
+            onPressed: () {
+              Navigator.push(
+                context,
+                MaterialPageRoute(builder: (_) => const AiParaphraseScreen()),
+              );
+            },
+          ),
           IconButton(
             tooltip: 'Pengaturan Gemini API Key',
             icon: Icon(

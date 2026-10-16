@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../core/services/ai_service.dart';
 import '../core/services/storage_service.dart';
 import '../models/ai_message_model.dart';
+import '../models/paraphrase_model.dart';
 
 class AiProvider extends ChangeNotifier {
   final AiService _aiService;
@@ -156,6 +157,20 @@ class AiProvider extends ChangeNotifier {
   }) async {
     return await _aiService.solveQuizQuestions(
       questions: questions,
+      courseName: courseName ?? _selectedCourseName,
+    );
+  }
+
+  Future<ParaphraseResult> paraphraseText({
+    required String text,
+    required ParaphraseMode mode,
+    bool includeCitationAdvice = false,
+    String? courseName,
+  }) async {
+    return await _aiService.paraphraseAcademicText(
+      text: text,
+      mode: mode,
+      includeCitationAdvice: includeCitationAdvice,
       courseName: courseName ?? _selectedCourseName,
     );
   }

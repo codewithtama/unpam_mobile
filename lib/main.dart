@@ -2,7 +2,9 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'core/services/storage_service.dart';
 import 'core/services/ai_service.dart';
+import 'core/services/biometric_auth_service.dart';
 import 'providers/ai_provider.dart';
+import 'providers/biometric_provider.dart';
 import 'theme/app_theme.dart';
 import 'screens/portal_webview_screen.dart';
 import 'screens/user_agreement_screen.dart';
@@ -10,14 +12,16 @@ import 'screens/user_agreement_screen.dart';
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
-  // Inisialisasi Local Storage & AI Service
+  // Inisialisasi Local Storage, Biometric & AI Service
   final storage = await StorageService.getInstance();
   final aiService = AiService(storage);
+  final biometricService = BiometricAuthService(prefs: storage.rawPreferences);
 
   runApp(
     MultiProvider(
       providers: [
         ChangeNotifierProvider(create: (_) => AiProvider(aiService, storage)),
+        ChangeNotifierProvider(create: (_) => BiometricProvider(biometricService)),
       ],
       child: UnpamMobileApp(storageService: storage),
     ),

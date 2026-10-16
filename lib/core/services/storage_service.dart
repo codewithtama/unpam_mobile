@@ -15,6 +15,8 @@ class StorageService {
     return _instance!;
   }
 
+  SharedPreferences get rawPreferences => _preferences!;
+
   Future<void> saveToken(String token) async {
     await _preferences?.setString(ApiConstants.tokenKey, token);
   }

@@ -3,6 +3,7 @@ import 'dart:typed_data';
 import 'package:dio/dio.dart';
 import '../services/storage_service.dart';
 import '../../models/ai_message_model.dart';
+import '../../models/paraphrase_model.dart';
 
 class AiService {
   final StorageService _storage;
@@ -550,6 +551,76 @@ class AiService {
       }
       return fallbackList;
     }
+  }
+
+  /// Melakukan parafrase cerdas terhadap draf tugas/teks mahasiswa
+  Future<ParaphraseResult> paraphraseAcademicText({
+    required String text,
+    required ParaphraseMode mode,
+    bool includeCitationAdvice = false,
+    String? courseName,
+  }) async {
+    String modeInstruction;
+    switch (mode) {
+      case ParaphraseMode.academic:
+        modeInstruction =
+            'Gaya Akademis & Baku: Gunakan kosakata baku Bahasa Indonesia (PUEBI/KBBI), struktur kalimat formal ragam ilmiah, transisi logis antarparagraf, dan terminologi yang tepat untuk karya ilmiah/makalah.';
+        break;
+      case ParaphraseMode.humanizer:
+        modeInstruction =
+            'Gaya Lugas & Alami (Humanizer Orisinal): Rombak total struktur kalimat agar mengalir santun, luwes, dan bernalar seperti pemikiran asli mahasiswa Indonesia. Variasikan panjang kalimat. HINDARI struktur kaku atau frasa pengantar khas bot AI agar tidak terdeteksi plagiat / AI detector.';
+        break;
+      case ParaphraseMode.concise:
+        modeInstruction =
+            'Gaya Ringkas & Padat: Pangkas kalimat bertele-tele dan redudansi kata. Sampaikan gagasan utama dalam kalimat yang padat, tajam, dan langsung ke inti permasalahan tanpa menghilangkan substansi.';
+        break;
+      case ParaphraseMode.expansive:
+        modeInstruction =
+            'Gaya Ekspansif & Analitis: Elaborasi ide dasar menjadi pemaparan naratif yang mendalam, lengkapi dengan penalaran sebab-akibat atau contoh aplikasi nyata di lapangan/industri yang relevan.';
+        break;
+    }
+
+    final systemPrompt =
+        'Anda adalah pakar penulisan akademik dan editor bahasa profesional untuk civitas akademika Universitas Pamulang.\n'
+        'Tugas Anda: Melakukan parafrase berkualitas tinggi terhadap teks mahasiswa berdasarkan mode yang diminta.\n\n'
+        'Aturan Khusus:\n'
+        '1. $modeInstruction\n'
+        '2. Jangan tambahkan kata pembuka/penutup seperti "Berikut adalah hasil parafrasenya:" atau "Semoga membantu".\n'
+        '3. ${includeCitationAdvice ? 'Di akhir teks, tambahkan baris pemisah "---SITASI---" lalu sertakan 1-2 contoh format sitasi referensi yang relevan dalam format APA 7th Edition.' : 'Jangan sertakan format sitasi kecuali diminta.'}\n'
+        '4. JANGAN gunakan emoji apa pun.';
+
+    final userPrompt =
+        'Konteks Mata Kuliah: ${courseName ?? "Umum / Universitas Pamulang"}\n\n'
+        'Teks Asli Mahasiswa:\n"""\n$text\n"""\n\n'
+        'Hasil Parafrase:';
+
+    final raw = await askRawLlm(
+      systemPrompt: systemPrompt,
+      userPrompt: userPrompt,
+    );
+
+    String paraphrased = raw.trim();
+    String? citationAdvice;
+
+    if (includeCitationAdvice && paraphrased.contains('---SITASI---')) {
+      final parts = paraphrased.split('---SITASI---');
+      paraphrased = parts[0].trim();
+      if (parts.length > 1) {
+        citationAdvice = parts[1].trim();
+      }
+    }
+
+    final origWords = ParaphraseResult.countWords(text);
+    final resWords = ParaphraseResult.countWords(paraphrased);
+
+    return ParaphraseResult(
+      originalText: text,
+      paraphrasedText: paraphrased,
+      mode: mode,
+      originalWordCount: origWords,
+      resultWordCount: resWords,
+      citationAdvice: citationAdvice,
+    );
   }
 }
 

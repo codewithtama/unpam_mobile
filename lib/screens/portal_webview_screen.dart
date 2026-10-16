@@ -7,6 +7,9 @@ import 'package:url_launcher/url_launcher.dart';
 import '../theme/app_theme.dart';
 import '../providers/ai_provider.dart';
 import 'ai_assistant_screen.dart';
+import 'ai_paraphrase_screen.dart';
+import '../providers/biometric_provider.dart';
+import '../widgets/biometric_vault_sheet.dart';
 
 class PortalWebViewScreen extends StatefulWidget {
   final String initialUrl;
@@ -33,6 +36,7 @@ class _PortalWebViewScreenState extends State<PortalWebViewScreen> {
   DateTime? _lastBackPressTime;
   Offset? _fabOffset;
   bool _isDraggingFab = false;
+  bool _isLoginPageDetected = false;
 
   bool _isAtTop = true;
   bool _wasAtTopOnDown = true;
@@ -97,6 +101,7 @@ class _PortalWebViewScreenState extends State<PortalWebViewScreen> {
                 _isLoading = true;
                 _hasError = false;
                 _isAtTop = true;
+                _isLoginPageDetected = false;
               });
               _updateHistoryState();
             }
@@ -114,6 +119,7 @@ class _PortalWebViewScreenState extends State<PortalWebViewScreen> {
               });
               _updateHistoryState();
             }
+            _detectLoginForm();
             try {
               await _controller.runJavaScript('''
                 (function() {
@@ -370,6 +376,58 @@ class _PortalWebViewScreenState extends State<PortalWebViewScreen> {
                     _consultWithAi();
                   },
                 ),
+
+                // Opsi 4: AI Parafrase Akademik
+                ListTile(
+                  contentPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 4),
+                  leading: Container(
+                    padding: const EdgeInsets.all(10),
+                    decoration: BoxDecoration(
+                      color: Colors.purple.shade50,
+                      shape: BoxShape.circle,
+                    ),
+                    child: Icon(Icons.auto_fix_high_rounded, color: Colors.purple.shade700, size: 22),
+                  ),
+                  title: const Text(
+                    'AI Parafrase Akademik',
+                    style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold),
+                  ),
+                  subtitle: const Text(
+                    'Parafrase teks tugas atau materi modul agar bebas plagiasi & bernalar ilmiah',
+                    style: TextStyle(fontSize: 12, color: AppTheme.textMuted),
+                  ),
+                  trailing: const Icon(Icons.arrow_forward_ios_rounded, size: 14, color: AppTheme.textMuted),
+                  onTap: () {
+                    Navigator.pop(ctx);
+                    _handleParaphraseNavigation();
+                  },
+                ),
+
+                // Opsi 5: Biometric Auto-Login & Brankas Kredensial
+                ListTile(
+                  contentPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 4),
+                  leading: Container(
+                    padding: const EdgeInsets.all(10),
+                    decoration: BoxDecoration(
+                      color: Colors.amber.shade50,
+                      shape: BoxShape.circle,
+                    ),
+                    child: const Icon(Icons.fingerprint_rounded, color: AppTheme.accentGold, size: 22),
+                  ),
+                  title: const Text(
+                    'Biometric Auto-Login',
+                    style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold),
+                  ),
+                  subtitle: const Text(
+                    'Kelola akun UNPAM terenkripsi & masuk otomatis dengan sidik jari',
+                    style: TextStyle(fontSize: 12, color: AppTheme.textMuted),
+                  ),
+                  trailing: const Icon(Icons.arrow_forward_ios_rounded, size: 14, color: AppTheme.textMuted),
+                  onTap: () {
+                    Navigator.pop(ctx);
+                    BiometricVaultSheet.show(context);
+                  },
+                ),
               ],
             ),
           ),
@@ -379,6 +437,202 @@ class _PortalWebViewScreenState extends State<PortalWebViewScreen> {
   }
 
 
+
+  Future<void> _handleParaphraseNavigation() async {
+    String selectedText = '';
+    try {
+      final res = await _controller.runJavaScriptReturningResult(
+        r'''
+        (function() {
+          var sel = window.getSelection ? window.getSelection().toString() : '';
+          return sel ? sel.trim() : '';
+        })()
+        ''',
+      );
+      if (res is String && res.trim().isNotEmpty) {
+        String cleaned = res.trim();
+        if (cleaned.startsWith('"') && cleaned.endsWith('"') && cleaned.length >= 2) {
+          cleaned = cleaned.substring(1, cleaned.length - 1);
+          cleaned = cleaned.replaceAll(r'\"', '"').replaceAll(r'\n', '\n');
+        }
+        if (cleaned.length > 5) {
+          selectedText = cleaned;
+        }
+      }
+    } catch (e) {
+      debugPrint('Selection retrieval failed: $e');
+    }
+
+    if (!mounted) return;
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => AiParaphraseScreen(
+          initialText: selectedText.isNotEmpty ? selectedText : null,
+          courseName: _pageTitle,
+        ),
+      ),
+    );
+  }
+
+  Future<void> _detectLoginForm() async {
+    try {
+      final res = await _controller.runJavaScriptReturningResult('''
+        (function() {
+          var u = document.querySelector('input#username, input[name="username"]');
+          var p = document.querySelector('input#password, input[name="password"]');
+          return (u && p) ? 'true' : 'false';
+        })();
+      ''');
+      final isLogin = res == 'true' || res == true || res == '"true"';
+      if (mounted && isLogin != _isLoginPageDetected) {
+        setState(() {
+          _isLoginPageDetected = isLogin;
+        });
+      }
+    } catch (e) {
+      debugPrint('Login form detection error: $e');
+    }
+  }
+
+  Future<void> _performBiometricLogin() async {
+    final bioProv = context.read<BiometricProvider>();
+    if (!bioProv.hasSavedCredentials) {
+      BiometricVaultSheet.show(context);
+      return;
+    }
+
+    final creds = await bioProv.getCredentialsForLogin();
+    if (creds == null) {
+      return;
+    }
+
+    final nim = creds['nim'] ?? '';
+    final password = creds['password'] ?? '';
+
+    if (nim.isEmpty || password.isEmpty) return;
+
+    try {
+      final js = '''
+      (function() {
+        var u = document.querySelector('input#username, input[name="username"]');
+        var p = document.querySelector('input#password, input[name="password"]');
+        var btn = document.querySelector('button#loginbtn, input#loginbtn, form#login button[type="submit"], input[type="submit"]');
+        if (u && p) {
+          u.value = ${jsonEncode(nim)};
+          u.dispatchEvent(new Event('input', { bubbles: true }));
+          u.dispatchEvent(new Event('change', { bubbles: true }));
+          p.value = ${jsonEncode(password)};
+          p.dispatchEvent(new Event('input', { bubbles: true }));
+          p.dispatchEvent(new Event('change', { bubbles: true }));
+          if (btn) {
+            btn.click();
+            return 'submitted';
+          }
+          return 'filled';
+        }
+        return 'not_found';
+      })();
+      ''';
+
+      await _controller.runJavaScript(js);
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Mengisi kredensial dan memproses login Mentari...'),
+            backgroundColor: AppTheme.primaryBlue,
+            duration: Duration(seconds: 2),
+          ),
+        );
+      }
+    } catch (e) {
+      debugPrint('Auto-login script injection error: $e');
+    }
+  }
+
+  Widget _buildBiometricLoginBanner() {
+    return Consumer<BiometricProvider>(
+      builder: (ctx, bioProv, _) {
+        final hasCreds = bioProv.hasSavedCredentials;
+        return Container(
+          margin: const EdgeInsets.fromLTRB(16, 0, 16, 8),
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+          decoration: BoxDecoration(
+            color: AppTheme.primaryBlue,
+            borderRadius: BorderRadius.circular(14),
+            boxShadow: [
+              BoxShadow(
+                color: AppTheme.primaryBlue.withOpacity(0.3),
+                blurRadius: 8,
+                offset: const Offset(0, 3),
+              ),
+            ],
+          ),
+          child: Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.all(7),
+                decoration: BoxDecoration(
+                  color: Colors.white.withOpacity(0.15),
+                  shape: BoxShape.circle,
+                ),
+                child: const Icon(
+                  Icons.fingerprint_rounded,
+                  color: AppTheme.accentGold,
+                  size: 22,
+                ),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text(
+                      hasCreds ? 'Halaman Login Terdeteksi' : 'Simpan Akun UNPAM',
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontWeight: FontWeight.bold,
+                        fontSize: 12.5,
+                      ),
+                    ),
+                    Text(
+                      hasCreds
+                          ? 'NIM: ${bioProv.savedNim ?? ""}'
+                          : 'Masuk otomatis dengan sidik jari',
+                      style: TextStyle(
+                        color: Colors.white.withOpacity(0.85),
+                        fontSize: 11,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              ElevatedButton.icon(
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: AppTheme.accentGold,
+                  foregroundColor: Colors.white,
+                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                  minimumSize: const Size(48, 36),
+                ),
+                onPressed: hasCreds
+                    ? _performBiometricLogin
+                    : () => BiometricVaultSheet.show(context),
+                icon: Icon(
+                  hasCreds ? Icons.login_rounded : Icons.add_rounded,
+                  size: 16,
+                ),
+                label: Text(
+                  hasCreds ? 'Login Sidik Jari' : 'Atur Akun',
+                  style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold),
+                ),
+              ),
+            ],
+          ),
+        );
+      },
+    );
+  }
 
   Future<void> _handleForumAutoDraft() async {
     if (!mounted) return;
@@ -1621,7 +1875,13 @@ class _PortalWebViewScreenState extends State<PortalWebViewScreen> {
             ),
           ],
         ),
-        bottomNavigationBar: _buildBottomNav(),
+        bottomNavigationBar: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            if (_isLoginPageDetected) _buildBiometricLoginBanner(),
+            _buildBottomNav(),
+          ],
+        ),
       ),
     );
   }
@@ -1685,6 +1945,25 @@ class _PortalWebViewScreenState extends State<PortalWebViewScreen> {
         ],
       ),
       actions: [
+        Consumer<BiometricProvider>(
+          builder: (ctx, bioProv, _) {
+            return IconButton(
+              tooltip: 'Biometric Auto-Login',
+              icon: Icon(
+                Icons.fingerprint_rounded,
+                color: bioProv.hasSavedCredentials ? AppTheme.accentGold : Colors.white70,
+                size: 22,
+              ),
+              onPressed: () {
+                if (_isLoginPageDetected && bioProv.hasSavedCredentials) {
+                  _performBiometricLogin();
+                } else {
+                  BiometricVaultSheet.show(context);
+                }
+              },
+            );
+          },
+        ),
         PopupMenuButton<String>(
           icon: const Icon(Icons.more_vert_rounded, color: Colors.white, size: 20),
           onSelected: (val) {
