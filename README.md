@@ -23,9 +23,9 @@ Aplikasi dirancang dengan arsitektur **Native Portal Wrapper** yang membungkus w
 - **Pull-to-Refresh & Navigasi Cerdas:** Mendukung gestur tarik ke bawah untuk memuat ulang halaman serta integrasi riwayat navigasi tombol kembali Android.
 
 ### 2. UNPAM AI (Real Dual-Engine Intelligence & Automation)
-- **UNPAM AI Tools (Draggable Floating Pill):** Tombol aksi mengambang yang dapat digeser bebas (draggable) ke posisi mana saja di layar tanpa menghalangi konten perkuliahan.
-- **One-Click Forum Discussion Auto-Drafter:** Membaca judul dan topik pertanyaan diskusi forum dosen secara otomatis dari DOM, membuat draf argumen akademis berbobot via AI, dan menyuntikkannya (inject) langsung ke elemen textarea atau rich-text editor (Atto/TinyMCE) di halaman Mentari.
-- **Live Quiz Solver & Auto-Highlight Jawaban:** Memindai seluruh butir soal pilihan ganda di halaman kuis webview, menganalisis kunci jawaban paling akurat via AI, dan memberikan sorotan warna hijau menyala (highlight) serta opsi auto-centang pada radio button yang tepat.
+- **Asisten Perkuliahan Cerdas (Draggable Floating Pill):** Tombol aksi mengambang yang dapat digeser bebas (draggable) ke posisi mana saja di layar tanpa menghalangi konten perkuliahan.
+- **AI Forum Diskusi:** Membaca judul dan topik pertanyaan diskusi dosen secara kontekstual, membantu merancang draf argumen akademis yang berbobot dan mengalir alami, serta menyematkannya langsung ke kolom komentar forum di Mentari.
+- **AI Quiz:** Menelaah butir-butir soal pilihan ganda di halaman kuis, menyajikan rekomendasi rujukan jawaban beserta ulasan konsep keilmuannya, dan memberikan penanda visual yang rapi pada lembar kuis.
 - **Ekstraksi DOM Otomatis & Konsultasi:** Mengambil teks soal kuis, instruksi tugas, atau materi modul yang sedang tampil di layar WebView dan mengirimkannya langsung ke UNPAM AI sebagai konteks pembelajaran.
 - **Dual-Engine LLM Fallback:**
   - **Default (Cloud AI Publik):** Berjalan gratis tanpa konfigurasi menggunakan model OpenAI / LLaMA via Pollinations API untuk menjawab pertanyaan teks akademik.

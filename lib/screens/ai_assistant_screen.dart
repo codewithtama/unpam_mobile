@@ -369,9 +369,9 @@ class _AiAssistantScreenState extends State<AiAssistantScreen> {
                   final mk = aiProv.selectedCourseName ?? 'Mata Kuliah';
                   _handleSend('Rangkum materi utama untuk mata kuliah $mk');
                 }),
-                _buildQuickChip('💬 Draft Forum Diskusi', () {
+                _buildQuickChip('💬 Opini Forum Diskusi', () {
                   final mk = aiProv.selectedCourseName ?? 'Mata Kuliah';
-                  _handleSend('Buatkan draft jawaban forum diskusi LMS untuk $mk');
+                  _handleSend('Bantu susun pandangan atau opini akademis untuk diskusi $mk');
                 }),
                 _buildQuickChip('💡 Tips Belajar Kuis & Ujian', () {
                   _handleSend('Berikan tips strategi belajar efektif menghadapi Pretest dan Post-test di UNPAM');

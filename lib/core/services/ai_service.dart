@@ -457,25 +457,24 @@ class AiService {
     throw Exception('Layanan AI tidak memberikan respons.');
   }
 
-  /// Membuat draf balasan forum diskusi perkuliahan berbobot akademis
+  /// Membantu menyusun tanggapan diskusi perkuliahan yang mengalir alami dan bernalar akademis
   Future<String> generateForumReply({
     required String topic,
     String? courseName,
   }) async {
     const systemPrompt =
-        'Anda adalah mahasiswa berprestasi dan kritis di Universitas Pamulang. '
-        'Tugas Anda adalah menulis tanggapan atau draf balasan untuk Forum Diskusi perkuliahan. '
-        'Pedoman penulisan:\n'
-        '1. Gunakan bahasa Indonesia baku, sopan, bernada akademis, lugas, dan terstruktur.\n'
-        '2. Langsung sampaikan argumen inti, analisis logis, atau solusi yang relevan dengan pertanyaan dosen tanpa kalimat pembuka klise atau basa-basi kosong.\n'
-        '3. Berikan rincian poin atau contoh konkret jika diperlukan.\n'
-        '4. Tutup dengan pernyataan simpulan yang tegas dan salam penutup standar perkuliahan.\n'
-        '5. JANGAN gunakan emoji apapun dalam teks balasan.';
+        'Anda adalah seorang mahasiswa aktif dan kritis di Universitas Pamulang yang sedang berpartisipasi dalam Forum Diskusi perkuliahan. '
+        'Tuliskan tanggapan atau opini diskusi dengan gaya bahasa manusiawi yang alami, lugas, mengalir, dan bernalar akademis.\n'
+        'Pedoman penting agar tulisan terdengar seperti buatan manusia orisinal:\n'
+        '1. Hindari kalimat pembuka klise bot AI seperti "Tentu, berikut adalah tanggapan saya...", "Sebagai mahasiswa...", atau pengantar basa-basi kosong. Langsung masuk ke inti argumen atau sudut pandang Anda.\n'
+        '2. Gunakan gaya bahasa Indonesia yang luwes, santun, dan logis. Sajikan penalaran yang jelas serta contoh konkret kontekstual di dunia nyata/industri.\n'
+        '3. Susun dalam bentuk paragraf naratif yang runtut dan berbobot (hindari format bullet-points yang berlebihan dan kaku).\n'
+        '4. Akhiri dengan simpulan padat dan salam penutup standar mahasiswa yang bersahabat (misalnya: "Sekian tanggapan dari saya, mohon koreksi dan masukannya. Terima kasih."). JANGAN gunakan emoji apapun.';
 
     final userPrompt =
         'Mata Kuliah: ${courseName ?? "Perkuliahan UNPAM"}\n\n'
         'Topik / Pertanyaan Diskusi Dosen:\n"""\n$topic\n"""\n\n'
-        'Tuliskan draf balasan forum diskusi yang berbobot dan siap diposting:';
+        'Tuliskan draf tanggapan diskusi forum yang bernalar akademis dan mengalir alami:';
 
     return await askRawLlm(
       systemPrompt: systemPrompt,
@@ -483,21 +482,22 @@ class AiService {
     );
   }
 
-  /// Menganalisis butir soal kuis pilihan ganda dan menentukan jawaban yang benar
+  /// Menelaah butir soal kuis perkuliahan dan memberikan rekomendasi rujukan jawaban
   Future<List<Map<String, dynamic>>> solveQuizQuestions({
     required List<Map<String, dynamic>> questions,
     String? courseName,
   }) async {
     const systemPrompt =
-        'Anda adalah mesin pemecah soal kuis akademik universitas yang sangat teliti. '
-        'Tugas Anda adalah menganalisis setiap butir soal kuis pilihan ganda dan menentukan opsi jawaban yang paling benar dan akurat. '
-        'Wajib kembalikan HANYA format JSON valid tanpa teks markdown pembuka/penutup, tanpa tag codeblock, langsung array JSON: '
-        '[{"index": 0, "correctOptionIndex": 1, "correctOptionText": "B. ...", "confidence": 95, "reason": "Alasan singkat"}]\n'
+        'Anda adalah rekan belajar dan tutor akademik Universitas Pamulang yang teliti dan berwawasan luas. '
+        'Tugas Anda adalah menelaah setiap butir soal kuis perkuliahan dan merekomendasikan opsi jawaban yang paling tepat berdasarkan konsep materi yang benar.\n'
+        'Berikan ulasan telaah singkat (1-2 kalimat bernada edukatif, wajar, dan logis seperti catatan belajar mahasiswa) pada kolom "reason".\n'
+        'Wajib kembalikan HANYA format JSON valid tanpa tag codeblock markdown atau teks pembuka/penutup:\n'
+        '[{"index": 0, "correctOptionIndex": 1, "correctOptionText": "B. ...", "confidence": 95, "reason": "Berdasarkan prinsip dasar..."}]\n'
         'Perhatikan bahwa "index" harus sesuai dengan index soal yang diberikan (0, 1, ...), dan "correctOptionIndex" adalah indeks opsi (0 untuk opsi ke-1, 1 untuk opsi ke-2, dst). JANGAN gunakan emoji.';
 
     final buffer = StringBuffer();
     buffer.writeln('Mata Kuliah: ${courseName ?? "Perkuliahan UNPAM"}\n');
-    buffer.writeln('Analisis daftar soal pilihan ganda berikut dan tentukan opsi jawaban yang paling akurat:\n');
+    buffer.writeln('Telaah daftar soal pilihan ganda berikut dan berikan rekomendasi rujukan jawaban yang paling tepat:\n');
 
     for (final q in questions) {
       buffer.writeln('Soal #${q['index']}: ${q['questionText']}');

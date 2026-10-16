@@ -222,7 +222,7 @@ class _PortalWebViewScreenState extends State<PortalWebViewScreen> {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       const Text(
-                        'UNPAM AI Power Tools',
+                        'Asisten Perkuliahan Cerdas',
                         style: TextStyle(
                           fontSize: 17,
                           fontWeight: FontWeight.bold,
@@ -242,7 +242,7 @@ class _PortalWebViewScreenState extends State<PortalWebViewScreen> {
                 const SizedBox(height: 10),
                 const Divider(height: 1),
 
-                // Opsi 1: Auto-Draft Forum
+                // Opsi 1: AI Forum Diskusi
                 ListTile(
                   contentPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 4),
                   leading: Container(
@@ -254,11 +254,11 @@ class _PortalWebViewScreenState extends State<PortalWebViewScreen> {
                     child: const Icon(Icons.forum_rounded, color: AppTheme.primaryBlue, size: 22),
                   ),
                   title: const Text(
-                    'Auto-Draft Balasan Forum',
+                    'AI Forum Diskusi',
                     style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold),
                   ),
                   subtitle: const Text(
-                    'Analisis pertanyaan diskusi dan masukkan draf jawaban langsung ke textarea',
+                    'Kaji topik diskusi dosen dan siapkan draf argumen bernalar akademis',
                     style: TextStyle(fontSize: 12, color: AppTheme.textMuted),
                   ),
                   trailing: const Icon(Icons.arrow_forward_ios_rounded, size: 14, color: AppTheme.textMuted),
@@ -268,7 +268,7 @@ class _PortalWebViewScreenState extends State<PortalWebViewScreen> {
                   },
                 ),
 
-                // Opsi 2: Live Quiz Solver & Highlight
+                // Opsi 2: AI Quiz
                 ListTile(
                   contentPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 4),
                   leading: Container(
@@ -280,11 +280,11 @@ class _PortalWebViewScreenState extends State<PortalWebViewScreen> {
                     child: Icon(Icons.fact_check_rounded, color: Colors.green.shade700, size: 22),
                   ),
                   title: const Text(
-                    'Live Quiz Solver & Auto-Highlight',
+                    'AI Quiz',
                     style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold),
                   ),
                   subtitle: const Text(
-                    'Deteksi soal pilihan ganda di halaman dan beri highlight hijau pada opsi yang benar',
+                    'Kaji butir soal pilihan ganda bersama ulasan konsep dan opsi rujukan',
                     style: TextStyle(fontSize: 12, color: AppTheme.textMuted),
                   ),
                   trailing: const Icon(Icons.arrow_forward_ios_rounded, size: 14, color: AppTheme.textMuted),
@@ -347,7 +347,7 @@ class _PortalWebViewScreenState extends State<PortalWebViewScreen> {
                 SizedBox(width: 18),
                 Expanded(
                   child: Text(
-                    'Menganalisis topik forum di halaman web...',
+                    'Mengkaji topik diskusi perkuliahan...',
                     style: TextStyle(fontSize: 14, fontWeight: FontWeight.w500),
                   ),
                 ),
@@ -466,7 +466,7 @@ class _PortalWebViewScreenState extends State<PortalWebViewScreen> {
                 SizedBox(width: 10),
                 Expanded(
                   child: Text(
-                    'Draf Balasan Forum',
+                    'AI Forum Diskusi',
                     style: TextStyle(fontSize: 17, fontWeight: FontWeight.bold),
                   ),
                 ),
@@ -504,12 +504,12 @@ class _PortalWebViewScreenState extends State<PortalWebViewScreen> {
                           borderRadius: BorderRadius.circular(10),
                           borderSide: const BorderSide(color: AppTheme.primaryBlue, width: 1.5),
                         ),
-                        hintText: 'Tulis atau sesuaikan draf balasan forum...',
+                        hintText: 'Tinjau atau sesuaikan tanggapan diskusi Anda...',
                       ),
                     ),
                     const SizedBox(height: 8),
                     const Text(
-                      'Draf ini dapat langsung dimasukkan ke kolom komentar webview, atau disalin jika diperlukan.',
+                      'Tanggapan ini dapat langsung disematkan ke kolom komentar perkuliahan atau disalin.',
                       style: TextStyle(fontSize: 11, color: AppTheme.textMuted),
                     ),
                   ],
@@ -548,8 +548,8 @@ class _PortalWebViewScreenState extends State<PortalWebViewScreen> {
                             SnackBar(
                               content: Text(
                                 success
-                                    ? 'Draf berhasil dimasukkan ke kolom balasan forum di webview.'
-                                    : 'Kolom input belum terbuka di halaman. Teks telah otomatis disalin ke clipboard.',
+                                    ? 'Tanggapan berhasil disematkan ke kolom komentar forum.'
+                                    : 'Kolom input belum terbuka di halaman. Teks telah disalin ke clipboard.',
                               ),
                               backgroundColor: success ? Colors.green.shade800 : Colors.black87,
                               duration: const Duration(seconds: 4),
@@ -568,7 +568,7 @@ class _PortalWebViewScreenState extends State<PortalWebViewScreen> {
                         child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
                       )
                     : const Icon(Icons.send_rounded, size: 16),
-                label: const Text('Inject ke Kolom Balasan'),
+                label: const Text('Sematkan ke Kolom Komentar'),
               ),
             ],
           );
@@ -661,7 +661,7 @@ class _PortalWebViewScreenState extends State<PortalWebViewScreen> {
                 SizedBox(width: 18),
                 Expanded(
                   child: Text(
-                    'Memindai butir soal kuis di halaman web...',
+                    'Menelaah butir soal kuis pada lembar perkuliahan...',
                     style: TextStyle(fontSize: 14, fontWeight: FontWeight.w500),
                   ),
                 ),
@@ -859,7 +859,7 @@ class _PortalWebViewScreenState extends State<PortalWebViewScreen> {
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
                               Text(
-                                'Hasil Analisis Kuis (${questions.length} Soal)',
+                                'AI Quiz (${questions.length} Soal)',
                                 style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
                               ),
                               Text(
@@ -880,7 +880,7 @@ class _PortalWebViewScreenState extends State<PortalWebViewScreen> {
                       children: [
                         const Expanded(
                           child: Text(
-                            'Otomatis pilih (centang) radio button di webview',
+                            'Bantu tandai opsi rujukan pada lembar kuis',
                             style: TextStyle(fontSize: 13, fontWeight: FontWeight.w500),
                           ),
                         ),
@@ -964,7 +964,7 @@ class _PortalWebViewScreenState extends State<PortalWebViewScreen> {
                                         crossAxisAlignment: CrossAxisAlignment.start,
                                         children: [
                                           Text(
-                                            'Jawaban AI: $chosenText',
+                                            'Rekomendasi Opsi: $chosenText',
                                             style: TextStyle(
                                               fontSize: 13,
                                               fontWeight: FontWeight.bold,
@@ -974,7 +974,7 @@ class _PortalWebViewScreenState extends State<PortalWebViewScreen> {
                                           if (reason.isNotEmpty) ...[
                                             const SizedBox(height: 4),
                                             Text(
-                                              reason,
+                                              'Ulasan Konsep: $reason',
                                               style: TextStyle(fontSize: 11, color: Colors.green.shade800),
                                             ),
                                           ],
@@ -1028,7 +1028,7 @@ class _PortalWebViewScreenState extends State<PortalWebViewScreen> {
                                       ScaffoldMessenger.of(context).showSnackBar(
                                         SnackBar(
                                           content: Text(
-                                            'Berhasil menyorot $count opsi jawaban kuis di halaman webview.',
+                                            'Berhasil menandai $count opsi rujukan pada lembar kuis.',
                                           ),
                                           backgroundColor: Colors.green.shade800,
                                           duration: const Duration(seconds: 4),
@@ -1049,7 +1049,7 @@ class _PortalWebViewScreenState extends State<PortalWebViewScreen> {
                                   )
                                 : const Icon(Icons.highlight_rounded, size: 18),
                             label: const Text(
-                              'Terapkan ke Halaman Web',
+                              'Tandai di Lembar Kuis',
                               style: TextStyle(fontWeight: FontWeight.bold),
                             ),
                           ),
