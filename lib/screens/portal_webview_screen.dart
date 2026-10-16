@@ -34,6 +34,16 @@ class _PortalWebViewScreenState extends State<PortalWebViewScreen> {
   Offset? _fabOffset;
   bool _isDraggingFab = false;
 
+  bool _isAtTop = true;
+  bool _wasAtTopOnDown = true;
+  double _pullDistance = 0.0;
+  bool _isPulling = false;
+  bool _isRefreshing = false;
+  bool _hasHapticed = false;
+  double? _dragStartY;
+  double? _dragStartX;
+  static const double _refreshTriggerDistance = 80.0;
+
   static const String mentariUrl = 'https://mentari.unpam.ac.id/';
 
   @override
@@ -46,6 +56,25 @@ class _PortalWebViewScreenState extends State<PortalWebViewScreen> {
   void _initController() {
     _controller = WebViewController()
       ..setJavaScriptMode(JavaScriptMode.unrestricted)
+      ..setOnScrollPositionChange((change) {
+        final atTop = change.y <= 1;
+        if (atTop != _isAtTop && mounted) {
+          setState(() {
+            _isAtTop = atTop;
+          });
+        }
+      })
+      ..addJavaScriptChannel(
+        'ScrollSyncChannel',
+        onMessageReceived: (message) {
+          final atTop = message.message == 'true';
+          if (atTop != _isAtTop && mounted) {
+            setState(() {
+              _isAtTop = atTop;
+            });
+          }
+        },
+      )
       ..setNavigationDelegate(
         NavigationDelegate(
           onProgress: (progress) {
@@ -67,6 +96,7 @@ class _PortalWebViewScreenState extends State<PortalWebViewScreen> {
                 _currentUrl = url;
                 _isLoading = true;
                 _hasError = false;
+                _isAtTop = true;
               });
               _updateHistoryState();
             }
@@ -77,14 +107,37 @@ class _PortalWebViewScreenState extends State<PortalWebViewScreen> {
               setState(() {
                 _currentUrl = url;
                 _isLoading = false;
+                _isRefreshing = false;
                 if (title != null && title.trim().isNotEmpty) {
                   _pageTitle = title.trim();
                 }
               });
               _updateHistoryState();
             }
+            try {
+              await _controller.runJavaScript('''
+                (function() {
+                  function syncScroll() {
+                    try {
+                      if (window.ScrollSyncChannel) {
+                        var atTop = (window.scrollY || document.documentElement.scrollTop || 0) <= 2;
+                        window.ScrollSyncChannel.postMessage(atTop ? 'true' : 'false');
+                      }
+                    } catch(e) {}
+                  }
+                  window.removeEventListener('scroll', syncScroll);
+                  window.addEventListener('scroll', syncScroll, { passive: true });
+                  syncScroll();
+                })();
+              ''');
+            } catch (e) {
+              debugPrint('Error injecting scroll sync: \$e');
+            }
           },
           onWebResourceError: (error) {
+            if (_isRefreshing && mounted) {
+              setState(() => _isRefreshing = false);
+            }
             // Abaikan error pembatalan navigasi internal WebView
             if (error.errorCode == -999 || error.description.contains('ERR_ABORTED')) {
               return;
@@ -1172,6 +1225,193 @@ class _PortalWebViewScreenState extends State<PortalWebViewScreen> {
     );
   }
 
+  void _onPointerDown(PointerDownEvent event) {
+    if (_isRefreshing) return;
+    _dragStartY = event.position.dy;
+    _dragStartX = event.position.dx;
+    _wasAtTopOnDown = _isAtTop;
+    _isPulling = false;
+    _pullDistance = 0.0;
+    _hasHapticed = false;
+
+    // Asynchronous double-check scroll position from DOM
+    _controller
+        .runJavaScriptReturningResult('window.scrollY || document.documentElement.scrollTop || 0;')
+        .then((res) {
+      final num? y = num.tryParse(res.toString());
+      if (y != null && mounted) {
+        final atTop = y <= 2;
+        if (atTop != _isAtTop) {
+          _isAtTop = atTop;
+          if (!_isPulling) {
+            _wasAtTopOnDown = atTop;
+          }
+        }
+      }
+    }).catchError((e) {
+      debugPrint('Scroll query error: \$e');
+    });
+  }
+
+  void _onPointerMove(PointerMoveEvent event) {
+    if (_isRefreshing || _dragStartY == null || _dragStartX == null) return;
+
+    if (!_wasAtTopOnDown || !_isAtTop) {
+      if (_isPulling) {
+        setState(() {
+          _isPulling = false;
+          _pullDistance = 0.0;
+        });
+      }
+      return;
+    }
+
+    final double deltaY = event.position.dy - _dragStartY!;
+    final double deltaX = (event.position.dx - _dragStartX!).abs();
+
+    if (deltaX > deltaY && !_isPulling) {
+      return;
+    }
+
+    if (deltaY > 0) {
+      double calculated = deltaY * 0.52;
+      if (calculated > 120.0) {
+        calculated = 120.0 + (calculated - 120.0) * 0.25;
+      }
+
+      final bool reachedThreshold = calculated >= _refreshTriggerDistance;
+      if (reachedThreshold && !_hasHapticed) {
+        _hasHapticed = true;
+        HapticFeedback.mediumImpact();
+      } else if (!reachedThreshold && _hasHapticed) {
+        _hasHapticed = false;
+      }
+
+      setState(() {
+        _isPulling = true;
+        _pullDistance = calculated;
+      });
+    } else {
+      if (_isPulling) {
+        setState(() {
+          _isPulling = false;
+          _pullDistance = 0.0;
+        });
+      }
+    }
+  }
+
+  void _onPointerUp(PointerUpEvent event) {
+    _handlePointerRelease();
+  }
+
+  void _onPointerCancel(PointerCancelEvent event) {
+    _handlePointerRelease();
+  }
+
+  void _handlePointerRelease() {
+    _dragStartY = null;
+    _dragStartX = null;
+    _hasHapticed = false;
+
+    if (_isPulling) {
+      if (_pullDistance >= _refreshTriggerDistance) {
+        _startRefresh();
+      } else {
+        setState(() {
+          _isPulling = false;
+          _pullDistance = 0.0;
+        });
+      }
+    }
+  }
+
+  Future<void> _startRefresh() async {
+    if (_isRefreshing) return;
+    setState(() {
+      _isRefreshing = true;
+      _isPulling = false;
+      _pullDistance = 0.0;
+      _hasError = false;
+    });
+
+    try {
+      await _controller.reload();
+    } catch (e) {
+      debugPrint('WebView reload error: \$e');
+    }
+
+    // Safety timeout in case navigation stalls
+    Future.delayed(const Duration(seconds: 12), () {
+      if (mounted && _isRefreshing) {
+        setState(() => _isRefreshing = false);
+      }
+    });
+  }
+
+  Widget _buildPullToRefreshIndicator() {
+    final double topPos;
+    if (_isRefreshing) {
+      topPos = 16.0;
+    } else if (_isPulling) {
+      topPos = ((_pullDistance - 38.0) * 0.72).clamp(-50.0, 44.0);
+    } else {
+      topPos = -60.0;
+    }
+
+    return AnimatedPositioned(
+      duration: _isPulling ? Duration.zero : const Duration(milliseconds: 280),
+      curve: Curves.easeOutCubic,
+      top: topPos,
+      left: 0,
+      right: 0,
+      child: Center(
+        child: AnimatedOpacity(
+          duration: const Duration(milliseconds: 180),
+          opacity: (_isPulling || _isRefreshing) ? 1.0 : 0.0,
+          child: Container(
+            width: 42,
+            height: 42,
+            decoration: BoxDecoration(
+              color: AppTheme.surfaceWhite,
+              shape: BoxShape.circle,
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withOpacity(0.12),
+                  blurRadius: 10,
+                  offset: const Offset(0, 4),
+                ),
+              ],
+              border: Border.all(
+                color: AppTheme.cardBorder,
+                width: 1.0,
+              ),
+            ),
+            padding: const EdgeInsets.all(9),
+            child: _isRefreshing
+                ? const CircularProgressIndicator(
+                    strokeWidth: 2.8,
+                    valueColor: AlwaysStoppedAnimation<Color>(AppTheme.primaryBlue),
+                  )
+                : Transform.rotate(
+                    angle: (_pullDistance / _refreshTriggerDistance) * 3.14159 * 1.5,
+                    child: CircularProgressIndicator(
+                      value: (_pullDistance / _refreshTriggerDistance).clamp(0.08, 0.88),
+                      strokeWidth: 2.8,
+                      backgroundColor: AppTheme.primaryLight.withOpacity(0.12),
+                      valueColor: AlwaysStoppedAnimation<Color>(
+                        _pullDistance >= _refreshTriggerDistance
+                            ? AppTheme.accentGold
+                            : AppTheme.primaryBlue,
+                      ),
+                    ),
+                  ),
+          ),
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return PopScope(
@@ -1217,69 +1457,81 @@ class _PortalWebViewScreenState extends State<PortalWebViewScreen> {
 
                   return Stack(
                     children: [
-                      RefreshIndicator(
-                        onRefresh: () async {
-                          await _controller.reload();
-                        },
+                      // Konten Utama: WebView dengan gesture listener untuk Pull-to-Refresh
+                      Listener(
+                        behavior: HitTestBehavior.translucent,
+                        onPointerDown: _onPointerDown,
+                        onPointerMove: _onPointerMove,
+                        onPointerUp: _onPointerUp,
+                        onPointerCancel: _onPointerCancel,
                         child: WebViewWidget(controller: _controller),
                       ),
 
-                      // Tampilan Offline / Gagal Muat
+                      // Floating Pull-to-Refresh Indicator
+                      _buildPullToRefreshIndicator(),
+
+                      // Tampilan Offline / Gagal Muat (Dapat juga di-pull untuk refresh)
                       if (_hasError)
                         Container(
                           color: Colors.white,
                           width: double.infinity,
                           height: double.infinity,
-                          padding: const EdgeInsets.all(28),
-                          child: Column(
-                            mainAxisAlignment: MainAxisAlignment.center,
-                            children: [
-                              Container(
-                                padding: const EdgeInsets.all(20),
-                                decoration: BoxDecoration(
-                                  color: Colors.red.shade50,
-                                  shape: BoxShape.circle,
+                          child: RefreshIndicator(
+                            onRefresh: _startRefresh,
+                            color: AppTheme.primaryBlue,
+                            child: ListView(
+                              physics: const AlwaysScrollableScrollPhysics(),
+                              padding: const EdgeInsets.all(28),
+                              children: [
+                                SizedBox(height: maxH * 0.15),
+                                Container(
+                                  padding: const EdgeInsets.all(20),
+                                  decoration: BoxDecoration(
+                                    color: Colors.red.shade50,
+                                    shape: BoxShape.circle,
+                                  ),
+                                  child: Icon(Icons.wifi_off_rounded, size: 52, color: Colors.red.shade400),
                                 ),
-                                child: Icon(Icons.wifi_off_rounded, size: 52, color: Colors.red.shade400),
-                              ),
-                              const SizedBox(height: 18),
-                              const Text(
-                                'Gagal Memuat Halaman',
-                                style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: AppTheme.textDark),
-                              ),
-                              const SizedBox(height: 8),
-                              Text(
-                                _errorMessage.isNotEmpty ? _errorMessage : 'Periksa koneksi internet Anda atau coba muat ulang.',
-                                textAlign: TextAlign.center,
-                                style: const TextStyle(fontSize: 13, color: AppTheme.textMuted),
-                              ),
-                              const SizedBox(height: 24),
-                              Wrap(
-                                spacing: 12,
-                                runSpacing: 10,
-                                alignment: WrapAlignment.center,
-                                children: [
-                                  ElevatedButton.icon(
-                                    onPressed: () {
-                                      setState(() => _hasError = false);
-                                      _controller.reload();
-                                    },
-                                    icon: const Icon(Icons.refresh_rounded, size: 18),
-                                    label: const Text('Muat Ulang'),
-                                    style: ElevatedButton.styleFrom(
-                                      backgroundColor: AppTheme.primaryBlue,
-                                      foregroundColor: Colors.white,
-                                      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+                                const SizedBox(height: 18),
+                                const Text(
+                                  'Gagal Memuat Halaman',
+                                  textAlign: TextAlign.center,
+                                  style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: AppTheme.textDark),
+                                ),
+                                const SizedBox(height: 8),
+                                Text(
+                                  _errorMessage.isNotEmpty ? _errorMessage : 'Periksa koneksi internet Anda atau coba muat ulang.',
+                                  textAlign: TextAlign.center,
+                                  style: const TextStyle(fontSize: 13, color: AppTheme.textMuted),
+                                ),
+                                const SizedBox(height: 24),
+                                Wrap(
+                                  spacing: 12,
+                                  runSpacing: 10,
+                                  alignment: WrapAlignment.center,
+                                  children: [
+                                    ElevatedButton.icon(
+                                      onPressed: () {
+                                        setState(() => _hasError = false);
+                                        _startRefresh();
+                                      },
+                                      icon: const Icon(Icons.refresh_rounded, size: 18),
+                                      label: const Text('Muat Ulang'),
+                                      style: ElevatedButton.styleFrom(
+                                        backgroundColor: AppTheme.primaryBlue,
+                                        foregroundColor: Colors.white,
+                                        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+                                      ),
                                     ),
-                                  ),
-                                  OutlinedButton.icon(
-                                    onPressed: () => _navigateToUrl(mentariUrl),
-                                    icon: const Icon(Icons.home_rounded, size: 18),
-                                    label: const Text('Ke Beranda Mentari'),
-                                  ),
-                                ],
-                              ),
-                            ],
+                                    OutlinedButton.icon(
+                                      onPressed: () => _navigateToUrl(mentariUrl),
+                                      icon: const Icon(Icons.home_rounded, size: 18),
+                                      label: const Text('Ke Beranda Mentari'),
+                                    ),
+                                  ],
+                                ),
+                              ],
+                            ),
                           ),
                         ),
 
@@ -1433,11 +1685,6 @@ class _PortalWebViewScreenState extends State<PortalWebViewScreen> {
         ],
       ),
       actions: [
-        IconButton(
-          tooltip: 'Muat Ulang Halaman',
-          icon: const Icon(Icons.refresh_rounded, size: 22, color: Colors.white),
-          onPressed: () => _controller.reload(),
-        ),
         PopupMenuButton<String>(
           icon: const Icon(Icons.more_vert_rounded, color: Colors.white, size: 20),
           onSelected: (val) {
