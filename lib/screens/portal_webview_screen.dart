@@ -526,16 +526,19 @@ class _PortalWebViewScreenState extends State<PortalWebViewScreen> {
     try {
       final res = await _controller.runJavaScriptReturningResult(r'''
         (function() {
-          var p = document.querySelector('input[type="password"]');
-          var form = p ? p.closest('form') : document.querySelector('form#login, form[action*="login"]');
-          var u = form 
-            ? form.querySelector('input#username, input[name="username"], input[type="text"], input[autocomplete*="user"]')
-            : document.querySelector('input#username, input[name="username"], input[autocomplete*="user"], input[type="text"]');
+          var p = document.querySelector('input[name="password"], input[type="password"], input#password');
+          var u = document.querySelector('input[name="username"], input#username, input[autocomplete="username"], input[name="user"], input[name="nim"]');
+          if (!u && p) {
+            var form = p.closest('form');
+            if (form) {
+              u = form.querySelector('input[type="text"], input:not([type])');
+            }
+          }
           var isLoginUrl = window.location.href.toLowerCase().indexOf('login') !== -1;
-          var isLoggedOut = !!document.querySelector('a[href*="login/index.php"], .logininfo a[href*="login"], .usermenu a[href*="login"]');
+          var isLoggedOut = !document.querySelector('a[href*="login"], .logininfo a[href*="login"], .usermenu a[href*="login"]');
 
           return JSON.stringify({
-            hasLoginForm: !!(u && p),
+            hasLoginForm: !(u && p),
             isLoginUrl: isLoginUrl,
             isLoggedOut: isLoggedOut
           });
@@ -588,7 +591,7 @@ class _PortalWebViewScreenState extends State<PortalWebViewScreen> {
     }
   }
 
-  Future<void> _performBiometricLogin() async {
+  Future<void> _performBiometricLogin({int attempt = 1}) async {
     final bioProv = context.read<BiometricProvider>();
     if (!bioProv.hasSavedCredentials) {
       BiometricVaultSheet.show(context);
@@ -600,50 +603,189 @@ class _PortalWebViewScreenState extends State<PortalWebViewScreen> {
       return;
     }
 
-    final nim = creds['nim'] ?? '';
-    final password = creds['password'] ?? '';
+    final nim = (creds['nim'] ?? '').trim();
+    final password = (creds['password'] ?? '').trim();
 
     if (nim.isEmpty || password.isEmpty) return;
 
     try {
       final js = '''
       (function(nimVal, passVal) {
-        var p = document.querySelector('input[type="password"]');
-        var form = p ? p.closest('form') : document.querySelector('form#login, form[action*="login"]');
-        var u = form
-          ? form.querySelector('input#username, input[name="username"], input[type="text"], input[autocomplete*="user"]')
-          : document.querySelector('input#username, input[name="username"], input[autocomplete*="user"], input[type="text"]');
+        function fillInputElement(input, val) {
+          if (!input) return false;
+          try { input.focus(); } catch(e) {}
+          var prevVal = input.value;
 
-        if (u && p) {
-          u.focus();
-          u.value = nimVal;
-          u.dispatchEvent(new Event('input', { bubbles: true }));
-          u.dispatchEvent(new Event('change', { bubbles: true }));
-
-          p.focus();
-          p.value = passVal;
-          p.dispatchEvent(new Event('input', { bubbles: true }));
-          p.dispatchEvent(new Event('change', { bubbles: true }));
-
-          var btn = (form ? form.querySelector('button[type="submit"], input[type="submit"], button#loginbtn, input#loginbtn') : null)
-            || document.querySelector('button#loginbtn, input#loginbtn, button[type="submit"], input[type="submit"]');
-
-          if (btn) {
-            setTimeout(function() {
-              btn.click();
-            }, 120);
-            return 'submitted_by_click';
-          } else if (form) {
-            setTimeout(function() {
-              form.submit();
-            }, 120);
-            return 'submitted_by_form';
+          var proto = Object.getPrototypeOf(input);
+          var desc = Object.getOwnPropertyDescriptor(proto, 'value');
+          if (!desc || !desc.set) {
+            desc = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value');
           }
-          return 'filled_only';
+          if (desc && desc.set) {
+            desc.set.call(input, val);
+          } else {
+            input.value = val;
+          }
+
+          try { input.setAttribute('value', val); } catch(e) {}
+
+          if (input._valueTracker) {
+            input._valueTracker.setValue(prevVal + '_force_react_sync_');
+          }
+
+          var eventOptions = { bubbles: true, composed: true, cancelable: true };
+          input.dispatchEvent(new Event('input', eventOptions));
+          input.dispatchEvent(new Event('change', eventOptions));
+
+          var reactPropsKey = Object.keys(input).find(function(k) { return k.startsWith('__reactProps\$'); });
+          if (reactPropsKey && input[reactPropsKey]) {
+            var props = input[reactPropsKey];
+            if (typeof props.onChange === 'function') {
+              try {
+                props.onChange({
+                  target: input,
+                  currentTarget: input,
+                  bubbles: true,
+                  preventDefault: function() {},
+                  stopPropagation: function() {}
+                });
+              } catch(e) {}
+            }
+          }
+          return true;
         }
 
-        window.location.href = 'https://mentari.unpam.ac.id/login/index.php';
-        return 'redirecting_to_login';
+        function findUsernameInputs() {
+          var list = [];
+          var selectors = [
+            'input[name="username"]',
+            'input#username',
+            'input[autocomplete="username"]',
+            'input[name="user"]',
+            'input[name="identity"]',
+            'input[name="nim"]',
+            'input[name="login"]'
+          ];
+          selectors.forEach(function(sel) {
+            document.querySelectorAll(sel).forEach(function(el) {
+              if (!list.includes(el)) list.push(el);
+            });
+          });
+
+          var passInputs = document.querySelectorAll('input[type="password"], input[name="password"]');
+          passInputs.forEach(function(passEl) {
+            var parentForm = passEl.closest('form');
+            if (parentForm) {
+              var candidates = parentForm.querySelectorAll('input[type="text"], input:not([type])');
+              candidates.forEach(function(el) {
+                var name = (el.name || '').toLowerCase();
+                var id = (el.id || '').toLowerCase();
+                var ph = (el.placeholder || '').toLowerCase();
+                if (name.includes('search') || id.includes('search') || ph.includes('cari')) return;
+                if (name.includes('csrf') || name.includes('token') || name.includes('captcha')) return;
+                if (!list.includes(el)) list.push(el);
+              });
+            }
+          });
+
+          var byPlaceholder = document.querySelectorAll('input[placeholder*="Pengguna" i], input[placeholder*="Username" i], input[placeholder*="NIM" i]');
+          byPlaceholder.forEach(function(el) {
+            if (!list.includes(el)) list.push(el);
+          });
+
+          return list;
+        }
+
+        function findPasswordInputs() {
+          var list = [];
+          var selectors = [
+            'input[name="password"]',
+            'input[type="password"]',
+            'input#password',
+            'input[autocomplete="current-password"]',
+            'input[autocomplete="password"]'
+          ];
+          selectors.forEach(function(sel) {
+            document.querySelectorAll(sel).forEach(function(el) {
+              if (!list.includes(el)) list.push(el);
+            });
+          });
+          return list;
+        }
+
+        var uList = findUsernameInputs();
+        var pList = findPasswordInputs();
+
+        if (uList.length === 0 || pList.length === 0) {
+          var currentUrl = window.location.href.toLowerCase();
+          if (currentUrl.indexOf('login') === -1) {
+            window.location.href = 'https://mentari.unpam.ac.id/login';
+            return JSON.stringify({ status: 'redirecting_to_login' });
+          }
+          return JSON.stringify({ status: 'inputs_not_found', uCount: uList.length, pCount: pList.length });
+        }
+
+        uList.forEach(function(u) { fillInputElement(u, nimVal); });
+        pList.forEach(function(p) { fillInputElement(p, passVal); });
+
+        // Delayed blur & submission to allow React / Formik debounced state update (useEffect -> setTimeout) to commit values
+        setTimeout(function() {
+          uList.forEach(function(u) {
+            try { u.dispatchEvent(new Event('blur', { bubbles: true, composed: true })); } catch(e) {}
+          });
+          pList.forEach(function(p) {
+            try { p.dispatchEvent(new Event('blur', { bubbles: true, composed: true })); } catch(e) {}
+          });
+
+          setTimeout(function() {
+            var submitBtn = null;
+            for (var i = 0; i < pList.length; i++) {
+              var form = pList[i].closest('form');
+              if (form) {
+                submitBtn = form.querySelector('button[type="submit"], input[type="submit"], button#loginbtn, input#loginbtn');
+                if (submitBtn) break;
+              }
+            }
+            if (!submitBtn) {
+              submitBtn = document.querySelector('button[type="submit"], input[type="submit"], button#loginbtn, input#loginbtn');
+            }
+            if (!submitBtn) {
+              var allBtns = Array.from(document.querySelectorAll('button'));
+              submitBtn = allBtns.find(function(b) {
+                var txt = (b.textContent || '').trim().toLowerCase();
+                return txt === 'masuk' || txt === 'login' || txt === 'log in' || txt === 'sign in';
+              });
+            }
+
+            if (submitBtn) {
+              submitBtn.focus();
+              submitBtn.click();
+              var btnPropsKey = Object.keys(submitBtn).find(function(k) { return k.startsWith('__reactProps\$'); });
+              if (btnPropsKey && submitBtn[btnPropsKey] && typeof submitBtn[btnPropsKey].onClick === 'function') {
+                try {
+                  submitBtn[btnPropsKey].onClick({
+                    preventDefault: function() {},
+                    stopPropagation: function() {},
+                    target: submitBtn,
+                    currentTarget: submitBtn
+                  });
+                } catch(e) {}
+              }
+            } else {
+              var form = document.querySelector('form#login, form[action*="login"]') || (pList[0] ? pList[0].closest('form') : null);
+              if (form) {
+                form.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }));
+                try { form.submit(); } catch(e) {}
+              }
+            }
+          }, 200);
+        }, 250);
+
+        return JSON.stringify({
+          status: 'filled_and_submitting',
+          uCount: uList.length,
+          pCount: pList.length
+        });
       })(${jsonEncode(nim)}, ${jsonEncode(password)});
       ''';
 
@@ -662,6 +804,13 @@ class _PortalWebViewScreenState extends State<PortalWebViewScreen> {
               duration: Duration(seconds: 2),
             ),
           );
+        } else if (resStr.contains('inputs_not_found') && attempt < 4) {
+          // Page might still be mounting in React SPA; retry shortly
+          Future.delayed(const Duration(milliseconds: 600), () {
+            if (mounted) {
+              _performBiometricLogin(attempt: attempt + 1);
+            }
+          });
         } else {
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(
@@ -762,7 +911,7 @@ class _PortalWebViewScreenState extends State<PortalWebViewScreen> {
                     setState(() {
                       _pendingAutoLoginAfterLoad = true;
                     });
-                    _navigateToUrl('https://mentari.unpam.ac.id/login/index.php');
+                    _navigateToUrl('https://mentari.unpam.ac.id/login');
                   },
                 ),
                 ListTile(
@@ -877,7 +1026,7 @@ class _PortalWebViewScreenState extends State<PortalWebViewScreen> {
                     setState(() {
                       _pendingAutoLoginAfterLoad = true;
                     });
-                    _navigateToUrl('https://mentari.unpam.ac.id/login/index.php');
+                    _navigateToUrl('https://mentari.unpam.ac.id/login');
                   }
                 },
                 icon: const Icon(
