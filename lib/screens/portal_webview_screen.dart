@@ -10,6 +10,8 @@ import 'ai_assistant_screen.dart';
 import 'ai_paraphrase_screen.dart';
 import '../providers/biometric_provider.dart';
 import '../widgets/biometric_vault_sheet.dart';
+import '../core/services/update_checker_service.dart';
+import '../widgets/update_dialog.dart';
 
 class PortalWebViewScreen extends StatefulWidget {
   final String initialUrl;
@@ -40,6 +42,7 @@ class _PortalWebViewScreenState extends State<PortalWebViewScreen> {
   bool _isLoggedOutDetected = false;
   bool _hasAutoLoggedInCurrentSession = false;
   bool _pendingAutoLoginAfterLoad = false;
+  final UpdateCheckerService _updateChecker = UpdateCheckerService();
 
   bool _isAtTop = true;
   bool _wasAtTopOnDown = true;
@@ -58,6 +61,9 @@ class _PortalWebViewScreenState extends State<PortalWebViewScreen> {
     super.initState();
     _currentUrl = widget.initialUrl;
     _initController();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _checkAppUpdateSilently();
+    });
   }
 
   void _initController() {
@@ -483,6 +489,35 @@ class _PortalWebViewScreenState extends State<PortalWebViewScreen> {
         ),
       ),
     );
+  }
+
+  Future<void> _checkAppUpdateSilently({bool isManual = false}) async {
+    try {
+      final updateInfo = await _updateChecker.checkForUpdate();
+      if (!mounted) return;
+
+      if (updateInfo != null && updateInfo.hasUpdate) {
+        UpdateDialog.show(
+          context: context,
+          updateInfo: updateInfo,
+          updateService: _updateChecker,
+        );
+      } else if (isManual) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Aplikasi sudah menggunakan versi terbaru!'),
+            backgroundColor: AppTheme.primaryBlue,
+            duration: Duration(seconds: 2),
+          ),
+        );
+      }
+    } catch (e) {
+      if (isManual && mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Gagal memeriksa pembaruan: $e')),
+        );
+      }
+    }
   }
 
   Future<void> _detectLoginForm() async {
@@ -2195,9 +2230,22 @@ class _PortalWebViewScreenState extends State<PortalWebViewScreen> {
               ScaffoldMessenger.of(context).showSnackBar(
                 const SnackBar(content: Text('Cache web berhasil dibersihkan')),
               );
+            } else if (val == 'check_update') {
+              _checkAppUpdateSilently(isManual: true);
             }
           },
           itemBuilder: (ctx) => [
+            const PopupMenuItem(
+              value: 'check_update',
+              child: Row(
+                children: [
+                  Icon(Icons.system_update_rounded, size: 18, color: AppTheme.accentGold),
+                  SizedBox(width: 10),
+                  Text('Cek Pembaruan Aplikasi'),
+                ],
+              ),
+            ),
+            const PopupMenuDivider(),
             const PopupMenuItem(
               value: 'mentari',
               child: Row(
