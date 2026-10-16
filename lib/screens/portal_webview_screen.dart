@@ -6,9 +6,7 @@ import 'package:webview_flutter/webview_flutter.dart';
 import 'package:url_launcher/url_launcher.dart';
 import '../theme/app_theme.dart';
 import '../providers/ai_provider.dart';
-import '../providers/auth_provider.dart';
 import 'ai_assistant_screen.dart';
-import 'profile_screen.dart';
 
 class PortalWebViewScreen extends StatefulWidget {
   final String initialUrl;
@@ -1376,13 +1374,6 @@ class _PortalWebViewScreenState extends State<PortalWebViewScreen> {
     );
   }
 
-  String _getInitials(String name) {
-    final parts = name.trim().split(RegExp(r'\s+'));
-    if (parts.isEmpty || parts[0].isEmpty) return 'M';
-    if (parts.length == 1) return parts[0].substring(0, 1).toUpperCase();
-    return '${parts[0][0]}${parts[1][0]}'.toUpperCase();
-  }
-
   PreferredSizeWidget _buildTopAppBar() {
     final bool isMentari = _currentUrl.contains('mentari');
 
@@ -1442,43 +1433,10 @@ class _PortalWebViewScreenState extends State<PortalWebViewScreen> {
         ],
       ),
       actions: [
-
         IconButton(
           tooltip: 'Muat Ulang Halaman',
           icon: const Icon(Icons.refresh_rounded, size: 22, color: Colors.white),
           onPressed: () => _controller.reload(),
-        ),
-        Consumer<AuthProvider>(
-          builder: (ctx, auth, _) {
-            final initials = _getInitials(auth.studentName);
-            return GestureDetector(
-              onTap: () {
-                Navigator.push(
-                  context,
-                  MaterialPageRoute(builder: (_) => const ProfileScreen()),
-                );
-              },
-              child: Container(
-                margin: const EdgeInsets.only(right: 4, left: 4),
-                child: CircleAvatar(
-                  radius: 17,
-                  backgroundColor: AppTheme.accentGold,
-                  child: CircleAvatar(
-                    radius: 15,
-                    backgroundColor: const Color(0xFF0A235C),
-                    child: Text(
-                      initials,
-                      style: const TextStyle(
-                        color: Colors.white,
-                        fontSize: 11,
-                        fontWeight: FontWeight.bold,
-                      ),
-                    ),
-                  ),
-                ),
-              ),
-            );
-          },
         ),
         PopupMenuButton<String>(
           icon: const Icon(Icons.more_vert_rounded, color: Colors.white, size: 20),
@@ -1489,11 +1447,6 @@ class _PortalWebViewScreenState extends State<PortalWebViewScreen> {
               _controller.clearCache();
               ScaffoldMessenger.of(context).showSnackBar(
                 const SnackBar(content: Text('Cache web berhasil dibersihkan')),
-              );
-            } else if (val == 'settings') {
-              Navigator.push(
-                context,
-                MaterialPageRoute(builder: (_) => const ProfileScreen()),
               );
             }
           },
@@ -1519,16 +1472,6 @@ class _PortalWebViewScreenState extends State<PortalWebViewScreen> {
                 ],
               ),
             ),
-            const PopupMenuItem(
-              value: 'settings',
-              child: Row(
-                children: [
-                  Icon(Icons.person_rounded, size: 18, color: Colors.grey),
-                  SizedBox(width: 10),
-                  Text('Profil Mahasiswa'),
-                ],
-              ),
-            ),
           ],
         ),
       ],
@@ -1551,12 +1494,6 @@ class _PortalWebViewScreenState extends State<PortalWebViewScreen> {
             MaterialPageRoute(builder: (_) => const AiAssistantScreen()),
           );
           if (mounted) setState(() => _currentNavIndex = 0);
-        } else if (idx == 2) {
-          await Navigator.push(
-            context,
-            MaterialPageRoute(builder: (_) => const ProfileScreen()),
-          );
-          if (mounted) setState(() => _currentNavIndex = 0);
         }
       },
       destinations: const [
@@ -1569,11 +1506,6 @@ class _PortalWebViewScreenState extends State<PortalWebViewScreen> {
           icon: Icon(Icons.auto_awesome_outlined),
           selectedIcon: Icon(Icons.auto_awesome, color: AppTheme.accentGold),
           label: 'UNPAM AI',
-        ),
-        NavigationDestination(
-          icon: Icon(Icons.person_outline_rounded),
-          selectedIcon: Icon(Icons.person_rounded, color: AppTheme.primaryBlue),
-          label: 'Profil',
         ),
       ],
     );

@@ -1,152 +1,69 @@
+import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:unpam_mobile/core/services/storage_service.dart';
 import 'package:unpam_mobile/core/services/ai_service.dart';
-import 'package:unpam_mobile/models/student_profile_model.dart';
-import 'package:unpam_mobile/providers/auth_provider.dart';
 import 'package:unpam_mobile/providers/ai_provider.dart';
+import 'package:unpam_mobile/screens/user_agreement_screen.dart';
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
-  group('StudentProfile Model Tests', () {
-    test('Default StudentProfile starts empty and is not filled until configured', () {
-      const profile = StudentProfile();
-      expect(profile.name, isEmpty);
-      expect(profile.nim, isEmpty);
-      expect(profile.isFilled, isFalse);
-      expect(profile.isValidName, isFalse);
-      expect(profile.isValidNim, isFalse);
-
-      const filled = StudentProfile(name: 'Dimas Alfa Pratama', nim: '241011750041');
-      expect(filled.isFilled, isTrue);
-      expect(filled.isValidName, isTrue);
-      expect(filled.isValidNim, isTrue);
-    });
-
-    test('Validation detects invalid NIM, email, and phone', () {
-      const invalidProfile = StudentProfile(
-        name: 'A',
-        nim: 'abc12',
-        email: 'bukan-email',
-        phone: '123',
-      );
-      expect(invalidProfile.isValidName, isFalse);
-      expect(invalidProfile.isValidNim, isFalse);
-      expect(invalidProfile.isValidEmail, isFalse);
-      expect(invalidProfile.isValidPhone, isFalse);
-    });
-
-    test('Serialization and deserialization roundtrip works accurately', () {
-      const original = StudentProfile(
-        name: 'Budi Santoso',
-        nim: '2021140099',
-        prodi: 'Sistem Informasi (S1)',
-        fakultas: 'Fakultas Ilmu Komputer',
-        kelas: '06SIFP001',
-        shift: 'Reguler A (Pagi)',
-        semester: 'Semester 6',
-        email: 'budi@mahasiswa.unpam.ac.id',
-        phone: '081298765432',
-        status: 'Mahasiswa Aktif',
-        bio: 'Fokus Data Science & Machine Learning',
-      );
-
-      final json = original.toJson();
-      final restored = StudentProfile.fromJson(json);
-
-      expect(restored.name, equals('Budi Santoso'));
-      expect(restored.nim, equals('2021140099'));
-      expect(restored.prodi, equals('Sistem Informasi (S1)'));
-      expect(restored.kelas, equals('06SIFP001'));
-      expect(restored.shift, equals('Reguler A (Pagi)'));
-      expect(restored.semester, equals('Semester 6'));
-      expect(restored.email, equals('budi@mahasiswa.unpam.ac.id'));
-      expect(restored.phone, equals('081298765432'));
-      expect(restored.status, equals('Mahasiswa Aktif'));
-      expect(restored.bio, equals('Fokus Data Science & Machine Learning'));
-    });
-
-    test('copyWith updates specific fields while preserving others', () {
-      const original = StudentProfile();
-      final updated = original.copyWith(
-        name: 'Ahmad Dahlan',
-        semester: 'Semester 5',
-      );
-
-      expect(updated.name, equals('Ahmad Dahlan'));
-      expect(updated.semester, equals('Semester 5'));
-      expect(updated.nim, equals(original.nim));
-      expect(updated.prodi, equals(original.prodi));
-    });
-  });
-
-  group('StorageService & AuthProvider Profile Persistence Tests', () {
+  group('StorageService Session & Config Tests', () {
     late StorageService storage;
 
     setUp(() async {
       SharedPreferences.setMockInitialValues({});
       storage = await StorageService.getInstance();
+      await storage.resetAll();
     });
 
-    test('Saving and retrieving StudentProfile preserves data', () async {
-      const newProfile = StudentProfile(
-        name: 'Rina Kusuma',
-        nim: '221011400555',
-        prodi: 'Manajemen (S1)',
-        fakultas: 'Fakultas Ekonomi & Bisnis',
-        kelas: '04SMJE002',
-        shift: 'Reguler B (Siang)',
-        semester: 'Semester 4',
-        email: 'rina@mahasiswa.unpam.ac.id',
-        phone: '085712345678',
-        status: 'Mahasiswa Aktif',
-        bio: 'Peminatan Manajemen Keuangan',
-      );
+    test('Saving and retrieving token and cookies persists correctly', () async {
+      expect(storage.hasToken, isFalse);
+      expect(storage.getToken(), isNull);
+      expect(storage.getCookies(), isNull);
 
-      await storage.saveStudentProfile(newProfile);
-      final retrieved = storage.getStudentProfile();
+      await storage.saveToken('test_bearer_token_123');
+      await storage.saveCookies('session_id=abcxyz; Path=/');
 
-      expect(retrieved.name, equals('Rina Kusuma'));
-      expect(retrieved.nim, equals('221011400555'));
-      expect(retrieved.prodi, equals('Manajemen (S1)'));
-      expect(retrieved.fakultas, equals('Fakultas Ekonomi & Bisnis'));
-      expect(retrieved.kelas, equals('04SMJE002'));
+      expect(storage.hasToken, isTrue);
+      expect(storage.getToken(), equals('test_bearer_token_123'));
+      expect(storage.getCookies(), equals('session_id=abcxyz; Path=/'));
+
+      await storage.clearSession();
+      expect(storage.hasToken, isFalse);
+      expect(storage.getToken(), isNull);
+      expect(storage.getCookies(), isNull);
     });
 
-    test('AuthProvider notifies listeners when profile is updated', () async {
-      final auth = AuthProvider(storage);
-      bool notified = false;
-      auth.addListener(() => notified = true);
+    test('Gemini API key is saved and retrieved from StorageService', () async {
+      expect(storage.getGeminiApiKey(), isNull);
 
-      const update = StudentProfile(name: 'Updated Name', nim: '1234567890');
-      await auth.updateProfile(update);
+      await storage.saveGeminiApiKey('AIzaSyCustomKey98765');
+      expect(storage.getGeminiApiKey(), equals('AIzaSyCustomKey98765'));
 
-      expect(notified, isTrue);
-      expect(auth.studentName, equals('Updated Name'));
-      expect(auth.studentNim, equals('1234567890'));
+      await storage.resetAll();
+      expect(storage.getGeminiApiKey(), isNull);
     });
 
-    test('AuthProvider resets profile to default values', () async {
-      final auth = AuthProvider(storage);
-      const custom = StudentProfile(name: 'Custom User', nim: '9999999999');
-      await auth.updateProfile(custom);
-      expect(auth.studentName, equals('Custom User'));
-      expect(auth.isProfileFilled, isTrue);
+    test('User agreement acceptance flag defaults to false and persists when set', () async {
+      expect(storage.isUserAgreementAccepted(), isFalse);
 
-      await auth.resetProfileToDefault();
-      expect(auth.studentName, isEmpty);
-      expect(auth.studentNim, isEmpty);
-      expect(auth.isProfileFilled, isFalse);
+      await storage.setUserAgreementAccepted(true);
+      expect(storage.isUserAgreementAccepted(), isTrue);
+
+      await storage.resetAll();
+      expect(storage.isUserAgreementAccepted(), isFalse);
     });
   });
 
-  group('AiProvider API Key Management Tests', () {
+  group('AiProvider API Key & State Management Tests', () {
     late StorageService storage;
 
     setUp(() async {
       SharedPreferences.setMockInitialValues({});
       storage = await StorageService.getInstance();
+      await storage.resetAll();
     });
 
     test('Saving and removing Gemini API key updates AiProvider state', () async {
@@ -163,6 +80,91 @@ void main() {
       await aiProv.removeGeminiApiKey();
       expect(aiProv.hasCustomApiKey, isFalse);
       expect(aiProv.getGeminiApiKey(), isEmpty);
+    });
+
+    test('AiProvider clearChat resets message list to initial welcome message', () {
+      final aiService = AiService(storage);
+      final aiProv = AiProvider(aiService, storage);
+
+      aiProv.clearChat();
+      expect(aiProv.messages.length, equals(1));
+      expect(aiProv.messages.first.isUser, isFalse);
+      expect(aiProv.isLoading, isFalse);
+    });
+  });
+
+  group('UserAgreementScreen Countdown & Consent Tests', () {
+    late StorageService storage;
+
+    setUp(() async {
+      SharedPreferences.setMockInitialValues({});
+      storage = await StorageService.getInstance();
+      await storage.resetAll();
+    });
+
+    testWidgets('Action buttons remain locked during 15s timer, unlock after timer expires', (WidgetTester tester) async {
+      await tester.pumpWidget(
+        MaterialApp(
+          home: UserAgreementScreen(storageService: storage),
+        ),
+      );
+
+      // Awal mula: tombol disable & timer 15s
+      expect(find.text('Syarat & Ketentuan'), findsOneWidget);
+      expect(find.text('TUNGGU (15s)'), findsOneWidget);
+      expect(find.text('TOLAK (15s)'), findsOneWidget);
+
+      final ElevatedButton acceptBtnInitial = tester.widget<ElevatedButton>(
+        find.byType(ElevatedButton),
+      );
+      expect(acceptBtnInitial.onPressed, isNull);
+
+      final OutlinedButton rejectBtnInitial = tester.widget<OutlinedButton>(
+        find.byType(OutlinedButton),
+      );
+      expect(rejectBtnInitial.onPressed, isNull);
+
+      // Jalankan waktu 10 detik: tombol masih terkunci
+      await tester.pump(const Duration(seconds: 10));
+      expect(find.text('TUNGGU (5s)'), findsOneWidget);
+      expect(find.text('TOLAK (5s)'), findsOneWidget);
+
+      // Jalankan sisa 5 detik hingga timer selesai (total 15s)
+      await tester.pump(const Duration(seconds: 5));
+      expect(find.text('SAYA SETUJU'), findsOneWidget);
+      expect(find.text('TOLAK'), findsOneWidget);
+
+      final ElevatedButton acceptBtnActive = tester.widget<ElevatedButton>(
+        find.byType(ElevatedButton),
+      );
+      expect(acceptBtnActive.onPressed, isNotNull);
+
+      final OutlinedButton rejectBtnActive = tester.widget<OutlinedButton>(
+        find.byType(OutlinedButton),
+      );
+      expect(rejectBtnActive.onPressed, isNotNull);
+    });
+
+    testWidgets('Tapping SAYA SETUJU saves agreement state in storage', (WidgetTester tester) async {
+      expect(storage.isUserAgreementAccepted(), isFalse);
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: UserAgreementScreen(
+            storageService: storage,
+            onAccepted: () {},
+          ),
+        ),
+      );
+
+      // Majukan timer 15 detik
+      await tester.pump(const Duration(seconds: 15));
+
+      // Tekan tombol SAYA SETUJU
+      await tester.tap(find.text('SAYA SETUJU'));
+      await tester.pump();
+
+      expect(storage.isUserAgreementAccepted(), isTrue);
     });
   });
 }

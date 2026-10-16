@@ -1,7 +1,5 @@
-import 'dart:convert';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../constants/api_constants.dart';
-import '../../models/student_profile_model.dart';
 
 class StorageService {
   static StorageService? _instance;
@@ -17,53 +15,6 @@ class StorageService {
     return _instance!;
   }
 
-  Future<void> saveStudentProfile(StudentProfile profile) async {
-    await _preferences?.setString(ApiConstants.studentNameKey, profile.name);
-    await _preferences?.setString(ApiConstants.nimKey, profile.nim);
-    await _preferences?.setString(ApiConstants.prodiKey, profile.prodi);
-    await _preferences?.setString(ApiConstants.fakultasKey, profile.fakultas);
-    await _preferences?.setString(ApiConstants.kelasKey, profile.kelas);
-    await _preferences?.setString(ApiConstants.shiftKey, profile.shift);
-    await _preferences?.setString(ApiConstants.semesterKey, profile.semester);
-    await _preferences?.setString(ApiConstants.emailKey, profile.email);
-    await _preferences?.setString(ApiConstants.phoneKey, profile.phone);
-    await _preferences?.setString(ApiConstants.statusKey, profile.status);
-    await _preferences?.setString(ApiConstants.bioKey, profile.bio);
-    await _preferences?.setString(
-      ApiConstants.profileJsonKey,
-      jsonEncode(profile.toJson()),
-    );
-  }
-
-  StudentProfile getStudentProfile() {
-    final rawJson = _preferences?.getString(ApiConstants.profileJsonKey);
-    if (rawJson != null && rawJson.isNotEmpty) {
-      try {
-        final decoded = jsonDecode(rawJson) as Map<String, dynamic>;
-        return StudentProfile.fromJson(decoded);
-      } catch (_) {}
-    }
-
-    final name = _preferences?.getString(ApiConstants.studentNameKey);
-    final nim = _preferences?.getString(ApiConstants.nimKey);
-    if (name != null || nim != null) {
-      return StudentProfile(
-        name: (name != null && name.isNotEmpty) ? name.trim() : '',
-        nim: (nim != null && nim.isNotEmpty) ? nim.trim() : '',
-        prodi: _preferences?.getString(ApiConstants.prodiKey) ?? '',
-        fakultas: _preferences?.getString(ApiConstants.fakultasKey) ?? '',
-        kelas: _preferences?.getString(ApiConstants.kelasKey) ?? '',
-        shift: _preferences?.getString(ApiConstants.shiftKey) ?? '',
-        semester: _preferences?.getString(ApiConstants.semesterKey) ?? '',
-        email: _preferences?.getString(ApiConstants.emailKey) ?? '',
-        phone: _preferences?.getString(ApiConstants.phoneKey) ?? '',
-        status: _preferences?.getString(ApiConstants.statusKey) ?? 'Mahasiswa Aktif',
-        bio: _preferences?.getString(ApiConstants.bioKey) ?? '',
-      );
-    }
-    return const StudentProfile();
-  }
-
   Future<void> saveToken(String token) async {
     await _preferences?.setString(ApiConstants.tokenKey, token);
   }
@@ -77,30 +28,12 @@ class StorageService {
     return token != null && token.isNotEmpty;
   }
 
-  Future<void> saveStudentInfo({
-    required String nim,
-    required String name,
-  }) async {
-    await _preferences?.setString(ApiConstants.nimKey, nim);
-    await _preferences?.setString(ApiConstants.studentNameKey, name);
-  }
-
-  String getNim() {
-    return _preferences?.getString(ApiConstants.nimKey) ??
-        getStudentProfile().nim;
-  }
-
-  String getStudentName() {
-    return _preferences?.getString(ApiConstants.studentNameKey) ??
-        getStudentProfile().name;
-  }
-
   Future<void> saveCookies(String cookies) async {
-    await _preferences?.setString('unpam_cookies', cookies);
+    await _preferences?.setString(ApiConstants.cookiesKey, cookies);
   }
 
   String? getCookies() {
-    return _preferences?.getString('unpam_cookies');
+    return _preferences?.getString(ApiConstants.cookiesKey);
   }
 
   Future<void> saveGeminiApiKey(String apiKey) async {
@@ -116,7 +49,15 @@ class StorageService {
 
   Future<void> clearSession() async {
     await _preferences?.remove(ApiConstants.tokenKey);
-    await _preferences?.remove('unpam_cookies');
+    await _preferences?.remove(ApiConstants.cookiesKey);
+  }
+
+  Future<void> setUserAgreementAccepted(bool accepted) async {
+    await _preferences?.setBool(ApiConstants.userAgreementKey, accepted);
+  }
+
+  bool isUserAgreementAccepted() {
+    return _preferences?.getBool(ApiConstants.userAgreementKey) ?? false;
   }
 
   Future<void> resetAll() async {

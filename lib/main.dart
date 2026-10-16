@@ -2,11 +2,10 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'core/services/storage_service.dart';
 import 'core/services/ai_service.dart';
-import 'providers/auth_provider.dart';
 import 'providers/ai_provider.dart';
 import 'theme/app_theme.dart';
 import 'screens/portal_webview_screen.dart';
-import 'screens/student_profile_setup_screen.dart';
+import 'screens/user_agreement_screen.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -18,29 +17,32 @@ void main() async {
   runApp(
     MultiProvider(
       providers: [
-        ChangeNotifierProvider(create: (_) => AuthProvider(storage)),
         ChangeNotifierProvider(create: (_) => AiProvider(aiService, storage)),
       ],
-      child: const UnpamMobileApp(),
+      child: UnpamMobileApp(storageService: storage),
     ),
   );
 }
 
 class UnpamMobileApp extends StatelessWidget {
-  const UnpamMobileApp({super.key});
+  final StorageService storageService;
+
+  const UnpamMobileApp({
+    super.key,
+    required this.storageService,
+  });
 
   @override
   Widget build(BuildContext context) {
-    final auth = context.watch<AuthProvider>();
-    final isConfigured = auth.isProfileFilled;
+    final bool isAgreementAccepted = storageService.isUserAgreementAccepted();
 
     return MaterialApp(
       title: 'UNPAM LMS Mobile',
       debugShowCheckedModeBanner: false,
       theme: AppTheme.lightTheme,
-      home: isConfigured
+      home: isAgreementAccepted
           ? const PortalWebViewScreen()
-          : const StudentProfileSetupScreen(),
+          : UserAgreementScreen(storageService: storageService),
     );
   }
 }

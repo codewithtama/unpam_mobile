@@ -32,15 +32,10 @@ Aplikasi dirancang dengan arsitektur **Native Portal Wrapper** yang membungkus w
   - **Google Gemini Engine:** Mendukung kunci API pribadi Google Generative Language dengan multi-model fallback otomatis (`gemini-3.5-flash-lite`, `gemini-3.5-flash`, `gemini-3.8-flash`, `gemini-flash-latest`, `gemini-2.5-flash`, `gemini-1.5-flash`) untuk penalaran tinggi dan analisis visual gambar/screenshot kuis.
 - **Interactive Quiz Generator:** Menghasilkan latihan kuis interaktif dengan pilihan ganda, kunci jawaban, dan pembahasan konsep secara otomatis.
 
-### 3. KTM Digital & Profil Mahasiswa Interaktif
-- **Kartu Tanda Mahasiswa (KTM) Digital:** Kartu identitas virtual resmi bergaya kartu pintar perbankan dengan gradien biru-emas UNPAM, chip digital, watermark logo kampus, dan status keaktifan mahasiswa.
-- **Formulir Edit Profil Lengkap:** Mahasiswa dapat memperbarui Nama Lengkap, NIM, Program Studi, Fakultas, Kelas, Shift Kuliah, Semester, Email Institusi, Nomor WhatsApp/Telepon, serta Catatan Akademik.
-- **Penyimpanan Persisten:** Seluruh data profil tersimpan aman dan persisten secara lokal menggunakan `StorageService` (`SharedPreferences`).
-
-### 4. Navigasi Bersih 3-Tab
-- **Mentari:** Akses langsung ke portal perkuliahan utama.
-- **UNPAM AI:** Ruang konsultasi akademik, pembahasan soal, dan penalaran tugas.
-- **Profil:** Akses KTM digital, edit biodata mahasiswa, pengelolaan API Key Gemini, dan pembersihan cache browser.
+### 3. Akses Langsung & Navigasi Bersih 2-Tab
+- **Persetujuan Pengguna (User Agreement):** Pada peluncuran pertama aplikasi, pengguna diwajibkan meninjau Syarat & Ketentuan Penggunaan. Layar persetujuan ini diproteksi tanpa opsi keluar bebas dan dilengkapi pengatur waktu (countdown timer) 15 detik sebelum opsi persetujuan atau penolakan diaktifkan.
+- **Mentari:** Akses langsung ke portal perkuliahan utama Universitas Pamulang.
+- **UNPAM AI:** Ruang konsultasi akademik, pembahasan soal, dan penalaran tugas berbasis AI.
 
 ---
 
@@ -51,22 +46,26 @@ Aplikasi dirancang dengan arsitektur **Native Portal Wrapper** yang membungkus w
                       |       Aplikasi Flutter (Android)      |
                       +---------------------------------------+
                                           |
-        +---------------------------------+---------------------------------+
-        |                                 |                                 |
-        v                                 v                                 v
-+-----------------------+     +-----------------------+     +-----------------------+
-|  PortalWebViewScreen  |     |   UNPAM AI Engine     |     |     ProfileScreen     |
-| (Native Chromium Shell|     |  (Dual-Engine LLM)    |     |  (KTM Digital & Bio)  |
-+-----------------------+     +-----------------------+     +-----------------------+
-        |                                 |                                 |
-        | [DOM Injection &                | [Multimodal &                   | [Persistent Storage]
-        |  Draggable AI Button]           |  Context Prompt]                |
-        v                                 v                                 v
-+-----------------------+     +-----------------------+     +-----------------------+
-|  mentari.unpam.ac.id  |     | 1. Cloud AI (Default) |     |    StorageService     |
-| (Sesi Perkuliahan,    |     | 2. Google Gemini API  |     |  (SharedPreferences   |
-|  Kuis, Tugas, Forum)  |     |    (Multi-Model List) |     |   Local Key-Value)    |
-+-----------------------+     +-----------------------+     +-----------------------+
+                      +-------------------+-------------------+
+                      | (Pertama kali buka: Belum disetujui)  | (Sudah disetujui)
+                      v                                       v
+          +-----------------------+               +-----------------------+
+          |  UserAgreementScreen  |               |  PortalWebViewScreen  |
+          | (15s Mandatory Timer  |               | (Native Chromium Shell|
+          |  & PopScope Protected)|               +-----------------------+
+          +-----------------------+                           |
+                      |                                       v
+                      | (Disetujui)               +-----------------------+
+                      +-------------------------> |   UNPAM AI Engine     |
+                                                  |  (Dual-Engine LLM)    |
+                                                  +-----------------------+
+                                                              |
+                                                              v
+                                                  +-----------------------+
+                                                  |    StorageService     |
+                                                  |  (SharedPreferences   |
+                                                  |   Local Key-Value)    |
+                                                  +-----------------------+
 ```
 
 ---
@@ -85,20 +84,18 @@ unpam_mobile/
 │   │       ├── ai_service.dart          # Real Dual-Engine AI (Cloud AI & Gemini Fallback)
 │   │       └── storage_service.dart     # Service penyimpanan lokal SharedPreferences
 │   ├── models/
-│   │   ├── ai_message_model.dart        # Model pesan percakapan & kuis interaktif
-│   │   └── student_profile_model.dart   # Model profil mahasiswa dengan validasi data
+│   │   └── ai_message_model.dart        # Model pesan percakapan & kuis interaktif
 │   ├── providers/
-│   │   ├── ai_provider.dart             # State management UNPAM AI & riwayat konsultasi
-│   │   └── auth_provider.dart           # State management profil mahasiswa
+│   │   └── ai_provider.dart             # State management UNPAM AI & riwayat konsultasi
 │   ├── screens/
 │   │   ├── ai_assistant_screen.dart     # Antarmuka UNPAM AI & dialog API Key
 │   │   ├── portal_webview_screen.dart   # Shell Chromium Mentari & Draggable AI Button
-│   │   └── profile_screen.dart          # KTM Digital & formulir edit profil mahasiswa
+│   │   └── user_agreement_screen.dart   # Persetujuan pengguna dengan timer 15 detik
 │   ├── theme/
 │   │   └── app_theme.dart               # Sistem token warna institusi (Navy, Gold, Surface)
-│   └── main.dart                        # Titik masuk aplikasi & Provider binding
+│   └── main.dart                        # Titik masuk aplikasi, routing persetujuan & Provider
 ├── test/
-│   └── widget_test.dart                 # Automated unit & widget tests
+│   └── widget_test.dart                 # Automated unit & integration tests
 ├── pubspec.yaml                         # Dependensi proyek Flutter
 └── README.md                            # Dokumentasi teknis proyek
 ```
@@ -147,7 +144,7 @@ Berkas APK hasil build akan tersedia di:
 ## Konfigurasi Kunci API UNPAM AI (Opsional)
 
 Secara default, fitur UNPAM AI langsung dapat digunakan secara **gratis** melalui Cloud AI Engine bawaan. Untuk mahasiswa yang ingin mengaktifkan inferensi berkecepatan tinggi dan fitur membaca screenshot gambar/soal visual:
-1. Buka tab **UNPAM AI** atau tab **Profil** di dalam aplikasi.
+1. Buka tab **UNPAM AI** di dalam aplikasi.
 2. Klik ikon kunci (**Pengaturan Gemini API Key**).
 3. Masukkan kunci API dari [Google AI Studio](https://aistudio.google.com/).
 4. Aplikasi akan secara otomatis memvalidasi kunci via endpoint discovery dan memilih model terbaik (`gemini-3.5-flash-lite` / `gemini-3.5-flash`).
@@ -158,4 +155,4 @@ Secara default, fitur UNPAM AI langsung dapat digunakan secara **gratis** melalu
 
 1. **Autentikasi Terenkripsi:** Proses autentikasi mahasiswa dilakukan langsung pada peramban resmi Mentari UNPAM. Kredensial akun (password) tidak pernah dibaca, dicegat, atau disimpan oleh aplikasi.
 2. **Keamanan Kunci API:** Kunci API Google Gemini disimpan secara privat di `SharedPreferences` perangkat pengguna dan hanya dikirimkan langsung ke endpoint resmi `generativelanguage.googleapis.com` melalui protokol TLS 1.3 terenkripsi.
-3. **Data Isolation:** Seluruh profil mahasiswa dan riwayat chat UNPAM AI tersimpan secara lokal di perangkat tanpa server perantara pihak ketiga.
+3. **Data Isolation:** Seluruh riwayat konsultasi UNPAM AI tersimpan secara lokal di perangkat tanpa server perantara pihak ketiga.
