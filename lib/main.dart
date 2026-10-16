@@ -6,6 +6,7 @@ import 'providers/auth_provider.dart';
 import 'providers/ai_provider.dart';
 import 'theme/app_theme.dart';
 import 'screens/portal_webview_screen.dart';
+import 'screens/student_profile_setup_screen.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -30,11 +31,16 @@ class UnpamMobileApp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final auth = context.watch<AuthProvider>();
+    final isConfigured = auth.isProfileFilled;
+
     return MaterialApp(
       title: 'UNPAM LMS Mobile',
       debugShowCheckedModeBanner: false,
       theme: AppTheme.lightTheme,
-      home: const PortalWebViewScreen(),
+      home: isConfigured
+          ? const PortalWebViewScreen()
+          : const StudentProfileSetupScreen(),
     );
   }
 }

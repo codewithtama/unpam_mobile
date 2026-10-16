@@ -10,15 +10,18 @@ void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
   group('StudentProfile Model Tests', () {
-    test('Default StudentProfile has valid initial values and passes validation', () {
+    test('Default StudentProfile starts empty and is not filled until configured', () {
       const profile = StudentProfile();
-      expect(profile.name, equals('Tama Vernaldi'));
-      expect(profile.nim, equals('221011400123'));
-      expect(profile.prodi, equals('Teknik Informatika (S1)'));
-      expect(profile.isValidName, isTrue);
-      expect(profile.isValidNim, isTrue);
-      expect(profile.isValidEmail, isTrue);
-      expect(profile.isValidPhone, isTrue);
+      expect(profile.name, isEmpty);
+      expect(profile.nim, isEmpty);
+      expect(profile.isFilled, isFalse);
+      expect(profile.isValidName, isFalse);
+      expect(profile.isValidNim, isFalse);
+
+      const filled = StudentProfile(name: 'Dimas Alfa Pratama', nim: '241011750041');
+      expect(filled.isFilled, isTrue);
+      expect(filled.isValidName, isTrue);
+      expect(filled.isValidNim, isTrue);
     });
 
     test('Validation detects invalid NIM, email, and phone', () {
@@ -129,10 +132,12 @@ void main() {
       const custom = StudentProfile(name: 'Custom User', nim: '9999999999');
       await auth.updateProfile(custom);
       expect(auth.studentName, equals('Custom User'));
+      expect(auth.isProfileFilled, isTrue);
 
       await auth.resetProfileToDefault();
-      expect(auth.studentName, equals('Tama Vernaldi'));
-      expect(auth.studentNim, equals('221011400123'));
+      expect(auth.studentName, isEmpty);
+      expect(auth.studentNim, isEmpty);
+      expect(auth.isProfileFilled, isFalse);
     });
   });
 

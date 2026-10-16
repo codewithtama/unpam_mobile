@@ -140,9 +140,30 @@ class AiProvider extends ChangeNotifier {
     return _storage.getGeminiApiKey() ?? '';
   }
 
+  Future<String> generateForumReply({
+    required String topic,
+    String? courseName,
+  }) async {
+    return await _aiService.generateForumReply(
+      topic: topic,
+      courseName: courseName ?? _selectedCourseName,
+    );
+  }
+
+  Future<List<Map<String, dynamic>>> solveQuizQuestions({
+    required List<Map<String, dynamic>> questions,
+    String? courseName,
+  }) async {
+    return await _aiService.solveQuizQuestions(
+      questions: questions,
+      courseName: courseName ?? _selectedCourseName,
+    );
+  }
+
   void clearChat() {
     _messages.clear();
     _initWelcomeMessage();
     notifyListeners();
   }
 }
+

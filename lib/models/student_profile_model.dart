@@ -12,18 +12,20 @@ class StudentProfile {
   final String bio;
 
   const StudentProfile({
-    this.name = 'Tama Vernaldi',
-    this.nim = '221011400123',
-    this.prodi = 'Teknik Informatika (S1)',
-    this.fakultas = 'Fakultas Ilmu Komputer',
-    this.kelas = '04TPLP001',
-    this.shift = 'Reguler C (Malam)',
-    this.semester = 'Semester 4',
-    this.email = 'tama@mahasiswa.unpam.ac.id',
-    this.phone = '081234567890',
+    this.name = '',
+    this.nim = '',
+    this.prodi = '',
+    this.fakultas = '',
+    this.kelas = '',
+    this.shift = '',
+    this.semester = '',
+    this.email = '',
+    this.phone = '',
     this.status = 'Mahasiswa Aktif',
-    this.bio = 'Fokus Peminatan Mobile Application & Artificial Intelligence',
+    this.bio = '',
   });
+
+  bool get isFilled => name.trim().isNotEmpty && nim.trim().isNotEmpty;
 
   StudentProfile copyWith({
     String? name,
@@ -69,18 +71,17 @@ class StudentProfile {
 
   factory StudentProfile.fromJson(Map<String, dynamic> json) {
     return StudentProfile(
-      name: (json['name'] as String?)?.trim() ?? 'Tama Vernaldi',
-      nim: (json['nim'] as String?)?.trim() ?? '221011400123',
-      prodi: (json['prodi'] as String?)?.trim() ?? 'Teknik Informatika (S1)',
-      fakultas: (json['fakultas'] as String?)?.trim() ?? 'Fakultas Ilmu Komputer',
-      kelas: (json['kelas'] as String?)?.trim() ?? '04TPLP001',
-      shift: (json['shift'] as String?)?.trim() ?? 'Reguler C (Malam)',
-      semester: (json['semester'] as String?)?.trim() ?? 'Semester 4',
-      email: (json['email'] as String?)?.trim() ?? 'tama@mahasiswa.unpam.ac.id',
-      phone: (json['phone'] as String?)?.trim() ?? '081234567890',
+      name: (json['name'] as String?)?.trim() ?? '',
+      nim: (json['nim'] as String?)?.trim() ?? '',
+      prodi: (json['prodi'] as String?)?.trim() ?? '',
+      fakultas: (json['fakultas'] as String?)?.trim() ?? '',
+      kelas: (json['kelas'] as String?)?.trim() ?? '',
+      shift: (json['shift'] as String?)?.trim() ?? '',
+      semester: (json['semester'] as String?)?.trim() ?? '',
+      email: (json['email'] as String?)?.trim() ?? '',
+      phone: (json['phone'] as String?)?.trim() ?? '',
       status: (json['status'] as String?)?.trim() ?? 'Mahasiswa Aktif',
-      bio: (json['bio'] as String?)?.trim() ??
-          'Fokus Peminatan Mobile Application & Artificial Intelligence',
+      bio: (json['bio'] as String?)?.trim() ?? '',
     );
   }
 

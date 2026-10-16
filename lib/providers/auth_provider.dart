@@ -13,7 +13,8 @@ class AuthProvider extends ChangeNotifier {
   StudentProfile get profile => _profile;
   String get studentNim => _profile.nim;
   String get studentName => _profile.name;
-  bool get isLoggedIn => _storage.hasToken || _profile.nim.isNotEmpty;
+  bool get isProfileFilled => _profile.isFilled;
+  bool get isLoggedIn => _profile.isFilled;
 
   Future<void> updateProfile(StudentProfile updated) async {
     _profile = updated;

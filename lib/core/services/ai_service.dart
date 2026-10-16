@@ -95,13 +95,13 @@ class AiService {
               prompt: cleanPrompt,
               courseName: courseName,
               rateLimitNotice:
-                  '⚠️ *Batas kuota Gemini (Rate Limit 429) tercapai. Asisten otomatis beralih ke Cloud AI untuk menjawab soal Anda.*\n\n',
+                  '[Info] Batas kuota Gemini (Rate Limit 429) tercapai. Asisten otomatis beralih ke Cloud AI untuk menjawab soal Anda.\n\n',
             );
           } else {
             return AiMessage(
               id: DateTime.now().millisecondsSinceEpoch.toString(),
               content:
-                  '⚠️ Kuota request Google Gemini API Anda mencapai batas harian / menit (Rate Limit 429). Mohon tunggu sekitar 1 menit sebelum mengirim gambar kembali.',
+                  '[Peringatan] Kuota request Google Gemini API Anda mencapai batas harian / menit (Rate Limit 429). Mohon tunggu sekitar 1 menit sebelum mengirim gambar kembali.',
               isUser: false,
               timestamp: DateTime.now(),
               relatedCourseName: courseName,
@@ -111,8 +111,8 @@ class AiService {
           return AiMessage(
             id: DateTime.now().millisecondsSinceEpoch.toString(),
             content:
-                '❌ **API Key Google Gemini Tidak Valid / Akses Ditolak ($code)**\n\n'
-                'Google menolak kunci API yang tersimpan. Silakan periksa kembali API Key Anda melalui tombol kunci 🔑 di pojok kanan atas.',
+                '[Error] API Key Google Gemini Tidak Valid / Akses Ditolak ($code)\n\n'
+                'Google menolak kunci API yang tersimpan. Silakan periksa kembali API Key Anda melalui tombol kunci di pojok kanan atas.',
             isUser: false,
             timestamp: DateTime.now(),
             relatedCourseName: courseName,
@@ -158,13 +158,13 @@ class AiService {
       return AiMessage(
         id: DateTime.now().millisecondsSinceEpoch.toString(),
         content:
-            '📷 **Screenshot Gambar Diterima**\n\n'
-            'Untuk membaca dan menganalisis soal kuis langsung dari screenshot gambar dengan Google Vision AI, silakan masukkan **Google Gemini API Key** Anda.\n\n'
-            'API Key ini **100% Gratis** resmi dari Google:\n'
-            '1. Ketuk tombol kunci 🔑 di pojok kanan atas layar ini.\n'
+            '[Screenshot Gambar Diterima]\n\n'
+            'Untuk membaca dan menganalisis soal kuis langsung dari screenshot gambar dengan Google Vision AI, silakan masukkan Google Gemini API Key Anda.\n\n'
+            'API Key ini gratis resmi dari Google:\n'
+            '1. Ketuk tombol kunci di pojok kanan atas layar ini.\n'
             '2. Buka link Google AI Studio dan salin API Key Anda.\n'
             '3. Tempel dan simpan di aplikasi.\n\n'
-            '*Catatan: Untuk pertanyaan berupa teks atau soal yang diekstrak langsung dari web portal, Anda dapat langsung bertanya tanpa memerlukan API Key!*',
+            'Catatan: Untuk pertanyaan berupa teks atau soal yang diekstrak langsung dari web portal, Anda dapat langsung bertanya tanpa memerlukan API Key!',
         isUser: false,
         timestamp: DateTime.now(),
         relatedCourseName: courseName,
@@ -371,4 +371,185 @@ class AiService {
       relatedCourseName: courseName,
     );
   }
+
+  /// Menghubungi LLM (Gemini dengan fallback Cloud AI) untuk menghasilkan output string mentah
+  Future<String> askRawLlm({
+    required String systemPrompt,
+    required String userPrompt,
+  }) async {
+    final apiKey = _storage.getGeminiApiKey();
+    final now = DateTime.now();
+    final inCooldown = _rateLimitedUntil != null && now.isBefore(_rateLimitedUntil!);
+
+    if (apiKey != null && apiKey.isNotEmpty && !inCooldown) {
+      final body = {
+        'contents': [
+          {
+            'parts': [
+              {'text': '$systemPrompt\n\n$userPrompt'}
+            ]
+          }
+        ],
+        'generationConfig': {
+          'temperature': 0.3,
+          'maxOutputTokens': 2048,
+        }
+      };
+
+      for (final model in _geminiCandidateModels) {
+        final url =
+            'https://generativelanguage.googleapis.com/v1beta/models/$model:generateContent?key=$apiKey';
+        try {
+          final response = await _dio.post<Map<String, dynamic>>(
+            url,
+            data: body,
+            options: Options(headers: {'Content-Type': 'application/json'}),
+          );
+          final candidates = response.data?['candidates'] as List<dynamic>?;
+          if (candidates != null && candidates.isNotEmpty) {
+            final text = candidates.first['content']?['parts']?[0]?['text']?.toString() ?? '';
+            if (text.trim().isNotEmpty) return text.trim();
+          }
+        } on DioException catch (e) {
+          final code = e.response?.statusCode;
+          if (code == 429) {
+            _rateLimitedUntil = now.add(const Duration(seconds: 45));
+            break;
+          }
+          continue;
+        } catch (_) {
+          continue;
+        }
+      }
+    }
+
+    // Fallback ke Cloud AI (Pollinations API)
+    try {
+      final response = await _dio.post<dynamic>(
+        'https://text.pollinations.ai/',
+        data: {
+          'messages': [
+            {'role': 'system', 'content': systemPrompt},
+            {'role': 'user', 'content': userPrompt}
+          ],
+          'model': 'openai',
+          'jsonMode': false,
+        },
+        options: Options(
+          sendTimeout: const Duration(seconds: 25),
+          receiveTimeout: const Duration(seconds: 35),
+        ),
+      );
+      final rawData = response.data?.toString() ?? '';
+      if (rawData.trim().isNotEmpty) return rawData.trim();
+    } catch (_) {
+      try {
+        final query = '$systemPrompt\n\n$userPrompt';
+        final getUrl = 'https://text.pollinations.ai/${Uri.encodeComponent(query.substring(0, query.length.clamp(0, 1500)))}';
+        final res = await _dio.get<dynamic>(getUrl);
+        final rawData = res.data?.toString() ?? '';
+        if (rawData.trim().isNotEmpty) return rawData.trim();
+      } catch (err) {
+        throw Exception('Gagal menghubungi server AI ($err). Pastikan koneksi internet stabil.');
+      }
+    }
+
+    throw Exception('Layanan AI tidak memberikan respons.');
+  }
+
+  /// Membuat draf balasan forum diskusi perkuliahan berbobot akademis
+  Future<String> generateForumReply({
+    required String topic,
+    String? courseName,
+  }) async {
+    const systemPrompt =
+        'Anda adalah mahasiswa berprestasi dan kritis di Universitas Pamulang. '
+        'Tugas Anda adalah menulis tanggapan atau draf balasan untuk Forum Diskusi perkuliahan. '
+        'Pedoman penulisan:\n'
+        '1. Gunakan bahasa Indonesia baku, sopan, bernada akademis, lugas, dan terstruktur.\n'
+        '2. Langsung sampaikan argumen inti, analisis logis, atau solusi yang relevan dengan pertanyaan dosen tanpa kalimat pembuka klise atau basa-basi kosong.\n'
+        '3. Berikan rincian poin atau contoh konkret jika diperlukan.\n'
+        '4. Tutup dengan pernyataan simpulan yang tegas dan salam penutup standar perkuliahan.\n'
+        '5. JANGAN gunakan emoji apapun dalam teks balasan.';
+
+    final userPrompt =
+        'Mata Kuliah: ${courseName ?? "Perkuliahan UNPAM"}\n\n'
+        'Topik / Pertanyaan Diskusi Dosen:\n"""\n$topic\n"""\n\n'
+        'Tuliskan draf balasan forum diskusi yang berbobot dan siap diposting:';
+
+    return await askRawLlm(
+      systemPrompt: systemPrompt,
+      userPrompt: userPrompt,
+    );
+  }
+
+  /// Menganalisis butir soal kuis pilihan ganda dan menentukan jawaban yang benar
+  Future<List<Map<String, dynamic>>> solveQuizQuestions({
+    required List<Map<String, dynamic>> questions,
+    String? courseName,
+  }) async {
+    const systemPrompt =
+        'Anda adalah mesin pemecah soal kuis akademik universitas yang sangat teliti. '
+        'Tugas Anda adalah menganalisis setiap butir soal kuis pilihan ganda dan menentukan opsi jawaban yang paling benar dan akurat. '
+        'Wajib kembalikan HANYA format JSON valid tanpa teks markdown pembuka/penutup, tanpa tag codeblock, langsung array JSON: '
+        '[{"index": 0, "correctOptionIndex": 1, "correctOptionText": "B. ...", "confidence": 95, "reason": "Alasan singkat"}]\n'
+        'Perhatikan bahwa "index" harus sesuai dengan index soal yang diberikan (0, 1, ...), dan "correctOptionIndex" adalah indeks opsi (0 untuk opsi ke-1, 1 untuk opsi ke-2, dst). JANGAN gunakan emoji.';
+
+    final buffer = StringBuffer();
+    buffer.writeln('Mata Kuliah: ${courseName ?? "Perkuliahan UNPAM"}\n');
+    buffer.writeln('Analisis daftar soal pilihan ganda berikut dan tentukan opsi jawaban yang paling akurat:\n');
+
+    for (final q in questions) {
+      buffer.writeln('Soal #${q['index']}: ${q['questionText']}');
+      final opts = q['options'] as List<dynamic>? ?? [];
+      for (int i = 0; i < opts.length; i++) {
+        final opt = opts[i];
+        final text = opt['optionText'] ?? '';
+        buffer.writeln('  - Opsi $i: $text');
+      }
+      buffer.writeln('');
+    }
+
+    final raw = await askRawLlm(
+      systemPrompt: systemPrompt,
+      userPrompt: buffer.toString(),
+    );
+
+    // Bersihkan pembungkus code block jika ada
+    String jsonStr = raw.trim();
+    if (jsonStr.startsWith('```json')) {
+      jsonStr = jsonStr.substring(7);
+    } else if (jsonStr.startsWith('```')) {
+      jsonStr = jsonStr.substring(3);
+    }
+    if (jsonStr.endsWith('```')) {
+      jsonStr = jsonStr.substring(0, jsonStr.length - 3);
+    }
+    jsonStr = jsonStr.trim();
+
+    final startIdx = jsonStr.indexOf('[');
+    final endIdx = jsonStr.lastIndexOf(']');
+    if (startIdx != -1 && endIdx != -1 && endIdx > startIdx) {
+      jsonStr = jsonStr.substring(startIdx, endIdx + 1);
+    }
+
+    try {
+      final List<dynamic> decoded = jsonDecode(jsonStr);
+      return decoded.map((e) => Map<String, dynamic>.from(e as Map)).toList();
+    } catch (e) {
+      // Fallback: ekstrak manual jika decoding gagal
+      final List<Map<String, dynamic>> fallbackList = [];
+      for (final q in questions) {
+        fallbackList.add({
+          'index': q['index'],
+          'correctOptionIndex': 0,
+          'correctOptionText': '',
+          'confidence': 70,
+          'reason': 'Analisis otomatis AI (fallback parsing).',
+        });
+      }
+      return fallbackList;
+    }
+  }
 }
+

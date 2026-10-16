@@ -19,12 +19,15 @@ Aplikasi dirancang dengan arsitektur **Native Portal Wrapper** yang membungkus w
 ### 1. Native Mentari Portal Wrapper
 - **Chromium Web Engine Asli:** Menjalankan portal resmi `https://mentari.unpam.ac.id/` dengan performa penuh, rendering JavaScript lengkap, penanganan cookie sesi `httpOnly`, dan kepatuhan terhadap proteksi Cloudflare Turnstile CAPTCHA.
 - **Tampilan 100% Native:** Header aplikasi dirancang elegan dengan identitas universitas, title dinamis, tombol muat ulang cepat, dan avatar inisial mahasiswa tanpa bilah alamat peramban (URL address bar).
+- **Shortcut Instan Navigasi Mentari (Deep-Link Quick Actions):** Bar navigasi horizontal dan bottom sheet modal untuk lompat langsung sekali tap ke Dashboard Perkuliahan, Presensi & Kehadiran, Kalender & Deadline Tugas, Buku Nilai / KHS, Forum Diskusi, serta Halaman Utama Mentari tanpa navigasi menu bertingkat.
 - **Penanganan Tautan Eksternal:** Secara otomatis mendeteksi dan mengarahkan tautan Google Meet, Zoom, WhatsApp dosen/grup kelas, dan dokumen unduhan langsung ke aplikasi native di smartphone.
 - **Pull-to-Refresh & Navigasi Cerdas:** Mendukung gestur tarik ke bawah untuk memuat ulang halaman serta integrasi riwayat navigasi tombol kembali Android.
 
-### 2. UNPAM AI (Real Dual-Engine Intelligence)
-- **Tanya AI Halaman Ini (Draggable Button):** Tombol aksi mengambang yang dapat **digeser bebas (draggable)** ke posisi mana saja di layar agar tidak menghalangi teks, tabel, atau formulir perkuliahan.
-- **Ekstraksi DOM Otomatis:** Mengambil teks soal kuis, instruksi tugas, atau materi modul yang sedang tampil di layar WebView dan mengirimkannya langsung ke UNPAM AI sebagai konteks pembelajaran.
+### 2. UNPAM AI (Real Dual-Engine Intelligence & Automation)
+- **UNPAM AI Tools (Draggable Floating Pill):** Tombol aksi mengambang yang dapat digeser bebas (draggable) ke posisi mana saja di layar tanpa menghalangi konten perkuliahan.
+- **One-Click Forum Discussion Auto-Drafter:** Membaca judul dan topik pertanyaan diskusi forum dosen secara otomatis dari DOM, membuat draf argumen akademis berbobot via AI, dan menyuntikkannya (inject) langsung ke elemen textarea atau rich-text editor (Atto/TinyMCE) di halaman Mentari.
+- **Live Quiz Solver & Auto-Highlight Jawaban:** Memindai seluruh butir soal pilihan ganda di halaman kuis webview, menganalisis kunci jawaban paling akurat via AI, dan memberikan sorotan warna hijau menyala (highlight) serta opsi auto-centang pada radio button yang tepat.
+- **Ekstraksi DOM Otomatis & Konsultasi:** Mengambil teks soal kuis, instruksi tugas, atau materi modul yang sedang tampil di layar WebView dan mengirimkannya langsung ke UNPAM AI sebagai konteks pembelajaran.
 - **Dual-Engine LLM Fallback:**
   - **Default (Cloud AI Publik):** Berjalan gratis tanpa konfigurasi menggunakan model OpenAI / LLaMA via Pollinations API untuk menjawab pertanyaan teks akademik.
   - **Google Gemini Engine:** Mendukung kunci API pribadi Google Generative Language dengan multi-model fallback otomatis (`gemini-3.5-flash-lite`, `gemini-3.5-flash`, `gemini-3.8-flash`, `gemini-flash-latest`, `gemini-2.5-flash`, `gemini-1.5-flash`) untuk penalaran tinggi dan analisis visual gambar/screenshot kuis.

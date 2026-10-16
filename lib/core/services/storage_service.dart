@@ -48,18 +48,17 @@ class StorageService {
     final nim = _preferences?.getString(ApiConstants.nimKey);
     if (name != null || nim != null) {
       return StudentProfile(
-        name: (name != null && name.isNotEmpty) ? name : 'Tama Vernaldi',
-        nim: (nim != null && nim.isNotEmpty) ? nim : '221011400123',
-        prodi: _preferences?.getString(ApiConstants.prodiKey) ?? 'Teknik Informatika (S1)',
-        fakultas: _preferences?.getString(ApiConstants.fakultasKey) ?? 'Fakultas Ilmu Komputer',
-        kelas: _preferences?.getString(ApiConstants.kelasKey) ?? '04TPLP001',
-        shift: _preferences?.getString(ApiConstants.shiftKey) ?? 'Reguler C (Malam)',
-        semester: _preferences?.getString(ApiConstants.semesterKey) ?? 'Semester 4',
-        email: _preferences?.getString(ApiConstants.emailKey) ?? 'tama@mahasiswa.unpam.ac.id',
-        phone: _preferences?.getString(ApiConstants.phoneKey) ?? '081234567890',
+        name: (name != null && name.isNotEmpty) ? name.trim() : '',
+        nim: (nim != null && nim.isNotEmpty) ? nim.trim() : '',
+        prodi: _preferences?.getString(ApiConstants.prodiKey) ?? '',
+        fakultas: _preferences?.getString(ApiConstants.fakultasKey) ?? '',
+        kelas: _preferences?.getString(ApiConstants.kelasKey) ?? '',
+        shift: _preferences?.getString(ApiConstants.shiftKey) ?? '',
+        semester: _preferences?.getString(ApiConstants.semesterKey) ?? '',
+        email: _preferences?.getString(ApiConstants.emailKey) ?? '',
+        phone: _preferences?.getString(ApiConstants.phoneKey) ?? '',
         status: _preferences?.getString(ApiConstants.statusKey) ?? 'Mahasiswa Aktif',
-        bio: _preferences?.getString(ApiConstants.bioKey) ??
-            'Fokus Peminatan Mobile Application & Artificial Intelligence',
+        bio: _preferences?.getString(ApiConstants.bioKey) ?? '',
       );
     }
     return const StudentProfile();
