@@ -1,3 +1,4 @@
+import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:image_picker/image_picker.dart';
@@ -14,6 +15,99 @@ class AiAssistantScreen extends StatefulWidget {
 
   @override
   State<AiAssistantScreen> createState() => _AiAssistantScreenState();
+}
+
+class _AiThinkingIndicator extends StatefulWidget {
+  const _AiThinkingIndicator();
+
+  @override
+  State<_AiThinkingIndicator> createState() => _AiThinkingIndicatorState();
+}
+
+class _AiThinkingIndicatorState extends State<_AiThinkingIndicator> with SingleTickerProviderStateMixin {
+  late final AnimationController _controller;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = AnimationController(vsync: this, duration: const Duration(milliseconds: 1200))..repeat();
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  double _dotScale(double t, double shift) {
+    final wave = math.sin((t * math.pi * 2) + shift);
+    return 0.75 + ((wave + 1) * 0.17);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return RepaintBoundary(
+      child: DecoratedBox(
+        decoration: BoxDecoration(
+          color: const Color(0xFFF8FAFC),
+          borderRadius: BorderRadius.circular(14),
+          border: Border.all(color: const Color(0xFFE2E8F0)),
+        ),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+          child: Row(
+            children: [
+              Container(
+                width: 28,
+                height: 28,
+                decoration: BoxDecoration(
+                  color: AppTheme.primaryBlue.withOpacity(0.10),
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: const Icon(Icons.psychology_alt_rounded, color: AppTheme.primaryBlue, size: 18),
+              ),
+              const SizedBox(width: 10),
+              const Expanded(
+                child: Text(
+                  'UNPAM AI sedang merangkai jawaban terbaik...',
+                  style: TextStyle(fontSize: 12, color: AppTheme.textMuted, fontWeight: FontWeight.w500),
+                ),
+              ),
+              AnimatedBuilder(
+                animation: _controller,
+                builder: (_, __) {
+                  final t = _controller.value;
+                  return Row(
+                    children: [
+                      _buildDot(_dotScale(t, 0)),
+                      const SizedBox(width: 4),
+                      _buildDot(_dotScale(t, math.pi / 1.9)),
+                      const SizedBox(width: 4),
+                      _buildDot(_dotScale(t, math.pi / 0.95)),
+                    ],
+                  );
+                },
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildDot(double scale) {
+    return Transform.scale(
+      scale: scale,
+      child: Container(
+        width: 7,
+        height: 7,
+        decoration: BoxDecoration(
+          color: AppTheme.primaryBlue,
+          borderRadius: BorderRadius.circular(999),
+        ),
+      ),
+    );
+  }
 }
 
 class _AiAssistantScreenState extends State<AiAssistantScreen> {
@@ -300,25 +394,18 @@ class _AiAssistantScreenState extends State<AiAssistantScreen> {
           ),
 
           // Loading Indicator
-          if (aiProv.isLoading)
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
-              color: Colors.white,
-              child: const Row(
-                children: [
-                  SizedBox(
-                    width: 14,
-                    height: 14,
-                    child: CircularProgressIndicator(strokeWidth: 2),
-                  ),
-                  SizedBox(width: 10),
-                  Text(
-                    'AI sedang menganalisis soal/layar & menyusun jawaban...',
-                    style: TextStyle(fontSize: 12, color: AppTheme.textMuted),
-                  ),
-                ],
-              ),
-            ),
+          AnimatedSwitcher(
+            duration: const Duration(milliseconds: 220),
+            switchInCurve: Curves.easeOutCubic,
+            switchOutCurve: Curves.easeInCubic,
+            child: aiProv.isLoading
+                ? const Padding(
+                    key: ValueKey('ai_loading_indicator'),
+                    padding: EdgeInsets.fromLTRB(16, 6, 16, 10),
+                    child: _AiThinkingIndicator(),
+                  )
+                : const SizedBox.shrink(key: ValueKey('ai_loading_empty')),
+          ),
 
           // Preview Thumbnail jika screenshot dipilih
           if (_selectedImageBytes != null)

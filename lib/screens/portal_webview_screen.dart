@@ -52,9 +52,14 @@ class _PortalWebViewScreenState extends State<PortalWebViewScreen> {
         NavigationDelegate(
           onProgress: (progress) {
             if (mounted) {
+              final nextProgress = progress.clamp(0, 100);
+              final nextLoading = nextProgress < 100;
+              if ((nextProgress - _progress).abs() < 2 && nextLoading == _isLoading) {
+                return;
+              }
               setState(() {
-                _progress = progress;
-                _isLoading = progress < 100;
+                _progress = nextProgress;
+                _isLoading = nextLoading;
               });
             }
           },
@@ -1181,11 +1186,16 @@ class _PortalWebViewScreenState extends State<PortalWebViewScreen> {
           children: [
             // Progress Bar saat loading halaman
             if (_isLoading)
-              LinearProgressIndicator(
-                value: _progress > 0 ? _progress / 100.0 : null,
-                minHeight: 3,
-                backgroundColor: Colors.transparent,
-                valueColor: const AlwaysStoppedAnimation<Color>(AppTheme.accentGold),
+              TweenAnimationBuilder<double>(
+                duration: const Duration(milliseconds: 180),
+                curve: Curves.easeOutCubic,
+                tween: Tween<double>(begin: 0, end: _progress > 0 ? _progress / 100.0 : 0),
+                builder: (_, value, __) => LinearProgressIndicator(
+                  value: value <= 0 ? null : value,
+                  minHeight: 3,
+                  backgroundColor: Colors.transparent,
+                  valueColor: const AlwaysStoppedAnimation<Color>(AppTheme.accentGold),
+                ),
               ),
 
 
