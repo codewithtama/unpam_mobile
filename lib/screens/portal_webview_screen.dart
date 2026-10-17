@@ -15,8 +15,10 @@ import '../widgets/biometric_vault_sheet.dart';
 import '../widgets/biometric_quick_prompt_sheet.dart';
 import '../core/services/update_checker_service.dart';
 import '../core/services/notification_service.dart';
+import '../core/services/file_download_service.dart';
 import '../widgets/update_dialog.dart';
 import '../widgets/release_history_dialog.dart';
+import 'package:open_filex/open_filex.dart';
 
 class PortalWebViewScreen extends StatefulWidget {
   final String initialUrl;
@@ -44,7 +46,18 @@ class _PortalWebViewScreenState extends State<PortalWebViewScreen> with WidgetsB
   DateTime? _lastBackPressTime;
   Offset? _fabOffset;
   bool _isDraggingFab = false;
-  bool _isLoginPageDetected = false;
+  bool _isMentariLoginDetected = false;
+  bool _isMyUnpamLoginDetected = false;
+  bool get _isLoginPageDetected =>
+      _currentNavIndex == 1 ? _isMyUnpamLoginDetected : _isMentariLoginDetected;
+  set _isLoginPageDetected(bool val) {
+    if (_currentNavIndex == 1) {
+      _isMyUnpamLoginDetected = val;
+    } else {
+      _isMentariLoginDetected = val;
+    }
+  }
+  bool _isLoggingOutMyUnpam = false;
   bool _isLoggedOutDetected = false;
   bool _hasAutoLoggedInCurrentSession = false;
   bool _pendingAutoLoginAfterLoad = false;
@@ -169,6 +182,12 @@ class _PortalWebViewScreenState extends State<PortalWebViewScreen> with WidgetsB
           _handleCapturedCredentials(message.message);
         },
       )
+      ..addJavaScriptChannel(
+        'CampusDownloadChannel',
+        onMessageReceived: (message) {
+          _handleAcademicFileDownload(message.message);
+        },
+      )
       ..setNavigationDelegate(
         NavigationDelegate(
           onProgress: (progress) {
@@ -255,6 +274,7 @@ class _PortalWebViewScreenState extends State<PortalWebViewScreen> with WidgetsB
             } catch (e) {
               debugPrint('Error injecting scroll sync: \$e');
             }
+            _injectDownloadInterceptorScript(_controller);
           },
           onWebResourceError: (error) {
             if (_isRefreshing && mounted) {
@@ -286,13 +306,9 @@ class _PortalWebViewScreenState extends State<PortalWebViewScreen> with WidgetsB
               return NavigationDecision.prevent;
             }
 
-            // 2. Berkas Dokumen Unduhan (PDF, DOCX, PPTX) jika dibuka langsung
-            if (url.endsWith('.pdf') ||
-                url.endsWith('.docx') ||
-                url.endsWith('.pptx') ||
-                url.endsWith('.xlsx') ||
-                url.contains('/api/file/download/')) {
-              _launchExternalUrl(request.url);
+            // 2. Berkas Dokumen Unduhan (PDF, DOCX, PPTX, Modul, Cetak)
+            if (FileDownloadService.isDocumentUrl(request.url)) {
+              _handleAcademicFileDownload(request.url);
               return NavigationDecision.prevent;
             }
 
@@ -328,6 +344,86 @@ class _PortalWebViewScreenState extends State<PortalWebViewScreen> with WidgetsB
     _controller.loadRequest(Uri.parse(_currentUrl));
   }
 
+  void _handleMyUnpamLogoutNavigation(String url) {
+    debugPrint('[MyUnpam] Logout URL intercepted: $url');
+    _isLoggingOutMyUnpam = true;
+    _isMyUnpamLoginDetected = true;
+    if (_myUnpamController != null) {
+      _handleSsoRedirectAutoBypass(_myUnpamController!);
+    }
+  }
+
+  Future<void> _handleSsoRedirectAutoBypass(WebViewController controller) async {
+    try {
+      final res = await controller.runJavaScriptReturningResult(r'''
+        (function() {
+          function checkAndBypass() {
+            var bodyText = (document.body ? (document.body.innerText || document.body.textContent || '') : '').toLowerCase();
+            var isRedirectScreen = bodyText.indexOf('konfirmasi redirect') !== -1 ||
+                                   bodyText.indexOf('lanjutkan ke my unpam') !== -1 ||
+                                   bodyText.indexOf('apakah anda ingin melanjutkan ke aplikasi berikut') !== -1;
+
+            if (isRedirectScreen) {
+              var buttons = Array.from(document.querySelectorAll('a, button, input[type="button"], input[type="submit"], [role="button"], div[role="button"]'));
+              var proceedBtn = buttons.find(function(b) {
+                var t = (b.innerText || b.value || b.textContent || '').trim().toLowerCase();
+                var h = (b.href || '').toLowerCase();
+                return t.indexOf('lanjutkan ke my unpam') !== -1 ||
+                       (t.indexOf('lanjutkan') !== -1 && t.indexOf('unpam') !== -1) ||
+                       t.indexOf('lanjutkan') !== -1 ||
+                       h.indexOf('my.unpam.ac.id') !== -1;
+              });
+
+              if (proceedBtn) {
+                try {
+                  proceedBtn.focus();
+                  proceedBtn.click();
+                  proceedBtn.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true, view: window }));
+                  return 'clicked_proceed_button';
+                } catch(e) {}
+              }
+
+              window.location.href = 'https://my.unpam.ac.id/';
+              return 'redirected_to_myunpam';
+            }
+            return 'none';
+          }
+
+          var initialRes = checkAndBypass();
+          if (initialRes === 'none' && !window._ssoBypassObserverActive) {
+            window._ssoBypassObserverActive = true;
+            try {
+              var obs = new MutationObserver(function() {
+                var r = checkAndBypass();
+                if (r !== 'none') {
+                  try { obs.disconnect(); } catch(e) {}
+                }
+              });
+              obs.observe(document.body || document.documentElement, { childList: true, subtree: true });
+            } catch(e) {}
+
+            var attempts = 0;
+            var poll = setInterval(function() {
+              attempts++;
+              var r = checkAndBypass();
+              if (r !== 'none' || attempts > 20) {
+                clearInterval(poll);
+              }
+            }, 300);
+          }
+          return initialRes;
+        })();
+      ''');
+
+      final resStr = res.toString();
+      if (resStr.contains('clicked_proceed_button') || resStr.contains('redirected_to_myunpam')) {
+        debugPrint('[MyUnpam SSO] Auto-bypassed redirect confirmation: $resStr');
+      }
+    } catch (e) {
+      debugPrint('[MyUnpam SSO] Bypass check error: $e');
+    }
+  }
+
   void _ensureMyUnpamControllerInitialized() {
     if (_myUnpamController != null) return;
 
@@ -343,6 +439,29 @@ class _PortalWebViewScreenState extends State<PortalWebViewScreen> with WidgetsB
           });
         }
       })
+      ..addJavaScriptChannel(
+        'ScrollSyncChannel',
+        onMessageReceived: (message) {
+          final atTop = message.message == 'true';
+          if (atTop != _isMyUnpamAtTop && mounted) {
+            setState(() {
+              _isMyUnpamAtTop = atTop;
+            });
+          }
+        },
+      )
+      ..addJavaScriptChannel(
+        'BiometricCaptureChannel',
+        onMessageReceived: (message) {
+          _handleCapturedCredentials(message.message);
+        },
+      )
+      ..addJavaScriptChannel(
+        'CampusDownloadChannel',
+        onMessageReceived: (message) {
+          _handleAcademicFileDownload(message.message);
+        },
+      )
       ..setNavigationDelegate(
         NavigationDelegate(
           onProgress: (progress) {
@@ -361,20 +480,31 @@ class _PortalWebViewScreenState extends State<PortalWebViewScreen> with WidgetsB
               setState(() {
                 _myUnpamCurrentUrl = nextUrl;
               });
+              if (_currentNavIndex == 1) {
+                _detectLoginForm();
+              }
             }
           },
           onPageStarted: (url) {
             if (mounted) {
+              final isLogin = url.toLowerCase().contains('login') ||
+                  url.toLowerCase().contains('sso') ||
+                  url.toLowerCase().contains('auth');
               setState(() {
                 _myUnpamCurrentUrl = url;
                 _isMyUnpamLoading = true;
                 _myUnpamHasError = false;
                 _isMyUnpamAtTop = true;
+                if (_currentNavIndex == 1) {
+                  _isLoginPageDetected = isLogin;
+                }
               });
               _updateHistoryState();
             }
           },
           onPageFinished: (url) async {
+            final lowerUrl = url.toLowerCase();
+
             if (mounted) {
               final title = await _myUnpamController?.getTitle();
               setState(() {
@@ -387,6 +517,47 @@ class _PortalWebViewScreenState extends State<PortalWebViewScreen> with WidgetsB
               });
               _updateHistoryState();
             }
+
+            // 1. Injeksi interceptor unduhan berkas PDF
+            if (_myUnpamController != null) {
+              _injectDownloadInterceptorScript(_myUnpamController!);
+            }
+
+            // 2. Tangani otomatis jika baru saja logout atau di halaman konfirmasi SSO
+            if (_isLoggingOutMyUnpam ||
+                lowerUrl.contains('logout') ||
+                lowerUrl.contains('keluar') ||
+                lowerUrl.contains('signout')) {
+              _isLoggingOutMyUnpam = false;
+
+              // Jika dialihkan ke luar portal MyUnpam (misal dashboard SSO), kembalikan langsung ke halaman login MyUnpam
+              if (!url.startsWith('https://my.unpam.ac.id')) {
+                Future.delayed(const Duration(milliseconds: 250), () {
+                  if (mounted && _myUnpamController != null) {
+                    _myUnpamController!.loadRequest(Uri.parse('https://my.unpam.ac.id/'));
+                  }
+                });
+                return;
+              }
+            }
+
+            // 3. Bypass layar 'Konfirmasi Redirect' secara otomatis jika muncul
+            if (_myUnpamController != null) {
+              await _handleSsoRedirectAutoBypass(_myUnpamController!);
+            }
+
+            // 4. Deteksi form login MyUnpam & aktifkan listener tangkapan kredensial
+            _detectLoginForm();
+            _injectLoginCaptureScript();
+            Future.delayed(const Duration(milliseconds: 700), () {
+              if (mounted) {
+                if (_myUnpamController != null) {
+                  _handleSsoRedirectAutoBypass(_myUnpamController!);
+                }
+                _detectLoginForm();
+                _injectLoginCaptureScript();
+              }
+            });
           },
           onWebResourceError: (error) {
             if (_isRefreshing && mounted) {
@@ -406,6 +577,12 @@ class _PortalWebViewScreenState extends State<PortalWebViewScreen> with WidgetsB
           onNavigationRequest: (request) {
             final url = request.url.toLowerCase();
 
+            // Intersep Logout di MyUnpam
+            if (url.contains('logout') || url.contains('keluar') || url.contains('signout')) {
+              _handleMyUnpamLogoutNavigation(request.url);
+              return NavigationDecision.navigate;
+            }
+
             // 1. Eksternal Links
             if (url.contains('meet.google.com') ||
                 url.contains('zoom.us') ||
@@ -417,17 +594,9 @@ class _PortalWebViewScreenState extends State<PortalWebViewScreen> with WidgetsB
               return NavigationDecision.prevent;
             }
 
-            // 2. Berkas Dokumen Unduhan (PDF, DOCX, Cetak KRS/KHS)
-            if (url.endsWith('.pdf') ||
-                url.contains('.pdf?') ||
-                url.contains('export=pdf') ||
-                url.contains('format=pdf') ||
-                url.endsWith('.docx') ||
-                url.endsWith('.xlsx') ||
-                url.endsWith('.zip') ||
-                url.endsWith('.rar') ||
-                url.contains('/download/')) {
-              _launchExternalUrl(request.url);
+            // 2. Berkas Dokumen Unduhan (PDF, DOCX, Cetak KRS/KHS, Transkrip)
+            if (FileDownloadService.isDocumentUrl(request.url)) {
+              _handleAcademicFileDownload(request.url);
               return NavigationDecision.prevent;
             }
 
@@ -468,6 +637,10 @@ class _PortalWebViewScreenState extends State<PortalWebViewScreen> with WidgetsB
   }
 
   Future<void> _launchExternalUrl(String url) async {
+    if (FileDownloadService.isDocumentUrl(url)) {
+      await _handleAcademicFileDownload(url);
+      return;
+    }
     final uri = Uri.parse(url);
     try {
       if (await canLaunchUrl(uri)) {
@@ -724,22 +897,26 @@ class _PortalWebViewScreenState extends State<PortalWebViewScreen> with WidgetsB
   void _showAiPowerToolsMenu() {
     showModalBottomSheet(
       context: context,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
-      ),
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
       builder: (ctx) {
         return SafeArea(
-          child: Padding(
-            padding: const EdgeInsets.symmetric(vertical: 16),
+          child: Container(
+            constraints: BoxConstraints(
+              maxHeight: MediaQuery.of(ctx).size.height * 0.88,
+            ),
+            decoration: const BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+            ),
             child: Column(
               mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Center(
                   child: Container(
-                    width: 40,
+                    width: 42,
                     height: 4,
-                    margin: const EdgeInsets.only(bottom: 12),
+                    margin: const EdgeInsets.only(top: 12, bottom: 8),
                     decoration: BoxDecoration(
                       color: Colors.grey.shade300,
                       borderRadius: BorderRadius.circular(2),
@@ -747,185 +924,153 @@ class _PortalWebViewScreenState extends State<PortalWebViewScreen> with WidgetsB
                   ),
                 ),
                 Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 4),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
+                  padding: const EdgeInsets.fromLTRB(20, 4, 12, 10),
+                  child: Row(
                     children: [
-                      const Text(
-                        'Asisten Perkuliahan Cerdas',
-                        style: TextStyle(
-                          fontSize: 17,
-                          fontWeight: FontWeight.bold,
-                          color: AppTheme.textDark,
+                      Container(
+                        padding: const EdgeInsets.all(8),
+                        decoration: BoxDecoration(
+                          color: AppTheme.primaryBlue.withOpacity(0.1),
+                          borderRadius: BorderRadius.circular(10),
+                        ),
+                        child: const Icon(
+                          Icons.auto_awesome,
+                          color: AppTheme.primaryBlue,
+                          size: 20,
                         ),
                       ),
-                      const SizedBox(height: 2),
-                      Text(
-                        'Halaman: $_pageTitle',
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: const TextStyle(fontSize: 12, color: AppTheme.textMuted),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            const Text(
+                              'UNPAM AI Tools & Fitur Cerdas',
+                              style: TextStyle(
+                                fontSize: 16,
+                                fontWeight: FontWeight.bold,
+                                color: AppTheme.textDark,
+                              ),
+                            ),
+                            const SizedBox(height: 2),
+                            Text(
+                              '${_currentNavIndex == 1 ? "MyUnpam SIAKAD" : "Mentari LMS"} • $_pageTitle',
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: const TextStyle(fontSize: 12, color: AppTheme.textMuted),
+                            ),
+                          ],
+                        ),
+                      ),
+                      IconButton(
+                        icon: const Icon(Icons.close_rounded, color: AppTheme.textMuted, size: 22),
+                        onPressed: () => Navigator.pop(ctx),
+                        tooltip: 'Tutup',
                       ),
                     ],
                   ),
                 ),
-                const SizedBox(height: 10),
-                const Divider(height: 1),
+                const Divider(height: 1, color: AppTheme.cardBorder),
+                Flexible(
+                  child: SingleChildScrollView(
+                    physics: const BouncingScrollPhysics(),
+                    padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        // Opsi 1: AI Forum Diskusi
+                        _buildAiToolTile(
+                          icon: Icons.forum_rounded,
+                          iconColor: AppTheme.primaryBlue,
+                          iconBgColor: AppTheme.primaryBlue.withOpacity(0.1),
+                          title: 'AI Forum Diskusi',
+                          subtitle: 'Kaji topik diskusi dosen dan siapkan draf argumen bernalar akademis',
+                          onTap: () {
+                            Navigator.pop(ctx);
+                            _handleForumAutoDraft();
+                          },
+                        ),
 
-                // Opsi 1: AI Forum Diskusi
-                ListTile(
-                  contentPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 4),
-                  leading: Container(
-                    padding: const EdgeInsets.all(10),
-                    decoration: BoxDecoration(
-                      color: AppTheme.primaryBlue.withOpacity(0.1),
-                      shape: BoxShape.circle,
-                    ),
-                    child: const Icon(Icons.forum_rounded, color: AppTheme.primaryBlue, size: 22),
-                  ),
-                  title: const Text(
-                    'AI Forum Diskusi',
-                    style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold),
-                  ),
-                  subtitle: const Text(
-                    'Kaji topik diskusi dosen dan siapkan draf argumen bernalar akademis',
-                    style: TextStyle(fontSize: 12, color: AppTheme.textMuted),
-                  ),
-                  trailing: const Icon(Icons.arrow_forward_ios_rounded, size: 14, color: AppTheme.textMuted),
-                  onTap: () {
-                    Navigator.pop(ctx);
-                    _handleForumAutoDraft();
-                  },
-                ),
+                        // Opsi 2: AI Quiz Solver & Recommender
+                        _buildAiToolTile(
+                          icon: Icons.fact_check_rounded,
+                          iconColor: Colors.green.shade700,
+                          iconBgColor: Colors.green.shade50,
+                          title: 'AI Quiz Solver & Recommender',
+                          subtitle: 'Kaji butir soal pilihan ganda bersama ulasan konsep dan opsi rujukan',
+                          onTap: () {
+                            Navigator.pop(ctx);
+                            _handleLiveQuizSolver();
+                          },
+                        ),
 
-                // Opsi 2: AI Quiz
-                ListTile(
-                  contentPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 4),
-                  leading: Container(
-                    padding: const EdgeInsets.all(10),
-                    decoration: BoxDecoration(
-                      color: Colors.green.shade50,
-                      shape: BoxShape.circle,
-                    ),
-                    child: Icon(Icons.fact_check_rounded, color: Colors.green.shade700, size: 22),
-                  ),
-                  title: const Text(
-                    'AI Quiz',
-                    style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold),
-                  ),
-                  subtitle: const Text(
-                    'Kaji butir soal pilihan ganda bersama ulasan konsep dan opsi rujukan',
-                    style: TextStyle(fontSize: 12, color: AppTheme.textMuted),
-                  ),
-                  trailing: const Icon(Icons.arrow_forward_ios_rounded, size: 14, color: AppTheme.textMuted),
-                  onTap: () {
-                    Navigator.pop(ctx);
-                    _handleLiveQuizSolver();
-                  },
-                ),
+                        // Opsi 3: AI Pengisi Kuesioner Dosen
+                        _buildAiToolTile(
+                          icon: Icons.assignment_turned_in_rounded,
+                          iconColor: Colors.teal.shade700,
+                          iconBgColor: Colors.teal.shade50,
+                          title: 'AI Pengisi Kuesioner Dosen',
+                          subtitle: 'Deteksi butir evaluasi dosen/perkuliahan & isi otomatis sesuai preferensi',
+                          onTap: () {
+                            Navigator.pop(ctx);
+                            _handleQuestionnaireAutoFill();
+                          },
+                        ),
 
-                // Opsi 3: AI Pengisi Kuesioner
-                ListTile(
-                  contentPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 4),
-                  leading: Container(
-                    padding: const EdgeInsets.all(10),
-                    decoration: BoxDecoration(
-                      color: Colors.teal.shade50,
-                      shape: BoxShape.circle,
-                    ),
-                    child: Icon(Icons.assignment_turned_in_rounded, color: Colors.teal.shade700, size: 22),
-                  ),
-                  title: const Text(
-                    'AI Pengisi Kuesioner',
-                    style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold),
-                  ),
-                  subtitle: const Text(
-                    'Deteksi butir evaluasi dosen/perkuliahan & isi otomatis sesuai preferensi',
-                    style: TextStyle(fontSize: 12, color: AppTheme.textMuted),
-                  ),
-                  trailing: const Icon(Icons.arrow_forward_ios_rounded, size: 14, color: AppTheme.textMuted),
-                  onTap: () {
-                    Navigator.pop(ctx);
-                    _handleQuestionnaireAutoFill();
-                  },
-                ),
+                        // Opsi 4: Tanya AI Halaman Ini
+                        _buildAiToolTile(
+                          icon: Icons.chat_bubble_outline_rounded,
+                          iconColor: AppTheme.accentGold,
+                          iconBgColor: Colors.amber.shade50,
+                          title: 'Tanya AI Halaman Ini',
+                          subtitle: 'Kirim teks halaman ke ruang konsultasi akademik UNPAM AI',
+                          onTap: () {
+                            Navigator.pop(ctx);
+                            _consultWithAi();
+                          },
+                        ),
 
-                // Opsi 4: Tanya AI Halaman Ini
-                ListTile(
-                  contentPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 4),
-                  leading: Container(
-                    padding: const EdgeInsets.all(10),
-                    decoration: BoxDecoration(
-                      color: Colors.amber.shade50,
-                      shape: BoxShape.circle,
-                    ),
-                    child: const Icon(Icons.chat_bubble_outline_rounded, color: AppTheme.accentGold, size: 22),
-                  ),
-                  title: const Text(
-                    'Tanya AI Halaman Ini',
-                    style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold),
-                  ),
-                  subtitle: const Text(
-                    'Kirim teks halaman ke ruang konsultasi akademik UNPAM AI',
-                    style: TextStyle(fontSize: 12, color: AppTheme.textMuted),
-                  ),
-                  trailing: const Icon(Icons.arrow_forward_ios_rounded, size: 14, color: AppTheme.textMuted),
-                  onTap: () {
-                    Navigator.pop(ctx);
-                    _consultWithAi();
-                  },
-                ),
+                        // Opsi 5: AI Parafrase Akademik
+                        _buildAiToolTile(
+                          icon: Icons.auto_fix_high_rounded,
+                          iconColor: Colors.purple.shade700,
+                          iconBgColor: Colors.purple.shade50,
+                          title: 'AI Parafrase Akademik',
+                          subtitle: 'Parafrase teks tugas atau materi modul agar bebas plagiasi & bernalar ilmiah',
+                          onTap: () {
+                            Navigator.pop(ctx);
+                            _handleParaphraseNavigation();
+                          },
+                        ),
 
-                // Opsi 4: AI Parafrase Akademik
-                ListTile(
-                  contentPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 4),
-                  leading: Container(
-                    padding: const EdgeInsets.all(10),
-                    decoration: BoxDecoration(
-                      color: Colors.purple.shade50,
-                      shape: BoxShape.circle,
-                    ),
-                    child: Icon(Icons.auto_fix_high_rounded, color: Colors.purple.shade700, size: 22),
-                  ),
-                  title: const Text(
-                    'AI Parafrase Akademik',
-                    style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold),
-                  ),
-                  subtitle: const Text(
-                    'Parafrase teks tugas atau materi modul agar bebas plagiasi & bernalar ilmiah',
-                    style: TextStyle(fontSize: 12, color: AppTheme.textMuted),
-                  ),
-                  trailing: const Icon(Icons.arrow_forward_ios_rounded, size: 14, color: AppTheme.textMuted),
-                  onTap: () {
-                    Navigator.pop(ctx);
-                    _handleParaphraseNavigation();
-                  },
-                ),
+                        // Opsi 6: Unduh Berkas / Dokumen Halaman Ini
+                        _buildAiToolTile(
+                          icon: Icons.download_rounded,
+                          iconColor: Colors.indigo.shade700,
+                          iconBgColor: Colors.indigo.shade50,
+                          title: 'Unduh Berkas / PDF Halaman',
+                          subtitle: 'Unduh dokumen perkuliahan (Cetak KRS, KHS, Modul PDF) dengan sesi login aktif',
+                          onTap: () {
+                            Navigator.pop(ctx);
+                            _handleManualDocumentDownload();
+                          },
+                        ),
 
-                // Opsi 5: Biometric Auto-Login & Brankas Kredensial
-                ListTile(
-                  contentPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 4),
-                  leading: Container(
-                    padding: const EdgeInsets.all(10),
-                    decoration: BoxDecoration(
-                      color: Colors.amber.shade50,
-                      shape: BoxShape.circle,
+                        // Opsi 7: Biometric Auto-Login Vault
+                        _buildAiToolTile(
+                          icon: Icons.fingerprint_rounded,
+                          iconColor: AppTheme.accentGold,
+                          iconBgColor: Colors.amber.shade50,
+                          title: 'Biometric Auto-Login Vault',
+                          subtitle: 'Kelola akun UNPAM terenkripsi & masuk otomatis dengan sidik jari',
+                          onTap: () {
+                            Navigator.pop(ctx);
+                            BiometricVaultSheet.show(context);
+                          },
+                        ),
+                      ],
                     ),
-                    child: const Icon(Icons.fingerprint_rounded, color: AppTheme.accentGold, size: 22),
                   ),
-                  title: const Text(
-                    'Biometric Auto-Login',
-                    style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold),
-                  ),
-                  subtitle: const Text(
-                    'Kelola akun UNPAM terenkripsi & masuk otomatis dengan sidik jari',
-                    style: TextStyle(fontSize: 12, color: AppTheme.textMuted),
-                  ),
-                  trailing: const Icon(Icons.arrow_forward_ios_rounded, size: 14, color: AppTheme.textMuted),
-                  onTap: () {
-                    Navigator.pop(ctx);
-                    BiometricVaultSheet.show(context);
-                  },
                 ),
               ],
             ),
@@ -935,12 +1080,236 @@ class _PortalWebViewScreenState extends State<PortalWebViewScreen> with WidgetsB
     );
   }
 
+  Widget _buildAiToolTile({
+    required IconData icon,
+    required Color iconColor,
+    required Color iconBgColor,
+    required String title,
+    required String subtitle,
+    required VoidCallback onTap,
+  }) {
+    return Container(
+      margin: const EdgeInsets.only(bottom: 8),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: AppTheme.cardBorder.withOpacity(0.6)),
+      ),
+      child: ListTile(
+        contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 4),
+        leading: Container(
+          padding: const EdgeInsets.all(10),
+          decoration: BoxDecoration(
+            color: iconBgColor,
+            shape: BoxShape.circle,
+          ),
+          child: Icon(icon, color: iconColor, size: 22),
+        ),
+        title: Text(
+          title,
+          style: const TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: AppTheme.textDark),
+        ),
+        subtitle: Padding(
+          padding: const EdgeInsets.only(top: 2),
+          child: Text(
+            subtitle,
+            style: const TextStyle(fontSize: 12, color: AppTheme.textMuted, height: 1.3),
+          ),
+        ),
+        trailing: const Icon(Icons.arrow_forward_ios_rounded, size: 14, color: AppTheme.textMuted),
+        onTap: onTap,
+      ),
+    );
+  }
+
+  Future<void> _handleManualDocumentDownload() async {
+    final currentUrl = _currentNavIndex == 1 ? _myUnpamCurrentUrl : _currentUrl;
+    if (currentUrl.isEmpty) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Tidak ada halaman aktif untuk diunduh.')),
+        );
+      }
+      return;
+    }
+    await _handleAcademicFileDownload(currentUrl);
+  }
+
+  Future<void> _handleAcademicFileDownload(String url, {String? customName}) async {
+    if (!mounted || url.isEmpty) return;
+
+    final scaffoldMessenger = ScaffoldMessenger.of(context);
+    scaffoldMessenger.hideCurrentSnackBar();
+    scaffoldMessenger.showSnackBar(
+      const SnackBar(
+        content: Row(
+          children: [
+            SizedBox(
+              width: 18,
+              height: 18,
+              child: CircularProgressIndicator(
+                strokeWidth: 2,
+                color: Colors.white,
+              ),
+            ),
+            SizedBox(width: 12),
+            Expanded(
+              child: Text(
+                'Mengunduh berkas perkuliahan...',
+                style: TextStyle(fontSize: 13, color: Colors.white),
+              ),
+            ),
+          ],
+        ),
+        backgroundColor: AppTheme.primaryBlue,
+        duration: Duration(seconds: 4),
+      ),
+    );
+
+    final activeUrl = _currentNavIndex == 1 ? _myUnpamCurrentUrl : _currentUrl;
+    final cookies = await FileDownloadService().getSessionCookiesForUrl(url.isNotEmpty ? url : activeUrl);
+
+    final result = await FileDownloadService().downloadAndOpenFile(
+      url: url,
+      customFileName: customName,
+      explicitCookies: cookies,
+      userAgent: _customUserAgent,
+      referer: activeUrl,
+    );
+
+    if (!mounted) return;
+    scaffoldMessenger.hideCurrentSnackBar();
+
+    if (result.isSuccess && result.filePath != null) {
+      scaffoldMessenger.showSnackBar(
+        SnackBar(
+          content: Row(
+            children: [
+              const Icon(Icons.check_circle_rounded, color: Colors.greenAccent, size: 20),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Text(
+                  'Berkas ${result.fileName ?? "dokumen"} siap!',
+                  style: const TextStyle(fontSize: 13, color: Colors.white),
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ),
+            ],
+          ),
+          backgroundColor: AppTheme.textDark,
+          action: SnackBarAction(
+            label: 'BUKA',
+            textColor: AppTheme.accentGold,
+            onPressed: () {
+              OpenFilex.open(result.filePath!);
+            },
+          ),
+          duration: const Duration(seconds: 6),
+        ),
+      );
+    } else {
+      scaffoldMessenger.showSnackBar(
+        SnackBar(
+          content: Row(
+            children: [
+              const Icon(Icons.error_outline_rounded, color: Colors.amberAccent, size: 20),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Text(
+                  result.errorMessage ?? 'Gagal mengunduh berkas perkuliahan.',
+                  style: const TextStyle(fontSize: 13, color: Colors.white),
+                ),
+              ),
+            ],
+          ),
+          backgroundColor: Colors.red.shade900,
+          duration: const Duration(seconds: 5),
+        ),
+      );
+    }
+  }
+
+  Future<void> _injectDownloadInterceptorScript(WebViewController controller) async {
+    try {
+      await controller.runJavaScript(r'''
+        (function() {
+          if (window.__campusDownloadInterceptorInstalled) return;
+          window.__campusDownloadInterceptorInstalled = true;
+
+          function isDocumentUrl(u) {
+            if (!u || typeof u !== 'string') return false;
+            var low = u.toLowerCase().trim();
+            if (low.startsWith('data:application/pdf') || low.startsWith('data:application/octet-stream')) return true;
+            if (low.indexOf('.pdf') !== -1 ||
+                low.indexOf('.docx') !== -1 ||
+                low.indexOf('.xlsx') !== -1 ||
+                low.indexOf('.pptx') !== -1 ||
+                low.indexOf('.zip') !== -1 ||
+                low.indexOf('.rar') !== -1) return true;
+            if (low.indexOf('pluginfile.php') !== -1 ||
+                low.indexOf('/mod/resource/view.php') !== -1 ||
+                low.indexOf('forcedownload=1') !== -1 ||
+                low.indexOf('export=pdf') !== -1 ||
+                low.indexOf('format=pdf') !== -1 ||
+                low.indexOf('type=pdf') !== -1 ||
+                low.indexOf('download=pdf') !== -1 ||
+                low.indexOf('cetak=pdf') !== -1) return true;
+            if (low.indexOf('cetak_krs') !== -1 ||
+                low.indexOf('cetak_khs') !== -1 ||
+                low.indexOf('cetak_transkrip') !== -1 ||
+                low.indexOf('cetak_kartu') !== -1 ||
+                low.indexOf('cetak_tagihan') !== -1 ||
+                low.indexOf('cetak_kwitansi') !== -1 ||
+                low.indexOf('krs_cetak') !== -1 ||
+                low.indexOf('khs_cetak') !== -1 ||
+                low.indexOf('kartu_ujian') !== -1 ||
+                low.indexOf('/krs/cetak') !== -1 ||
+                low.indexOf('/khs/cetak') !== -1 ||
+                low.indexOf('/transkrip/cetak') !== -1) return true;
+            return false;
+          }
+
+          var originalWindowOpen = window.open;
+          window.open = function(url, target, features) {
+            if (url && isDocumentUrl(url)) {
+              if (window.CampusDownloadChannel) {
+                window.CampusDownloadChannel.postMessage(url);
+                return null;
+              }
+            }
+            return originalWindowOpen ? originalWindowOpen.call(window, url, target, features) : null;
+          };
+
+          document.addEventListener('click', function(ev) {
+            var el = ev.target;
+            while (el && el.tagName !== 'A' && el.tagName !== 'BUTTON' && el !== document.body) {
+              el = el.parentElement;
+            }
+            if (el && el.tagName === 'A') {
+              var href = el.getAttribute('href') || el.href || '';
+              var downloadAttr = el.getAttribute('download');
+              if (downloadAttr !== null || isDocumentUrl(href)) {
+                if (window.CampusDownloadChannel && href && !href.startsWith('javascript:')) {
+                  ev.preventDefault();
+                  ev.stopPropagation();
+                  window.CampusDownloadChannel.postMessage(el.href || href);
+                }
+              }
+            }
+          }, true);
+        })();
+      ''');
+    } catch (e) {
+      debugPrint('Error injecting download interceptor: $e');
+    }
+  }
+
 
 
   Future<void> _handleParaphraseNavigation() async {
     String selectedText = '';
     try {
-      final res = await _controller.runJavaScriptReturningResult(
+      final res = await _activeController.runJavaScriptReturningResult(
         r'''
         (function() {
           var sel = window.getSelection ? window.getSelection().toString() : '';
@@ -1015,12 +1384,23 @@ class _PortalWebViewScreenState extends State<PortalWebViewScreen> with WidgetsB
   }
 
   Future<void> _detectLoginForm() async {
-    final bool urlHasLogin = _currentUrl.toLowerCase().contains('login');
+    final activeCtrl = _activeController;
+    final currentActive = _activeUrl.toLowerCase();
+    final bool isMyUnpam = _currentNavIndex == 1;
+    final bool urlHasLogin = currentActive.contains('login') ||
+        currentActive.contains('sso') ||
+        currentActive.contains('auth') ||
+        (isMyUnpam && (currentActive.isEmpty || currentActive == myUnpamUrl || currentActive == 'https://my.unpam.ac.id' || currentActive == 'https://my.unpam.ac.id/'));
 
     try {
-      final res = await _controller.runJavaScriptReturningResult(r'''
+      final res = await activeCtrl.runJavaScriptReturningResult(r'''
         (function() {
-          var isLoginUrl = window.location.href.toLowerCase().indexOf('login') !== -1;
+          var uUrl = window.location.href.toLowerCase();
+          var isLoginUrl = uUrl.indexOf('login') !== -1 ||
+                           uUrl.indexOf('sso') !== -1 ||
+                           uUrl.indexOf('auth') !== -1 ||
+                           uUrl === 'https://my.unpam.ac.id/' ||
+                           uUrl === 'https://my.unpam.ac.id';
 
           // 1. Cek token login Mentari (JWT di localStorage)
           var hasMentariToken = false;
@@ -1029,17 +1409,30 @@ class _PortalWebViewScreenState extends State<PortalWebViewScreen> with WidgetsB
             hasMentariToken = !!(acc && acc !== 'null' && acc !== 'undefined' && acc !== '""');
           } catch(e) {}
 
-          // 2. Cek indikator akun aktif di Moodle / Mentari
+          // 2. Cek indikator akun aktif di Moodle / MyUnpam
           var hasProfileIndicator = hasMentariToken || 
-            !!document.querySelector('.usermenu .userbutton, .userpicture, [data-testid="AccountCircleIcon"], [aria-label*="akun" i], [aria-label*="profile" i], .avatar');
+            !!document.querySelector('.usermenu .userbutton, .userpicture, [data-testid="AccountCircleIcon"], [aria-label*="akun" i], [aria-label*="profile" i], .avatar, a[href*="logout" i], a[href*="keluar" i], .user-panel, #user-profile, .brand-text, .navbar-user');
 
           // 3. Cek form login nyata (wajib ada elemen input password dan username)
-          var p = document.querySelector('input[name="password"], input[type="password"], input#password');
-          var u = document.querySelector('input[name="username"], input#username, input[autocomplete="username"], input[name="user"], input[name="nim"]');
+          var p = document.querySelector('input[name="password"], input[type="password"], input#password, input[name="pass"], input#pass, input[name*="password" i], input[placeholder*="pass" i], input[placeholder*="sandi" i]');
+          var u = document.querySelector('input[name="username"], input#username, input[autocomplete="username"], input[name="user"], input[name="identity"], input#identity, input[name="nim"], input#nim, input[name="user_id"], input#user_id, input[name="email"], input#email, input[name="login"], input[placeholder*="nim" i], input[placeholder*="username" i], input[placeholder*="identitas" i]');
           if (!u && p) {
             var form = p.closest('form');
             if (form) {
-              u = form.querySelector('input[type="text"], input:not([type])');
+              u = form.querySelector('input[type="text"], input[type="email"], input[type="number"], input:not([type])');
+            }
+          }
+          if (!u && p) {
+            var allInputs = Array.from(document.querySelectorAll('input'));
+            var pIdx = allInputs.indexOf(p);
+            if (pIdx > 0) {
+              for (var k = pIdx - 1; k >= 0; k--) {
+                var typ = (allInputs[k].type || 'text').toLowerCase();
+                if (typ === 'text' || typ === 'email' || typ === 'number' || typ === '') {
+                  u = allInputs[k];
+                  break;
+                }
+              }
             }
           }
 
@@ -1135,7 +1528,7 @@ class _PortalWebViewScreenState extends State<PortalWebViewScreen> with WidgetsB
 
   Future<void> _injectLoginCaptureScript() async {
     try {
-      await _controller.runJavaScript(r'''
+      await _activeController.runJavaScript(r'''
         (function() {
           if (window._unpamBioCaptureAttached) return;
           window._unpamBioCaptureAttached = true;
@@ -1145,13 +1538,13 @@ class _PortalWebViewScreenState extends State<PortalWebViewScreen> with WidgetsB
           var successNotified = false;
 
           function findInputs() {
-            var p = document.querySelector('input[type="password"], input[name="password"], input#password');
-            var u = document.querySelector('input[name="username"], input#username, input[autocomplete="username"], input[name="user"], input[name="identity"], input[name="nim"], input[name="login"]');
+            var p = document.querySelector('input[type="password"], input[name="password"], input#password, input[name="pass"], input#pass, input[name*="password" i], input[placeholder*="pass" i], input[placeholder*="sandi" i]');
+            var u = document.querySelector('input[name="username"], input#username, input[autocomplete="username"], input[name="user"], input[name="identity"], input#identity, input[name="nim"], input#nim, input[name="user_id"], input#user_id, input[name="email"], input#email, input[name="login"], input[placeholder*="nim" i], input[placeholder*="username" i], input[placeholder*="identitas" i]');
 
             if (!u && p) {
               var container = p.closest('form') || p.closest('[role="form"]') || p.parentElement;
               if (container) {
-                u = container.querySelector('input[type="text"], input:not([type]), input[type="number"]');
+                u = container.querySelector('input[type="text"], input[type="email"], input[type="number"], input:not([type])');
               }
             }
             if (!u && p) {
@@ -1195,7 +1588,7 @@ class _PortalWebViewScreenState extends State<PortalWebViewScreen> with WidgetsB
           }
 
           function hasProfileDom() {
-            return !!document.querySelector('.usermenu .userbutton, .userpicture, [data-testid="AccountCircleIcon"], [aria-label*="akun" i], [aria-label*="profile" i], .avatar');
+            return !!document.querySelector('.usermenu .userbutton, .userpicture, [data-testid="AccountCircleIcon"], [aria-label*="akun" i], [aria-label*="profile" i], .avatar, a[href*="logout" i], a[href*="keluar" i], .user-panel, #user-profile, .brand-text, .navbar-user');
           }
 
           function notifySuccess() {
@@ -1253,7 +1646,7 @@ class _PortalWebViewScreenState extends State<PortalWebViewScreen> with WidgetsB
         })();
       ''');
     } catch (e) {
-      debugPrint('Error injecting capture script: $e');
+      debugPrint('Login capture script injection error: $e');
     }
   }
 
@@ -1351,9 +1744,12 @@ class _PortalWebViewScreenState extends State<PortalWebViewScreen> with WidgetsB
 
     if (nim.isEmpty || password.isEmpty) return;
 
+    final isMyUnpam = _currentNavIndex == 1;
+    final portalName = isMyUnpam ? 'MyUnpam' : 'Mentari';
+
     try {
       final js = '''
-      (function(nimVal, passVal) {
+      (function(nimVal, passVal, isMyUnpamFlag) {
         function fillInputElement(input, val) {
           if (!input) return false;
           try { input.focus(); } catch(e) {}
@@ -1403,11 +1799,27 @@ class _PortalWebViewScreenState extends State<PortalWebViewScreen> with WidgetsB
           var selectors = [
             'input[name="username"]',
             'input#username',
-            'input[autocomplete="username"]',
-            'input[name="user"]',
             'input[name="identity"]',
+            'input#identity',
             'input[name="nim"]',
-            'input[name="login"]'
+            'input#nim',
+            'input[name="user_id"]',
+            'input#user_id',
+            'input[name="userid"]',
+            'input#userid',
+            'input[name="npm"]',
+            'input#npm',
+            'input[name="mhs_nim"]',
+            'input#mhs_nim',
+            'input[name="user"]',
+            'input[name="email"]',
+            'input#email',
+            'input[autocomplete="username"]',
+            'input[name="login"]',
+            'input[placeholder*="nim" i]',
+            'input[placeholder*="username" i]',
+            'input[placeholder*="identitas" i]',
+            'input[placeholder*="email" i]'
           ];
           selectors.forEach(function(sel) {
             document.querySelectorAll(sel).forEach(function(el) {
@@ -1415,11 +1827,11 @@ class _PortalWebViewScreenState extends State<PortalWebViewScreen> with WidgetsB
             });
           });
 
-          var passInputs = document.querySelectorAll('input[type="password"], input[name="password"]');
+          var passInputs = document.querySelectorAll('input[type="password"], input[name="password"], input#password, input[name="pass"], input#pass, input[name*="password" i]');
           passInputs.forEach(function(passEl) {
             var parentForm = passEl.closest('form');
             if (parentForm) {
-              var candidates = parentForm.querySelectorAll('input[type="text"], input:not([type])');
+              var candidates = parentForm.querySelectorAll('input[type="text"], input[type="email"], input[type="number"], input:not([type])');
               candidates.forEach(function(el) {
                 var name = (el.name || '').toLowerCase();
                 var id = (el.id || '').toLowerCase();
@@ -1431,11 +1843,6 @@ class _PortalWebViewScreenState extends State<PortalWebViewScreen> with WidgetsB
             }
           });
 
-          var byPlaceholder = document.querySelectorAll('input[placeholder*="Pengguna" i], input[placeholder*="Username" i], input[placeholder*="NIM" i]');
-          byPlaceholder.forEach(function(el) {
-            if (!list.includes(el)) list.push(el);
-          });
-
           return list;
         }
 
@@ -1445,8 +1852,15 @@ class _PortalWebViewScreenState extends State<PortalWebViewScreen> with WidgetsB
             'input[name="password"]',
             'input[type="password"]',
             'input#password',
+            'input[name="pass"]',
+            'input#pass',
+            'input[name*="password" i]',
+            'input[name*="pass" i]',
             'input[autocomplete="current-password"]',
-            'input[autocomplete="password"]'
+            'input[autocomplete="password"]',
+            'input[placeholder*="pass" i]',
+            'input[placeholder*="kata sandi" i]',
+            'input[placeholder*="sandi" i]'
           ];
           selectors.forEach(function(sel) {
             document.querySelectorAll(sel).forEach(function(el) {
@@ -1456,13 +1870,44 @@ class _PortalWebViewScreenState extends State<PortalWebViewScreen> with WidgetsB
           return list;
         }
 
+        var bodyText = (document.body ? (document.body.innerText || document.body.textContent || '') : '').toLowerCase();
+        var isRedirectScreen = bodyText.indexOf('konfirmasi redirect') !== -1 ||
+                               bodyText.indexOf('lanjutkan ke my unpam') !== -1 ||
+                               bodyText.indexOf('apakah anda ingin melanjutkan ke aplikasi berikut') !== -1;
+        if (isRedirectScreen) {
+          var buttons = Array.from(document.querySelectorAll('a, button, input[type="button"], input[type="submit"], [role="button"], div[role="button"]'));
+          var proceedBtn = buttons.find(function(b) {
+            var t = (b.innerText || b.value || b.textContent || '').trim().toLowerCase();
+            var h = (b.href || '').toLowerCase();
+            return t.indexOf('lanjutkan ke my unpam') !== -1 ||
+                   (t.indexOf('lanjutkan') !== -1 && t.indexOf('unpam') !== -1) ||
+                   t.indexOf('lanjutkan') !== -1 ||
+                   h.indexOf('my.unpam.ac.id') !== -1;
+          });
+          if (proceedBtn) {
+            try {
+              proceedBtn.focus();
+              proceedBtn.click();
+              proceedBtn.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true, view: window }));
+              return JSON.stringify({ status: 'clicked_proceed_button' });
+            } catch(e) {}
+          }
+          window.location.href = 'https://my.unpam.ac.id/';
+          return JSON.stringify({ status: 'redirecting_to_login' });
+        }
+
         var uList = findUsernameInputs();
         var pList = findPasswordInputs();
 
         if (uList.length === 0 || pList.length === 0) {
           var currentUrl = window.location.href.toLowerCase();
-          if (currentUrl.indexOf('login') === -1) {
-            window.location.href = 'https://mentari.unpam.ac.id/login';
+          var isAtKnownPortalLogin = currentUrl.indexOf('login') !== -1 ||
+                                     currentUrl.indexOf('sso') !== -1 ||
+                                     currentUrl.indexOf('auth') !== -1 ||
+                                     currentUrl.indexOf('my.unpam.ac.id') !== -1;
+          if (!isAtKnownPortalLogin) {
+            var targetLogin = isMyUnpamFlag ? 'https://my.unpam.ac.id/' : 'https://mentari.unpam.ac.id/login';
+            window.location.href = targetLogin;
             return JSON.stringify({ status: 'redirecting_to_login' });
           }
           return JSON.stringify({ status: 'inputs_not_found', uCount: uList.length, pCount: pList.length });
@@ -1471,7 +1916,6 @@ class _PortalWebViewScreenState extends State<PortalWebViewScreen> with WidgetsB
         uList.forEach(function(u) { fillInputElement(u, nimVal); });
         pList.forEach(function(p) { fillInputElement(p, passVal); });
 
-        // Delayed blur & submission to allow React / Formik debounced state update (useEffect -> setTimeout) to commit values
         setTimeout(function() {
           uList.forEach(function(u) {
             try { u.dispatchEvent(new Event('blur', { bubbles: true, composed: true })); } catch(e) {}
@@ -1481,13 +1925,11 @@ class _PortalWebViewScreenState extends State<PortalWebViewScreen> with WidgetsB
           });
 
           setTimeout(function() {
-            // Periksa apakah ada widget Cloudflare Turnstile yang belum tuntas diverifikasi
             var turnstileInput = document.querySelector('input[name="cf-turnstile-response"]');
             var hasTurnstileWidget = !!(turnstileInput || document.querySelector('iframe[src*="cloudflare"], iframe[src*="turnstile"], .cf-turnstile'));
             var turnstileSolved = turnstileInput ? (turnstileInput.value && turnstileInput.value.length > 10) : false;
 
             if (hasTurnstileWidget && !turnstileSolved) {
-              // Kredensial telah terisi; tunggu verifikasi Turnstile selesai sebelum submit otomatis
               return;
             }
 
@@ -1495,17 +1937,17 @@ class _PortalWebViewScreenState extends State<PortalWebViewScreen> with WidgetsB
             for (var i = 0; i < pList.length; i++) {
               var form = pList[i].closest('form');
               if (form) {
-                submitBtn = form.querySelector('button[type="submit"], input[type="submit"], button#loginbtn, input#loginbtn');
+                submitBtn = form.querySelector('button[type="submit"], input[type="submit"], button#loginbtn, input#loginbtn, .btn-primary, .btn-login, button.btn-block');
                 if (submitBtn) break;
               }
             }
             if (!submitBtn) {
-              submitBtn = document.querySelector('button[type="submit"], input[type="submit"], button#loginbtn, input#loginbtn');
+              submitBtn = document.querySelector('button[type="submit"], input[type="submit"], button#loginbtn, input#loginbtn, .btn-primary, .btn-login, button.btn-block');
             }
             if (!submitBtn) {
-              var allBtns = Array.from(document.querySelectorAll('button'));
+              var allBtns = Array.from(document.querySelectorAll('button, input[type="button"], a.btn, [role="button"]'));
               submitBtn = allBtns.find(function(b) {
-                var txt = (b.textContent || '').trim().toLowerCase();
+                var txt = (b.textContent || b.value || '').trim().toLowerCase();
                 return txt === 'masuk' || txt === 'login' || txt === 'log in' || txt === 'sign in';
               });
             }
@@ -1513,6 +1955,7 @@ class _PortalWebViewScreenState extends State<PortalWebViewScreen> with WidgetsB
             if (submitBtn) {
               submitBtn.focus();
               submitBtn.click();
+              submitBtn.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true, view: window }));
               var btnPropsKey = Object.keys(submitBtn).find(function(k) { return k.startsWith('__reactProps\$'); });
               if (btnPropsKey && submitBtn[btnPropsKey] && typeof submitBtn[btnPropsKey].onClick === 'function') {
                 try {
@@ -1539,26 +1982,25 @@ class _PortalWebViewScreenState extends State<PortalWebViewScreen> with WidgetsB
           uCount: uList.length,
           pCount: pList.length
         });
-      })(${jsonEncode(nim)}, ${jsonEncode(password)});
+      })(${jsonEncode(nim)}, ${jsonEncode(password)}, $isMyUnpam);
       ''';
 
       final res = await _activeController.runJavaScriptReturningResult(js);
       final resStr = res.toString();
 
       if (mounted) {
-        if (resStr.contains('redirecting')) {
+        if (resStr.contains('redirecting') || resStr.contains('clicked_proceed_button')) {
           setState(() {
             _pendingAutoLoginAfterLoad = true;
           });
           ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text('Mengarahkan ke halaman login Mentari...'),
+            SnackBar(
+              content: Text('Mengarahkan ke halaman login $portalName...'),
               backgroundColor: AppTheme.primaryBlue,
-              duration: Duration(seconds: 2),
+              duration: const Duration(seconds: 2),
             ),
           );
         } else if (resStr.contains('inputs_not_found') && attempt < 4) {
-          // Page might still be mounting in React SPA; retry shortly
           Future.delayed(const Duration(milliseconds: 600), () {
             if (mounted) {
               _performBiometricLogin(attempt: attempt + 1);
@@ -1566,14 +2008,13 @@ class _PortalWebViewScreenState extends State<PortalWebViewScreen> with WidgetsB
           });
         } else {
           ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text('Mengisi kredensial dan memproses login Mentari...'),
+            SnackBar(
+              content: Text('Mengisi kredensial dan memproses login $portalName...'),
               backgroundColor: AppTheme.primaryBlue,
-              duration: Duration(seconds: 2),
+              duration: const Duration(seconds: 2),
             ),
           );
 
-          // Pemicu verifikasi agar banner login langsung lenyap saat dashboard termuat
           Future.delayed(const Duration(milliseconds: 1200), () {
             if (mounted) {
               _detectLoginForm();
@@ -1592,7 +2033,12 @@ class _PortalWebViewScreenState extends State<PortalWebViewScreen> with WidgetsB
       return;
     }
 
-    final isLogin = _isLoginPageDetected || _currentUrl.toLowerCase().contains('login');
+    final isMyUnpam = _currentNavIndex == 1;
+    final isLogin = _isLoginPageDetected ||
+        _activeUrl.toLowerCase().contains('login') ||
+        _activeUrl.toLowerCase().contains('sso') ||
+        _activeUrl.toLowerCase().contains('auth') ||
+        (isMyUnpam && (_activeUrl == myUnpamUrl || _activeUrl == 'https://my.unpam.ac.id' || _activeUrl == 'https://my.unpam.ac.id/'));
     if (isLogin) {
       _performBiometricLogin();
     } else {
@@ -1603,6 +2049,7 @@ class _PortalWebViewScreenState extends State<PortalWebViewScreen> with WidgetsB
   void _showBiometricQuickMenu(BiometricProvider bioProv) {
     showModalBottomSheet(
       context: context,
+      isScrollControlled: true,
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
       ),
@@ -1665,14 +2112,22 @@ class _PortalWebViewScreenState extends State<PortalWebViewScreen> with WidgetsB
                     child: const Icon(Icons.login_rounded, color: AppTheme.accentGold, size: 20),
                   ),
                   title: const Text('Buka Halaman Login & Masuk Sekarang', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13.5)),
-                  subtitle: const Text('Arahkan langsung ke form login Mentari dan verifikasi sidik jari.', style: TextStyle(fontSize: 11.5, color: AppTheme.textMuted)),
+                  subtitle: Text(
+                    'Arahkan langsung ke form login ${_currentNavIndex == 1 ? "MyUnpam" : "Mentari"} dan verifikasi sidik jari.',
+                    style: const TextStyle(fontSize: 11.5, color: AppTheme.textMuted),
+                  ),
                   trailing: const Icon(Icons.arrow_forward_ios_rounded, size: 14, color: AppTheme.textMuted),
                   onTap: () {
                     Navigator.pop(ctx);
                     setState(() {
                       _pendingAutoLoginAfterLoad = true;
                     });
-                    _navigateToUrl('https://mentari.unpam.ac.id/login');
+                    if (_currentNavIndex == 1) {
+                      _ensureMyUnpamControllerInitialized();
+                      _myUnpamController?.loadRequest(Uri.parse(myUnpamUrl));
+                    } else {
+                      _navigateToUrl('https://mentari.unpam.ac.id/login');
+                    }
                   },
                 ),
                 ListTile(
@@ -1758,9 +2213,9 @@ class _PortalWebViewScreenState extends State<PortalWebViewScreen> with WidgetsB
                   crossAxisAlignment: CrossAxisAlignment.start,
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    const Text(
-                      'Form Login Mentari Terdeteksi',
-                      style: TextStyle(
+                    Text(
+                      'Form Login ${_currentNavIndex == 1 ? "MyUnpam" : "Mentari"} Terdeteksi',
+                      style: const TextStyle(
                         color: Colors.white,
                         fontWeight: FontWeight.bold,
                         fontSize: 12.5,
@@ -3827,7 +4282,7 @@ class _PortalWebViewScreenState extends State<PortalWebViewScreen> with WidgetsB
         bottomNavigationBar: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            if (_currentNavIndex == 0 && (_isLoginPageDetected || _isLoggedOutDetected)) _buildBiometricLoginBanner(),
+            if ((_currentNavIndex == 0 || _currentNavIndex == 1) && (_isLoginPageDetected || _isLoggedOutDetected)) _buildBiometricLoginBanner(),
             _buildBottomNav(),
           ],
         ),
@@ -4018,10 +4473,12 @@ class _PortalWebViewScreenState extends State<PortalWebViewScreen> with WidgetsB
         if (idx == 0) {
           setState(() => _currentNavIndex = 0);
           _updateHistoryState();
+          _detectLoginForm();
         } else if (idx == 1) {
           _ensureMyUnpamControllerInitialized();
           setState(() => _currentNavIndex = 1);
           _updateHistoryState();
+          _detectLoginForm();
         } else if (idx == 2) {
           final previousTab = _currentNavIndex;
           await Navigator.push(

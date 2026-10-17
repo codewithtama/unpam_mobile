@@ -13,6 +13,7 @@ import 'package:unpam_mobile/widgets/app_gate.dart';
 import 'package:unpam_mobile/models/github_release.dart';
 import 'package:unpam_mobile/core/services/update_checker_service.dart';
 import 'package:unpam_mobile/widgets/release_history_dialog.dart';
+import 'package:unpam_mobile/core/services/file_download_service.dart';
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
@@ -359,4 +360,81 @@ void main() {
       expect(find.byIcon(Icons.refresh_rounded), findsOneWidget);
     });
   });
+
+  group('FileDownloadService Document URL Detection Tests', () {
+    test('Correctly identifies academic PDF and document file URLs', () {
+      expect(FileDownloadService.isDocumentUrl('https://mentari.unpam.ac.id/pluginfile.php/123/mod_resource/content/1/Modul_1.pdf'), isTrue);
+      expect(FileDownloadService.isDocumentUrl('https://mentari.unpam.ac.id/mod/resource/view.php?id=88319'), isTrue);
+      expect(FileDownloadService.isDocumentUrl('https://mentari.unpam.ac.id/mod/assign/view.php?id=123&forcedownload=1'), isTrue);
+      expect(FileDownloadService.isDocumentUrl('https://my.unpam.ac.id/cetak_krs.php?smt=5'), isTrue);
+      expect(FileDownloadService.isDocumentUrl('https://my.unpam.ac.id/cetak_khs.php?ta=20252'), isTrue);
+      expect(FileDownloadService.isDocumentUrl('https://my.unpam.ac.id/cetak_transkrip.php'), isTrue);
+      expect(FileDownloadService.isDocumentUrl('https://my.unpam.ac.id/kartu_ujian.php'), isTrue);
+      expect(FileDownloadService.isDocumentUrl('https://my.unpam.ac.id/export?format=pdf'), isTrue);
+      expect(FileDownloadService.isDocumentUrl('data:application/pdf;base64,JVBERi0xLjQK...'), isTrue);
+    });
+
+    test('Ignores regular non-document portal navigation URLs', () {
+      expect(FileDownloadService.isDocumentUrl('https://mentari.unpam.ac.id/login/index.php'), isFalse);
+      expect(FileDownloadService.isDocumentUrl('https://mentari.unpam.ac.id/my/'), isFalse);
+      expect(FileDownloadService.isDocumentUrl('https://mentari.unpam.ac.id/course/view.php?id=432'), isFalse);
+      expect(FileDownloadService.isDocumentUrl('https://my.unpam.ac.id/dashboard'), isFalse);
+      expect(FileDownloadService.isDocumentUrl('https://my.unpam.ac.id/profil_mahasiswa'), isFalse);
+      expect(FileDownloadService.isDocumentUrl(''), isFalse);
+    });
+
+    test('Handles invalid URL gracefully in FileDownloadService', () async {
+      final service = FileDownloadService();
+      final result = await service.downloadAndOpenFile(url: 'invalid-url-string');
+
+      expect(result.isSuccess, isFalse);
+      expect(result.errorMessage, contains('tidak valid'));
+    });
+  });
+
+  group('MyUnpam Logout & SSO Redirect Detection Tests', () {
+    test('Correctly identifies SSO redirect confirmation text', () {
+      bool isRedirect(String text) {
+        final lower = text.toLowerCase();
+        return lower.contains('konfirmasi redirect') ||
+            lower.contains('lanjutkan ke my unpam') ||
+            lower.contains('apakah anda ingin melanjutkan ke aplikasi berikut');
+      }
+
+      expect(isRedirect('Konfirmasi Redirect: Anda berhasil login.'), isTrue);
+      expect(isRedirect('Lanjutkan ke MY UNPAM'), isTrue);
+      expect(isRedirect('Apakah Anda ingin melanjutkan ke aplikasi berikut?'), isTrue);
+      expect(isRedirect('Selamat Datang di Portal Mahasiswa Mentari UNPAM'), isFalse);
+      expect(isRedirect('Dashboard Akademik MyUnpam'), isFalse);
+    });
+
+    test('Correctly identifies logout and signout navigation requests', () {
+      bool isLogoutUrl(String url) {
+        final lower = url.toLowerCase();
+        return lower.contains('logout') || lower.contains('keluar') || lower.contains('signout');
+      }
+
+      expect(isLogoutUrl('https://my.unpam.ac.id/auth/logout'), isTrue);
+      expect(isLogoutUrl('https://satu.unpam.ac.id/logout?redirect=myunpam'), isTrue);
+      expect(isLogoutUrl('https://my.unpam.ac.id/keluar.php'), isTrue);
+      expect(isLogoutUrl('https://my.unpam.ac.id/dashboard'), isFalse);
+      expect(isLogoutUrl('https://my.unpam.ac.id/krs'), isFalse);
+    });
+
+    test('Correctly identifies MyUnpam login entrypoint and portal roots', () {
+      bool isMyUnpamLogin(String url, bool hasProfile) {
+        final lower = url.toLowerCase();
+        final isRoot = lower.isEmpty || lower == 'https://my.unpam.ac.id/' || lower == 'https://my.unpam.ac.id';
+        final isLogin = lower.contains('login') || lower.contains('sso') || lower.contains('auth');
+        return (isRoot || isLogin) && !hasProfile;
+      }
+
+      expect(isMyUnpamLogin('https://my.unpam.ac.id/', false), isTrue);
+      expect(isMyUnpamLogin('https://my.unpam.ac.id', false), isTrue);
+      expect(isMyUnpamLogin('https://sso.unpam.ac.id/login', false), isTrue);
+      expect(isMyUnpamLogin('https://my.unpam.ac.id/', true), isFalse);
+      expect(isMyUnpamLogin('https://my.unpam.ac.id/dashboard', false), isFalse);
+    });
+  });
 }
+
