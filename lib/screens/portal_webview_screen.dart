@@ -67,6 +67,19 @@ class _PortalWebViewScreenState extends State<PortalWebViewScreen> with WidgetsB
   static const double _refreshTriggerDistance = 80.0;
 
   static const String mentariUrl = 'https://mentari.unpam.ac.id/';
+  static const String myUnpamUrl = 'https://my.unpam.ac.id/';
+
+  WebViewController? _myUnpamController;
+  int _myUnpamProgress = 0;
+  bool _isMyUnpamLoading = false;
+  bool _myUnpamHasError = false;
+  String _myUnpamErrorMessage = '';
+  String _myUnpamCurrentUrl = '';
+  String _myUnpamPageTitle = 'MyUnpam Portal';
+  bool _isMyUnpamAtTop = true;
+
+  WebViewController get _activeController =>
+      (_currentNavIndex == 1 && _myUnpamController != null) ? _myUnpamController! : _controller;
 
   @override
   void initState() {
@@ -311,8 +324,138 @@ class _PortalWebViewScreenState extends State<PortalWebViewScreen> with WidgetsB
     _controller.loadRequest(Uri.parse(_currentUrl));
   }
 
+  void _ensureMyUnpamControllerInitialized() {
+    if (_myUnpamController != null) return;
+
+    _myUnpamController = WebViewController()
+      ..setJavaScriptMode(JavaScriptMode.unrestricted)
+      ..setUserAgent(_customUserAgent)
+      ..setBackgroundColor(Colors.white)
+      ..setOnScrollPositionChange((change) {
+        final atTop = change.y <= 1;
+        if (atTop != _isMyUnpamAtTop && mounted) {
+          setState(() {
+            _isMyUnpamAtTop = atTop;
+          });
+        }
+      })
+      ..setNavigationDelegate(
+        NavigationDelegate(
+          onProgress: (progress) {
+            if (mounted) {
+              final nextProgress = progress.clamp(0, 100);
+              final nextLoading = nextProgress < 100;
+              setState(() {
+                _myUnpamProgress = nextProgress;
+                _isMyUnpamLoading = nextLoading;
+              });
+            }
+          },
+          onUrlChange: (change) {
+            final nextUrl = change.url;
+            if (nextUrl != null && mounted) {
+              setState(() {
+                _myUnpamCurrentUrl = nextUrl;
+              });
+            }
+          },
+          onPageStarted: (url) {
+            if (mounted) {
+              setState(() {
+                _myUnpamCurrentUrl = url;
+                _isMyUnpamLoading = true;
+                _myUnpamHasError = false;
+                _isMyUnpamAtTop = true;
+              });
+              _updateHistoryState();
+            }
+          },
+          onPageFinished: (url) async {
+            if (mounted) {
+              final title = await _myUnpamController?.getTitle();
+              setState(() {
+                _myUnpamCurrentUrl = url;
+                _isMyUnpamLoading = false;
+                _isRefreshing = false;
+                if (title != null && title.trim().isNotEmpty) {
+                  _myUnpamPageTitle = title.trim();
+                }
+              });
+              _updateHistoryState();
+            }
+          },
+          onWebResourceError: (error) {
+            if (_isRefreshing && mounted) {
+              setState(() => _isRefreshing = false);
+            }
+            if (error.errorCode == -999 || error.description.contains('ERR_ABORTED')) {
+              return;
+            }
+            if (mounted && (error.isForMainFrame == true || _myUnpamProgress < 30)) {
+              setState(() {
+                _myUnpamHasError = true;
+                _myUnpamErrorMessage = error.description;
+                _isMyUnpamLoading = false;
+              });
+            }
+          },
+          onNavigationRequest: (request) {
+            final url = request.url.toLowerCase();
+
+            // 1. Eksternal Links
+            if (url.contains('meet.google.com') ||
+                url.contains('zoom.us') ||
+                url.contains('wa.me') ||
+                url.contains('api.whatsapp.com') ||
+                url.startsWith('mailto:') ||
+                url.startsWith('tel:')) {
+              _launchExternalUrl(request.url);
+              return NavigationDecision.prevent;
+            }
+
+            // 2. Berkas Dokumen Unduhan (PDF, DOCX, Cetak KRS/KHS)
+            if (url.endsWith('.pdf') ||
+                url.contains('.pdf?') ||
+                url.contains('export=pdf') ||
+                url.contains('format=pdf') ||
+                url.endsWith('.docx') ||
+                url.endsWith('.xlsx') ||
+                url.endsWith('.zip') ||
+                url.endsWith('.rar') ||
+                url.contains('/download/')) {
+              _launchExternalUrl(request.url);
+              return NavigationDecision.prevent;
+            }
+
+            return NavigationDecision.navigate;
+          },
+        ),
+      );
+
+    if (_myUnpamController!.platform is AndroidWebViewController) {
+      final androidController = _myUnpamController!.platform as AndroidWebViewController;
+      androidController.setMediaPlaybackRequiresUserGesture(false);
+      androidController.setMixedContentMode(MixedContentMode.alwaysAllow);
+      androidController.setAllowContentAccess(true);
+      androidController.setAllowFileAccess(true);
+
+      try {
+        final cookieManager = WebViewCookieManager();
+        if (cookieManager.platform is AndroidWebViewCookieManager) {
+          (cookieManager.platform as AndroidWebViewCookieManager)
+              .setAcceptThirdPartyCookies(androidController, true);
+        }
+      } catch (e) {
+        debugPrint('Third party cookie setup error for MyUnpam: $e');
+      }
+    }
+
+    _myUnpamCurrentUrl = myUnpamUrl;
+    _myUnpamController!.loadRequest(Uri.parse(myUnpamUrl));
+  }
+
   Future<void> _updateHistoryState() async {
-    final canBack = await _controller.canGoBack();
+    final canBack = await _activeController.canGoBack();
     if (mounted) {
       setState(() {
         _canGoBack = canBack;
@@ -340,8 +483,15 @@ class _PortalWebViewScreenState extends State<PortalWebViewScreen> with WidgetsB
   void _handleBackNavigation(bool didPop, dynamic result) async {
     if (didPop) return;
 
-    if (await _controller.canGoBack()) {
-      await _controller.goBack();
+    if (await _activeController.canGoBack()) {
+      await _activeController.goBack();
+      _updateHistoryState();
+      return;
+    }
+
+    // Jika sedang di tab MyUnpam dan sudah di halaman awal, kembali ke tab Mentari
+    if (_currentNavIndex == 1) {
+      setState(() => _currentNavIndex = 0);
       _updateHistoryState();
       return;
     }
@@ -1375,7 +1525,7 @@ class _PortalWebViewScreenState extends State<PortalWebViewScreen> with WidgetsB
       })(${jsonEncode(nim)}, ${jsonEncode(password)});
       ''';
 
-      final res = await _controller.runJavaScriptReturningResult(js);
+      final res = await _activeController.runJavaScriptReturningResult(js);
       final resStr = res.toString();
 
       if (mounted) {
@@ -3165,7 +3315,7 @@ class _PortalWebViewScreenState extends State<PortalWebViewScreen> with WidgetsB
   Future<void> _consultWithAi() async {
     String extracted = '';
     try {
-      final raw = await _controller.runJavaScriptReturningResult(
+      final raw = await _activeController.runJavaScriptReturningResult(
         r'''
         (function() {
           var selectors = ['.soal', '.question', '.quiz-content', '.card-body', 'form', 'article', 'main'];
@@ -3185,18 +3335,21 @@ class _PortalWebViewScreenState extends State<PortalWebViewScreen> with WidgetsB
       }
     } catch (_) {}
 
+    final activeTitle = _currentNavIndex == 1 ? _myUnpamPageTitle : _pageTitle;
+    final portalName = _currentNavIndex == 1 ? 'MyUnpam (SIAKAD)' : 'Mentari (LMS)';
+
     final buffer = StringBuffer();
     if (extracted.trim().isNotEmpty) {
-      buffer.writeln('Saya sedang membuka halaman perkuliahan UNPAM: "$_pageTitle".');
-      buffer.writeln('\nBerikut teks soal/tugas/materi yang tampil di layar saya:\n"""\n${extracted.trim()}\n"""');
-      buffer.writeln('\nTolong jawab dan jelaskan secara tepat: berikan opsi jawaban yang benar (jika soal kuis) atau solusi kode/uraian (jika tugas), serta jelaskan konsep dasarnya.');
+      buffer.writeln('Saya sedang membuka halaman $portalName: "$activeTitle".');
+      buffer.writeln('\nBerikut teks/informasi yang tampil di layar saya:\n"""\n${extracted.trim()}\n"""');
+      buffer.writeln('\nTolong bantu telaah atau jelaskan materi/informasi perkuliahan di atas secara tepat, ringkas, dan edukatif.');
     } else {
-      buffer.writeln('Saya sedang mempelajari materi perkuliahan "$_pageTitle" di portal UNPAM.');
-      buffer.writeln('Tolong berikan rangkuman konsep penting materi ini dan kisi-kisi pemahaman untuk kuis atau tugas.');
+      buffer.writeln('Saya sedang membuka $portalName "$activeTitle".');
+      buffer.writeln('Tolong berikan ringkasan penting dan panduan akademik yang relevan.');
     }
 
     if (!mounted) return;
-    context.read<AiProvider>().setSelectedCourse(_pageTitle);
+    context.read<AiProvider>().setSelectedCourse(activeTitle);
     Navigator.push(
       context,
       MaterialPageRoute(
@@ -3215,7 +3368,7 @@ class _PortalWebViewScreenState extends State<PortalWebViewScreen> with WidgetsB
     _hasHapticed = false;
 
     // Asynchronous double-check scroll position from DOM
-    _controller
+    _activeController
         .runJavaScriptReturningResult('window.scrollY || document.documentElement.scrollTop || 0;')
         .then((res) {
       final num? y = num.tryParse(res.toString());
@@ -3312,13 +3465,17 @@ class _PortalWebViewScreenState extends State<PortalWebViewScreen> with WidgetsB
       _isRefreshing = true;
       _isPulling = false;
       _pullDistance = 0.0;
-      _hasError = false;
+      if (_currentNavIndex == 1) {
+        _myUnpamHasError = false;
+      } else {
+        _hasError = false;
+      }
     });
 
     try {
-      await _controller.reload();
+      await _activeController.reload();
     } catch (e) {
-      debugPrint('WebView reload error: \$e');
+      debugPrint('WebView reload error: $e');
     }
 
     // Safety timeout in case navigation stalls
@@ -3401,13 +3558,17 @@ class _PortalWebViewScreenState extends State<PortalWebViewScreen> with WidgetsB
         backgroundColor: Colors.white,
         appBar: _buildTopAppBar(),
         body: Column(
-          children: [
-            // Progress Bar saat loading halaman
-            if (_isLoading)
+          children: [            // Progress Bar saat loading halaman
+            if ((_currentNavIndex == 0 && _isLoading) || (_currentNavIndex == 1 && _isMyUnpamLoading))
               TweenAnimationBuilder<double>(
                 duration: const Duration(milliseconds: 180),
                 curve: Curves.easeOutCubic,
-                tween: Tween<double>(begin: 0, end: _progress > 0 ? _progress / 100.0 : 0),
+                tween: Tween<double>(
+                  begin: 0,
+                  end: (_currentNavIndex == 0 ? _progress : _myUnpamProgress) > 0
+                      ? (_currentNavIndex == 0 ? _progress : _myUnpamProgress) / 100.0
+                      : 0,
+                ),
                 builder: (_, value, __) => LinearProgressIndicator(
                   value: value <= 0 ? null : value,
                   minHeight: 3,
@@ -3437,21 +3598,40 @@ class _PortalWebViewScreenState extends State<PortalWebViewScreen> with WidgetsB
 
                   return Stack(
                     children: [
-                      // Konten Utama: WebView dengan gesture listener untuk Pull-to-Refresh
-                      Listener(
-                        behavior: HitTestBehavior.translucent,
-                        onPointerDown: _onPointerDown,
-                        onPointerMove: _onPointerMove,
-                        onPointerUp: _onPointerUp,
-                        onPointerCancel: _onPointerCancel,
-                        child: WebViewWidget(controller: _controller),
+                      // Konten Utama: IndexedStack 2 Portal (Mentari & MyUnpam)
+                      IndexedStack(
+                        index: _currentNavIndex == 1 ? 1 : 0,
+                        children: [
+                          // Tab 0: Mentari
+                          Listener(
+                            behavior: HitTestBehavior.translucent,
+                            onPointerDown: _onPointerDown,
+                            onPointerMove: _onPointerMove,
+                            onPointerUp: _onPointerUp,
+                            onPointerCancel: _onPointerCancel,
+                            child: WebViewWidget(controller: _controller),
+                          ),
+                          // Tab 1: MyUnpam
+                          _myUnpamController != null
+                              ? Listener(
+                                  behavior: HitTestBehavior.translucent,
+                                  onPointerDown: _onPointerDown,
+                                  onPointerMove: _onPointerMove,
+                                  onPointerUp: _onPointerUp,
+                                  onPointerCancel: _onPointerCancel,
+                                  child: WebViewWidget(controller: _myUnpamController!),
+                                )
+                              : const Center(
+                                  child: CircularProgressIndicator(color: AppTheme.primaryBlue),
+                                ),
+                        ],
                       ),
 
                       // Floating Pull-to-Refresh Indicator
                       _buildPullToRefreshIndicator(),
 
                       // Tampilan Offline / Gagal Muat (Dapat juga di-pull untuk refresh)
-                      if (_hasError)
+                      if ((_currentNavIndex == 0 && _hasError) || (_currentNavIndex == 1 && _myUnpamHasError))
                         Container(
                           color: Colors.white,
                           width: double.infinity,
@@ -3473,14 +3653,16 @@ class _PortalWebViewScreenState extends State<PortalWebViewScreen> with WidgetsB
                                   child: Icon(Icons.wifi_off_rounded, size: 52, color: Colors.red.shade400),
                                 ),
                                 const SizedBox(height: 18),
-                                const Text(
-                                  'Gagal Memuat Halaman',
+                                Text(
+                                  _currentNavIndex == 1 ? 'Gagal Memuat MyUnpam' : 'Gagal Memuat Mentari',
                                   textAlign: TextAlign.center,
-                                  style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: AppTheme.textDark),
+                                  style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: AppTheme.textDark),
                                 ),
                                 const SizedBox(height: 8),
                                 Text(
-                                  _errorMessage.isNotEmpty ? _errorMessage : 'Periksa koneksi internet Anda atau coba muat ulang.',
+                                  (_currentNavIndex == 1 ? _myUnpamErrorMessage : _errorMessage).isNotEmpty
+                                      ? (_currentNavIndex == 1 ? _myUnpamErrorMessage : _errorMessage)
+                                      : 'Periksa koneksi internet Anda atau coba muat ulang.',
                                   textAlign: TextAlign.center,
                                   style: const TextStyle(fontSize: 13, color: AppTheme.textMuted),
                                 ),
@@ -3492,7 +3674,13 @@ class _PortalWebViewScreenState extends State<PortalWebViewScreen> with WidgetsB
                                   children: [
                                     ElevatedButton.icon(
                                       onPressed: () {
-                                        setState(() => _hasError = false);
+                                        setState(() {
+                                          if (_currentNavIndex == 1) {
+                                            _myUnpamHasError = false;
+                                          } else {
+                                            _hasError = false;
+                                          }
+                                        });
                                         _startRefresh();
                                       },
                                       icon: const Icon(Icons.refresh_rounded, size: 18),
@@ -3509,19 +3697,24 @@ class _PortalWebViewScreenState extends State<PortalWebViewScreen> with WidgetsB
                                       label: const Text('Reset Sesi & Cache'),
                                     ),
                                     OutlinedButton.icon(
-                                      onPressed: () => _navigateToUrl(mentariUrl),
+                                      onPressed: () {
+                                        if (_currentNavIndex == 1) {
+                                          _myUnpamController?.loadRequest(Uri.parse(myUnpamUrl));
+                                        } else {
+                                          _navigateToUrl(mentariUrl);
+                                        }
+                                      },
                                       icon: const Icon(Icons.home_rounded, size: 18),
-                                      label: const Text('Ke Beranda Mentari'),
+                                      label: Text(_currentNavIndex == 1 ? 'Ke Beranda MyUnpam' : 'Ke Beranda Mentari'),
                                     ),
                                   ],
                                 ),
                               ],
-                            ),
                           ),
                         ),
 
                       // Banner Pemulihan jika terdeteksi Layar Putih / SPA Blank
-                      if (_isWhiteScreenDetected && !_hasError && !_isLoading)
+                      if (_currentNavIndex == 0 && _isWhiteScreenDetected && !_hasError && !_isLoading)
                         _buildWhiteScreenRecoveryBanner(),
 
 
@@ -3614,7 +3807,7 @@ class _PortalWebViewScreenState extends State<PortalWebViewScreen> with WidgetsB
         bottomNavigationBar: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            if (_isLoginPageDetected || _isLoggedOutDetected) _buildBiometricLoginBanner(),
+            if (_currentNavIndex == 0 && (_isLoginPageDetected || _isLoggedOutDetected)) _buildBiometricLoginBanner(),
             _buildBottomNav(),
           ],
         ),
@@ -3623,7 +3816,7 @@ class _PortalWebViewScreenState extends State<PortalWebViewScreen> with WidgetsB
   }
 
   PreferredSizeWidget _buildTopAppBar() {
-    final bool isMentari = _currentUrl.contains('mentari');
+    final bool isMyUnpam = _currentNavIndex == 1;
 
     return AppBar(
       elevation: 1,
@@ -3634,7 +3827,7 @@ class _PortalWebViewScreenState extends State<PortalWebViewScreen> with WidgetsB
               tooltip: 'Kembali',
               icon: const Icon(Icons.arrow_back_rounded, color: Colors.white, size: 22),
               onPressed: () async {
-                await _controller.goBack();
+                await _activeController.goBack();
                 _updateHistoryState();
               },
             )
@@ -3647,8 +3840,8 @@ class _PortalWebViewScreenState extends State<PortalWebViewScreen> with WidgetsB
                     color: Colors.white.withOpacity(0.15),
                     borderRadius: BorderRadius.circular(10),
                   ),
-                  child: const Icon(
-                    Icons.school_rounded,
+                  child: Icon(
+                    isMyUnpam ? Icons.badge_rounded : Icons.school_rounded,
                     color: AppTheme.accentGold,
                     size: 20,
                   ),
@@ -3661,7 +3854,7 @@ class _PortalWebViewScreenState extends State<PortalWebViewScreen> with WidgetsB
         mainAxisSize: MainAxisSize.min,
         children: [
           Text(
-            isMentari ? 'Mentari Portal' : 'UNPAM Mobile',
+            isMyUnpam ? 'MyUnpam Portal' : 'Mentari Portal',
             style: const TextStyle(
               fontSize: 16,
               fontWeight: FontWeight.bold,
@@ -3671,7 +3864,7 @@ class _PortalWebViewScreenState extends State<PortalWebViewScreen> with WidgetsB
           ),
           const SizedBox(height: 1),
           Text(
-            isMentari ? 'Portal Akademik Mahasiswa' : 'Universitas Pamulang',
+            isMyUnpam ? 'Sistem Informasi Akademik Mahasiswa' : 'Portal Pembelajaran Mahasiswa',
             style: TextStyle(
               fontSize: 11,
               color: Colors.white.withOpacity(0.8),
@@ -3711,7 +3904,12 @@ class _PortalWebViewScreenState extends State<PortalWebViewScreen> with WidgetsB
             if (val == 'refresh') {
               _startRefresh();
             } else if (val == 'mentari') {
+              setState(() => _currentNavIndex = 0);
               _navigateToUrl(mentariUrl);
+            } else if (val == 'myunpam') {
+              _ensureMyUnpamControllerInitialized();
+              setState(() => _currentNavIndex = 1);
+              _myUnpamController?.loadRequest(Uri.parse(myUnpamUrl));
             } else if (val == 'clear_cache') {
               _resetMentariSession();
             } else if (val == 'check_update') {
@@ -3731,12 +3929,33 @@ class _PortalWebViewScreenState extends State<PortalWebViewScreen> with WidgetsB
             ),
             const PopupMenuDivider(),
             const PopupMenuItem(
+              value: 'mentari',
+              child: Row(
+                children: [
+                  Icon(Icons.menu_book_rounded, size: 18, color: AppTheme.primaryLight),
+                  SizedBox(width: 10),
+                  Text('Buka Portal Mentari'),
+                ],
+              ),
+            ),
+            const PopupMenuItem(
+              value: 'myunpam',
+              child: Row(
+                children: [
+                  Icon(Icons.badge_rounded, size: 18, color: AppTheme.accentGold),
+                  SizedBox(width: 10),
+                  Text('Buka Portal MyUnpam'),
+                ],
+              ),
+            ),
+            const PopupMenuDivider(),
+            const PopupMenuItem(
               value: 'clear_cache',
               child: Row(
                 children: [
                   Icon(Icons.cleaning_services_rounded, size: 18, color: Colors.grey),
                   SizedBox(width: 10),
-                  Text('Reset Sesi & Cache Mentari'),
+                  Text('Reset Sesi & Cache'),
                 ],
               ),
             ),
@@ -3748,17 +3967,6 @@ class _PortalWebViewScreenState extends State<PortalWebViewScreen> with WidgetsB
                   Icon(Icons.system_update_rounded, size: 18, color: AppTheme.accentGold),
                   SizedBox(width: 10),
                   Text('Cek Pembaruan Aplikasi'),
-                ],
-              ),
-            ),
-            const PopupMenuDivider(),
-            const PopupMenuItem(
-              value: 'mentari',
-              child: Row(
-                children: [
-                  Icon(Icons.dashboard_rounded, size: 18, color: AppTheme.primaryLight),
-                  SizedBox(width: 10),
-                  Text('Buka Mentari Portal'),
                 ],
               ),
             ),
@@ -3777,20 +3985,33 @@ class _PortalWebViewScreenState extends State<PortalWebViewScreen> with WidgetsB
       onDestinationSelected: (idx) async {
         if (idx == 0) {
           setState(() => _currentNavIndex = 0);
-          _navigateToUrl(mentariUrl);
+          _updateHistoryState();
         } else if (idx == 1) {
+          _ensureMyUnpamControllerInitialized();
+          setState(() => _currentNavIndex = 1);
+          _updateHistoryState();
+        } else if (idx == 2) {
+          final previousTab = _currentNavIndex;
           await Navigator.push(
             context,
             MaterialPageRoute(builder: (_) => const AiAssistantScreen()),
           );
-          if (mounted) setState(() => _currentNavIndex = 0);
+          if (mounted) {
+            setState(() => _currentNavIndex = previousTab);
+            _updateHistoryState();
+          }
         }
       },
       destinations: const [
         NavigationDestination(
-          icon: Icon(Icons.dashboard_outlined),
-          selectedIcon: Icon(Icons.dashboard_rounded, color: AppTheme.primaryBlue),
+          icon: Icon(Icons.menu_book_outlined),
+          selectedIcon: Icon(Icons.menu_book_rounded, color: AppTheme.primaryBlue),
           label: 'Mentari',
+        ),
+        NavigationDestination(
+          icon: Icon(Icons.badge_outlined),
+          selectedIcon: Icon(Icons.badge_rounded, color: AppTheme.primaryBlue),
+          label: 'MyUnpam',
         ),
         NavigationDestination(
           icon: Icon(Icons.auto_awesome_outlined),

@@ -52,10 +52,25 @@ class AiService {
           return res.statusCode == 200;
 
         case AiProviderType.claude:
-          final res = await _dio.post<Map<String, dynamic>>(
+          try {
+            final res = await _dio.get<Map<String, dynamic>>(
+              'https://api.anthropic.com/v1/models',
+              options: Options(
+                headers: {
+                  'x-api-key': cleanKey,
+                  'anthropic-version': '2023-06-01',
+                },
+                sendTimeout: const Duration(seconds: 10),
+                receiveTimeout: const Duration(seconds: 15),
+              ),
+            );
+            if (res.statusCode == 200) return true;
+          } catch (_) {}
+
+          final resMsg = await _dio.post<Map<String, dynamic>>(
             'https://api.anthropic.com/v1/messages',
             data: {
-              'model': 'claude-3-haiku-20240307',
+              'model': 'claude-haiku-5-5',
               'max_tokens': 10,
               'messages': [
                 {'role': 'user', 'content': 'hi'}
@@ -71,7 +86,7 @@ class AiService {
               receiveTimeout: const Duration(seconds: 15),
             ),
           );
-          return res.statusCode == 200;
+          return resMsg.statusCode == 200;
 
         case AiProviderType.openai:
           final res = await _dio.get<Map<String, dynamic>>(
@@ -85,15 +100,27 @@ class AiService {
           return res.statusCode == 200;
 
         case AiProviderType.qwen:
-          final res = await _dio.get<Map<String, dynamic>>(
-            'https://dashscope-intl.aliyuncs.com/compatible-mode/v1/models',
+          try {
+            final res = await _dio.get<Map<String, dynamic>>(
+              'https://dashscope-intl.aliyuncs.com/compatible-mode/v1/models',
+              options: Options(
+                headers: {'Authorization': 'Bearer $cleanKey'},
+                sendTimeout: const Duration(seconds: 10),
+                receiveTimeout: const Duration(seconds: 15),
+              ),
+            );
+            if (res.statusCode == 200) return true;
+          } catch (_) {}
+
+          final resMainland = await _dio.get<Map<String, dynamic>>(
+            'https://dashscope.aliyuncs.com/compatible-mode/v1/models',
             options: Options(
               headers: {'Authorization': 'Bearer $cleanKey'},
               sendTimeout: const Duration(seconds: 10),
               receiveTimeout: const Duration(seconds: 15),
             ),
           );
-          return res.statusCode == 200;
+          return resMainland.statusCode == 200;
 
         case AiProviderType.openrouter:
           final res = await _dio.get<Map<String, dynamic>>(
@@ -302,13 +329,29 @@ class AiService {
         return geminiMsg.content;
 
       case AiProviderType.deepseek:
-        return await _callOpenAiCompatible(
-          url: 'https://api.deepseek.com/chat/completions',
-          apiKey: apiKey,
-          model: option.defaultModelId,
-          systemPrompt: systemPrompt,
-          userPrompt: prompt,
-        );
+        final modelsToTry = [
+          option.defaultModelId,
+          ..._deepseekCandidateModels.where((m) => m != option.defaultModelId),
+        ];
+        DioException? lastDeepseekErr;
+        for (final m in modelsToTry) {
+          try {
+            return await _callOpenAiCompatible(
+              url: 'https://api.deepseek.com/chat/completions',
+              apiKey: apiKey,
+              model: m,
+              systemPrompt: systemPrompt,
+              userPrompt: prompt,
+            );
+          } on DioException catch (e) {
+            lastDeepseekErr = e;
+            final code = e.response?.statusCode;
+            if (code == 401 || code == 403 || code == 429) rethrow;
+            continue;
+          }
+        }
+        if (lastDeepseekErr != null) throw lastDeepseekErr;
+        throw Exception('DeepSeek API tidak memberikan respons');
 
       case AiProviderType.claude:
         return await _callClaude(
@@ -321,13 +364,39 @@ class AiService {
         );
 
       case AiProviderType.qwen:
-        return await _callOpenAiCompatible(
-          url: 'https://dashscope-intl.aliyuncs.com/compatible-mode/v1/chat/completions',
-          apiKey: apiKey,
-          model: option.defaultModelId,
-          systemPrompt: systemPrompt,
-          userPrompt: prompt,
-        );
+        final qwenModelsToTry = [
+          option.defaultModelId,
+          ..._qwenCandidateModels.where((m) => m != option.defaultModelId),
+        ];
+        final endpoints = [
+          'https://dashscope-intl.aliyuncs.com/compatible-mode/v1/chat/completions',
+          'https://dashscope.aliyuncs.com/compatible-mode/v1/chat/completions',
+        ];
+        DioException? lastQwenErr;
+        for (final url in endpoints) {
+          for (final m in qwenModelsToTry) {
+            try {
+              return await _callOpenAiCompatible(
+                url: url,
+                apiKey: apiKey,
+                model: m,
+                systemPrompt: systemPrompt,
+                userPrompt: prompt,
+              );
+            } on DioException catch (e) {
+              lastQwenErr = e;
+              final code = e.response?.statusCode;
+              if (code == 401 || code == 403) {
+                // Mungkin region akun berbeda (intl vs mainland), coba endpoint berikutnya
+                break;
+              }
+              if (code == 429) rethrow;
+              continue;
+            }
+          }
+        }
+        if (lastQwenErr != null) throw lastQwenErr;
+        throw Exception('Alibaba Qwen DashScope API tidak memberikan respons');
 
       case AiProviderType.openai:
         return await _callOpenAiWithVision(
@@ -367,10 +436,37 @@ class AiService {
   // --- Implementasi Protokol Provider Khusus ---
 
   static const List<String> _geminiCandidateModels = [
+    'gemini-3.7-flash',
+    'gemini-3.5-flash',
+    'gemini-flash-latest',
+    'gemini-3.1-pro-preview',
     'gemini-2.5-flash',
     'gemini-2.0-flash',
     'gemini-1.5-flash',
-    'gemini-flash-latest',
+  ];
+
+  static const List<String> _claudeCandidateModels = [
+    'claude-sonnet-5-5',
+    'claude-haiku-5-5',
+    'claude-opus-5-5',
+    'claude-fable-5-1',
+    'claude-3-7-sonnet-20250219',
+    'claude-3-5-sonnet-20241022',
+    'claude-3-haiku-20240307',
+  ];
+
+  static const List<String> _deepseekCandidateModels = [
+    'deepseek-v4-flash',
+    'deepseek-v4-pro',
+    'deepseek-chat',
+  ];
+
+  static const List<String> _qwenCandidateModels = [
+    'qwen3.8-max',
+    'qwen3.7-max',
+    'qwen-max',
+    'qwen-plus',
+    'qwen-turbo',
   ];
 
   /// Engine Google Gemini (Multimodal Vision OCR & Fast Text)
@@ -449,7 +545,7 @@ class AiService {
     throw Exception('Tidak ada model Gemini yang merespons.');
   }
 
-  /// Protokol Anthropic Claude (Messages API)
+  /// Protokol Anthropic Claude (Messages API) dengan fallback model cerdas
   Future<String> _callClaude({
     required String apiKey,
     required String model,
@@ -475,32 +571,51 @@ class AiService {
       'text': userPrompt,
     });
 
-    final response = await _dio.post<Map<String, dynamic>>(
-      'https://api.anthropic.com/v1/messages',
-      data: {
-        'model': model,
-        'max_tokens': 2048,
-        'system': systemPrompt,
-        'messages': [
-          {'role': 'user', 'content': contentParts}
-        ],
-      },
-      options: Options(
-        headers: {
-          'x-api-key': apiKey,
-          'anthropic-version': '2023-06-01',
-          'content-type': 'application/json',
-        },
-        sendTimeout: const Duration(seconds: 30),
-        receiveTimeout: const Duration(seconds: 50),
-      ),
-    );
+    final modelsToTry = [
+      model,
+      ..._claudeCandidateModels.where((m) => m != model),
+    ];
 
-    final content = response.data?['content'] as List<dynamic>?;
-    if (content != null && content.isNotEmpty) {
-      final text = content.first['text']?.toString() ?? '';
-      if (text.isNotEmpty) return text;
+    DioException? lastDioError;
+    for (final candidate in modelsToTry) {
+      try {
+        final response = await _dio.post<Map<String, dynamic>>(
+          'https://api.anthropic.com/v1/messages',
+          data: {
+            'model': candidate,
+            'max_tokens': 2048,
+            'system': systemPrompt,
+            'messages': [
+              {'role': 'user', 'content': contentParts}
+            ],
+          },
+          options: Options(
+            headers: {
+              'x-api-key': apiKey,
+              'anthropic-version': '2023-06-01',
+              'content-type': 'application/json',
+            },
+            sendTimeout: const Duration(seconds: 30),
+            receiveTimeout: const Duration(seconds: 50),
+          ),
+        );
+
+        final content = response.data?['content'] as List<dynamic>?;
+        if (content != null && content.isNotEmpty) {
+          final text = content.first['text']?.toString() ?? '';
+          if (text.isNotEmpty) return text;
+        }
+      } on DioException catch (e) {
+        lastDioError = e;
+        final code = e.response?.statusCode;
+        if (code == 401 || code == 403 || code == 429) {
+          rethrow;
+        }
+        continue;
+      }
     }
+
+    if (lastDioError != null) throw lastDioError;
     throw Exception('Respons kosong dari Claude API');
   }
 
@@ -541,6 +656,8 @@ class AiService {
       final msg = choices.first['message'];
       final content = msg?['content']?.toString() ?? '';
       if (content.isNotEmpty) return content;
+      final reasoning = msg?['reasoning_content']?.toString() ?? '';
+      if (reasoning.isNotEmpty) return reasoning;
     }
     throw Exception('Respons kosong dari server $model');
   }
@@ -597,6 +714,8 @@ class AiService {
       final msg = choices.first['message'];
       final text = msg?['content']?.toString() ?? '';
       if (text.isNotEmpty) return text;
+      final reasoning = msg?['reasoning_content']?.toString() ?? '';
+      if (reasoning.isNotEmpty) return reasoning;
     }
     throw Exception('Respons kosong dari model $model');
   }

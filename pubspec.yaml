@@ -1,7 +1,7 @@
 name: unpam_mobile
 description: "Aplikasi Mobile LMS Kampus (Mentari UNPAM) - Mobile Programming"
 publish_to: 'none'
-version: 1.0.14+15
+version: 1.0.15+16
 
 environment:
   sdk: '>=3.0.0 <4.0.0'

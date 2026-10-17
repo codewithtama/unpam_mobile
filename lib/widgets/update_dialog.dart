@@ -236,6 +236,18 @@ class _UpdateDialogState extends State<UpdateDialog> {
                   style: const TextStyle(fontSize: 12, height: 1.45, color: AppTheme.textDark),
                 ),
               ),
+            const SizedBox(height: 8),
+            Row(
+              children: [
+                Icon(Icons.info_outline_rounded, size: 14, color: AppTheme.textMuted.withOpacity(0.85)),
+                const SizedBox(width: 6),
+                Expanded(
+                  child: Text(
+                    'Tips: Jika muncul pesan "paket tidak valid", hapus (uninstall) versi lama di HP terlebih dahulu.',
+                    style: TextStyle(fontSize: 10.5, color: AppTheme.textMuted.withOpacity(0.85)),
+                  ),
+                ),
+              ],
             ),
 
             if (_isDownloading) ...[
