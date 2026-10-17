@@ -25,6 +25,30 @@ class AppUpdateInfo {
     return '${mb.toStringAsFixed(1)} MB';
   }
 
+  Map<String, dynamic> toJson() => {
+        'currentVersion': currentVersion,
+        'latestVersion': latestVersion,
+        'releaseTitle': releaseTitle,
+        'changelog': changelog,
+        'apkDownloadUrl': apkDownloadUrl,
+        'apkSizeBytes': apkSizeBytes,
+        'publishedAt': publishedAt?.toIso8601String(),
+        'hasUpdate': hasUpdate,
+      };
+
+  factory AppUpdateInfo.fromJson(Map<String, dynamic> json) => AppUpdateInfo(
+        currentVersion: json['currentVersion'] as String? ?? '',
+        latestVersion: json['latestVersion'] as String? ?? '',
+        releaseTitle: json['releaseTitle'] as String? ?? '',
+        changelog: json['changelog'] as String? ?? '',
+        apkDownloadUrl: json['apkDownloadUrl'] as String? ?? '',
+        apkSizeBytes: (json['apkSizeBytes'] as num?)?.toInt() ?? 0,
+        publishedAt: json['publishedAt'] != null
+            ? DateTime.tryParse(json['publishedAt'] as String)
+            : null,
+        hasUpdate: json['hasUpdate'] as bool? ?? false,
+      );
+
   /// Membandingkan format semver (misal '1.0.1' vs '1.0.0')
   static bool isNewerVersion(String remote, String current) {
     final cleanRemote = _cleanVersion(remote);

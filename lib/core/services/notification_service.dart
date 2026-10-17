@@ -1,5 +1,7 @@
+import 'dart:convert';
 import 'dart:io';
 import 'package:flutter/foundation.dart';
+import 'package:flutter/material.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import '../../models/app_update_info.dart';
 
@@ -13,14 +15,21 @@ class NotificationService {
   void Function(AppUpdateInfo info)? onUpdateNotificationTap;
   AppUpdateInfo? _pendingUpdateInfo;
 
-  static const String _channelId = 'unpam_update_channel';
+  static const String _channelId = 'unpam_update_channel_v2';
   static const String _channelName = 'Pembaruan Aplikasi UNPAM';
   static const String _channelDesc = 'Pemberitahuan ketika versi baru aplikasi UNPAM Mobile tersedia.';
 
   Future<void> initialize({void Function(AppUpdateInfo info)? onUpdateTap}) async {
+    if (onUpdateTap != null) {
+      onUpdateNotificationTap = onUpdateTap;
+      if (_pendingUpdateInfo != null) {
+        final pending = _pendingUpdateInfo!;
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          onUpdateNotificationTap?.call(pending);
+        });
+      }
+    }
     if (_isInitialized) return;
-
-    onUpdateNotificationTap = onUpdateTap;
 
     const androidSettings = AndroidInitializationSettings('@mipmap/ic_launcher');
     const darwinSettings = DarwinInitializationSettings(
@@ -38,11 +47,51 @@ class NotificationService {
     await _plugin.initialize(
       settings: initSettings,
       onDidReceiveNotificationResponse: (response) {
-        if (_pendingUpdateInfo != null) {
-          onUpdateNotificationTap?.call(_pendingUpdateInfo!);
+        AppUpdateInfo? target = _pendingUpdateInfo;
+        if (target == null && response.payload != null && response.payload!.isNotEmpty) {
+          try {
+            final data = jsonDecode(response.payload!);
+            target = AppUpdateInfo.fromJson(data as Map<String, dynamic>);
+          } catch (_) {}
+        }
+        if (target != null) {
+          _pendingUpdateInfo = target;
+          onUpdateNotificationTap?.call(target);
         }
       },
     );
+
+    if (Platform.isAndroid) {
+      final androidPlugin = _plugin.resolvePlatformSpecificImplementation<AndroidFlutterLocalNotificationsPlugin>();
+      const channel = AndroidNotificationChannel(
+        _channelId,
+        _channelName,
+        description: _channelDesc,
+        importance: Importance.max,
+        playSound: true,
+        enableVibration: true,
+        enableLights: true,
+        showBadge: true,
+      );
+      await androidPlugin?.createNotificationChannel(channel);
+    }
+
+    // Periksa apakah aplikasi dibuka langsung dari ketukan notifikasi saat status terminated
+    try {
+      final launchDetails = await _plugin.getNotificationAppLaunchDetails();
+      if (launchDetails != null &&
+          launchDetails.didNotificationLaunchApp &&
+          launchDetails.notificationResponse?.payload != null) {
+        final data = jsonDecode(launchDetails.notificationResponse!.payload!);
+        _pendingUpdateInfo = AppUpdateInfo.fromJson(data as Map<String, dynamic>);
+        if (onUpdateNotificationTap != null && _pendingUpdateInfo != null) {
+          final pending = _pendingUpdateInfo!;
+          WidgetsBinding.instance.addPostFrameCallback((_) {
+            onUpdateNotificationTap?.call(pending);
+          });
+        }
+      }
+    } catch (_) {}
 
     _isInitialized = true;
   }
@@ -74,7 +123,7 @@ class NotificationService {
 
       _pendingUpdateInfo = updateInfo;
 
-      const androidDetails = AndroidNotificationDetails(
+      final androidDetails = AndroidNotificationDetails(
         _channelId,
         _channelName,
         channelDescription: _channelDesc,
@@ -84,13 +133,19 @@ class NotificationService {
         icon: '@mipmap/ic_launcher',
         enableLights: true,
         enableVibration: true,
+        playSound: true,
+        channelShowBadge: true,
         ticker: 'Pembaruan Tersedia',
-        styleInformation: BigTextStyleInformation(''),
+        styleInformation: BigTextStyleInformation(
+          '${updateInfo.releaseTitle}\n\nKetuk untuk mengunduh dan memasang versi terbaru.',
+          contentTitle: 'Pembaruan UNPAM Mobile ${updateInfo.latestVersion} Tersedia! 🚀',
+          summaryText: 'Pembaruan Tersedia (${updateInfo.latestVersion})',
+        ),
       );
 
-      const notificationDetails = NotificationDetails(
+      final notificationDetails = NotificationDetails(
         android: androidDetails,
-        iOS: DarwinNotificationDetails(
+        iOS: const DarwinNotificationDetails(
           presentAlert: true,
           presentBadge: true,
           presentSound: true,
@@ -105,6 +160,7 @@ class NotificationService {
         title: title,
         body: body,
         notificationDetails: notificationDetails,
+        payload: jsonEncode(updateInfo.toJson()),
       );
     } catch (e) {
       debugPrint('Failed to show update notification: $e');

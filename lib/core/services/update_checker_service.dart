@@ -30,11 +30,29 @@ class UpdateCheckerService {
       final packageInfo = await PackageInfo.fromPlatform();
       final currentVersion = packageInfo.version;
 
-      const url = 'https://api.github.com/repos/$_repoOwner/$_repoName/releases/latest';
-      final response = await _dio.get<Map<String, dynamic>>(url);
+      Map<String, dynamic>? data;
 
-      if (response.statusCode == 200 && response.data != null) {
-        final data = response.data!;
+      // 1. Coba endpoint rilis terbaru utama
+      try {
+        const url = 'https://api.github.com/repos/$_repoOwner/$_repoName/releases/latest';
+        final response = await _dio.get<Map<String, dynamic>>(url);
+        if (response.statusCode == 200 && response.data != null) {
+          data = response.data;
+        }
+      } catch (e) {
+        // 2. Fallback ke endpoint daftar rilis teratas jika endpoint /latest dibatasi atau gagal
+        try {
+          const fallbackUrl = 'https://api.github.com/repos/$_repoOwner/$_repoName/releases?per_page=1';
+          final fallbackResp = await _dio.get<List<dynamic>>(fallbackUrl);
+          if (fallbackResp.statusCode == 200 &&
+              fallbackResp.data != null &&
+              fallbackResp.data!.isNotEmpty) {
+            data = fallbackResp.data!.first as Map<String, dynamic>;
+          }
+        } catch (_) {}
+      }
+
+      if (data != null) {
         final tagName = data['tag_name']?.toString() ?? '';
         final releaseTitle = data['name']?.toString() ?? 'Pembaruan Aplikasi';
         final changelog = data['body']?.toString() ?? 'Peningkatan performa dan perbaikan bug.';
@@ -58,9 +76,9 @@ class UpdateCheckerService {
           }
         }
 
-        // Jika tidak ada aset APK khusus, fallback ke link halaman rilis GitHub
-        if (apkUrl.isEmpty) {
-          apkUrl = data['html_url']?.toString() ?? 'https://github.com/$_repoOwner/$_repoName/releases';
+        // Jika rilis baru dibuat namun APK belum selesai di-attach pada assets, gunakan direct download URL release
+        if (apkUrl.isEmpty && tagName.isNotEmpty) {
+          apkUrl = 'https://github.com/$_repoOwner/$_repoName/releases/download/$tagName/app-release.apk';
         }
 
         final hasUpdate = AppUpdateInfo.isNewerVersion(tagName, currentVersion);
@@ -75,6 +93,40 @@ class UpdateCheckerService {
           publishedAt: publishedAt,
           hasUpdate: hasUpdate,
         );
+      } else {
+        // 3. Fallback ketiga: parsing feed publik releases.atom (tanpa batasan rate-limit GitHub API)
+        try {
+          const atomUrl = 'https://github.com/$_repoOwner/$_repoName/releases.atom';
+          final atomResp = await _dio.get<String>(
+            atomUrl,
+            options: Options(
+              responseType: ResponseType.plain,
+              headers: {'Accept': 'application/atom+xml, text/xml, */*'},
+            ),
+          );
+          if (atomResp.statusCode == 200 && atomResp.data != null) {
+            final content = atomResp.data!;
+            final tagMatch = RegExp(r'/releases/tag/([^"]+)').firstMatch(content);
+            if (tagMatch != null) {
+              final tagName = tagMatch.group(1)?.trim() ?? '';
+              final titleMatch = RegExp(r'<entry>[\s\S]*?<title>(.*?)</title>').firstMatch(content);
+              final releaseTitle = titleMatch?.group(1)?.trim() ?? 'Pembaruan UNPAM Mobile $tagName';
+              final hasUpdate = AppUpdateInfo.isNewerVersion(tagName, currentVersion);
+              final apkUrl = 'https://github.com/$_repoOwner/$_repoName/releases/download/$tagName/app-release.apk';
+
+              return AppUpdateInfo(
+                currentVersion: currentVersion,
+                latestVersion: tagName,
+                releaseTitle: releaseTitle,
+                changelog: 'Versi terbaru $tagName telah dirilis di GitHub. Ketuk untuk mengunduh dan memperbarui aplikasi.',
+                apkDownloadUrl: apkUrl,
+                apkSizeBytes: 0,
+                publishedAt: DateTime.now(),
+                hasUpdate: hasUpdate,
+              );
+            }
+          }
+        } catch (_) {}
       }
     } catch (_) {
       // Offline atau repository belum memiliki rilis

@@ -14,6 +14,7 @@ import 'package:unpam_mobile/models/github_release.dart';
 import 'package:unpam_mobile/core/services/update_checker_service.dart';
 import 'package:unpam_mobile/widgets/release_history_dialog.dart';
 import 'package:unpam_mobile/core/services/file_download_service.dart';
+import 'package:unpam_mobile/models/app_update_info.dart';
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
@@ -434,6 +435,53 @@ void main() {
       expect(isMyUnpamLogin('https://sso.unpam.ac.id/login', false), isTrue);
       expect(isMyUnpamLogin('https://my.unpam.ac.id/', true), isFalse);
       expect(isMyUnpamLogin('https://my.unpam.ac.id/dashboard', false), isFalse);
+    });
+  });
+
+  group('AppUpdateInfo & OTA Notification Serialization Tests', () {
+    test('AppUpdateInfo correctly serializes to and from JSON', () {
+      final original = AppUpdateInfo(
+        currentVersion: '1.0.18',
+        latestVersion: 'v1.0.19',
+        releaseTitle: 'Pembaruan UNPAM Mobile v1.0.19',
+        changelog: 'Perbaikan notifikasi popup otomatis dan OTA dialog',
+        apkDownloadUrl: 'https://github.com/codewithtama/unpam_mobile/releases/download/v1.0.19/app-release.apk',
+        apkSizeBytes: 44040192,
+        publishedAt: DateTime(2026, 10, 18, 2, 0),
+        hasUpdate: true,
+      );
+
+      final json = original.toJson();
+      expect(json['currentVersion'], equals('1.0.18'));
+      expect(json['latestVersion'], equals('v1.0.19'));
+      expect(json['hasUpdate'], isTrue);
+
+      final restored = AppUpdateInfo.fromJson(json);
+      expect(restored.currentVersion, equals(original.currentVersion));
+      expect(restored.latestVersion, equals(original.latestVersion));
+      expect(restored.releaseTitle, equals(original.releaseTitle));
+      expect(restored.changelog, equals(original.changelog));
+      expect(restored.apkDownloadUrl, equals(original.apkDownloadUrl));
+      expect(restored.apkSizeBytes, equals(original.apkSizeBytes));
+      expect(restored.formattedApkSize, equals('42.0 MB'));
+      expect(restored.hasUpdate, isTrue);
+    });
+
+    test('AppUpdateInfo.isNewerVersion handles semver formats and prefixes accurately', () {
+      // Versi baru lebih tinggi
+      expect(AppUpdateInfo.isNewerVersion('v1.0.19', '1.0.18'), isTrue);
+      expect(AppUpdateInfo.isNewerVersion('1.0.19', '1.0.18+19'), isTrue);
+      expect(AppUpdateInfo.isNewerVersion('v1.1.0', '1.0.18'), isTrue);
+      expect(AppUpdateInfo.isNewerVersion('2.0.0', '1.9.9'), isTrue);
+
+      // Versi sama
+      expect(AppUpdateInfo.isNewerVersion('v1.0.18', '1.0.18'), isFalse);
+      expect(AppUpdateInfo.isNewerVersion('1.0.18+19', '1.0.18'), isFalse);
+      expect(AppUpdateInfo.isNewerVersion('1.0.18', '1.0.18'), isFalse);
+
+      // Versi lama lebih rendah
+      expect(AppUpdateInfo.isNewerVersion('v1.0.9', '1.0.10'), isFalse);
+      expect(AppUpdateInfo.isNewerVersion('v1.0.17', '1.0.18'), isFalse);
     });
   });
 }

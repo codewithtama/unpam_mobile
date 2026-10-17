@@ -65,6 +65,8 @@ class _PortalWebViewScreenState extends State<PortalWebViewScreen> with WidgetsB
   String? _capturedNim;
   String? _capturedPassword;
   final UpdateCheckerService _updateChecker = UpdateCheckerService();
+  bool _isCheckingUpdate = false;
+  bool _isUpdateDialogShowing = false;
 
   static const String _customUserAgent =
       'Mozilla/5.0 (Linux; Android 13; SM-S918B) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.6613.127 Mobile Safari/537.36';
@@ -106,17 +108,20 @@ class _PortalWebViewScreenState extends State<PortalWebViewScreen> with WidgetsB
     _initController();
     NotificationService().initialize(
       onUpdateTap: (info) {
-        if (mounted) {
+        if (mounted && !_isUpdateDialogShowing) {
+          _isUpdateDialogShowing = true;
           UpdateDialog.show(
             context: context,
             updateInfo: info,
             updateService: _updateChecker,
-          );
+          ).then((_) {
+            _isUpdateDialogShowing = false;
+          });
         }
       },
     );
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      Future.delayed(const Duration(seconds: 2), () {
+      Future.delayed(const Duration(milliseconds: 600), () {
         if (mounted) {
           _checkAppUpdateSilently();
         }
@@ -135,6 +140,7 @@ class _PortalWebViewScreenState extends State<PortalWebViewScreen> with WidgetsB
     super.didChangeAppLifecycleState(state);
     if (state == AppLifecycleState.resumed) {
       _checkAndRestoreSurfaceOnResume();
+      _checkAppUpdateSilently();
     }
   }
 
@@ -1344,21 +1350,30 @@ class _PortalWebViewScreenState extends State<PortalWebViewScreen> with WidgetsB
   }
 
   Future<void> _checkAppUpdateSilently({bool isManual = false}) async {
+    if (_isCheckingUpdate) return;
+    _isCheckingUpdate = true;
     try {
       final updateInfo = await _updateChecker.checkForUpdate();
       if (!mounted) return;
 
       if (updateInfo != null && updateInfo.hasUpdate) {
         // Tampilkan notifikasi sistem melayang di status bar HP
-        NotificationService().showUpdateNotification(updateInfo);
+        await NotificationService().showUpdateNotification(updateInfo);
+        if (!mounted) return;
 
-        // Tampilkan dialog pop-up di layar aplikasi
-        UpdateDialog.show(
-          context: context,
-          updateInfo: updateInfo,
-          updateService: _updateChecker,
-        );
+        // Tampilkan dialog pop-up di layar aplikasi jika belum sedang tampil
+        if (!_isUpdateDialogShowing) {
+          _isUpdateDialogShowing = true;
+          UpdateDialog.show(
+            context: context,
+            updateInfo: updateInfo,
+            updateService: _updateChecker,
+          ).then((_) {
+            _isUpdateDialogShowing = false;
+          });
+        }
       } else if (isManual) {
+        if (!mounted) return;
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
             content: Text('Aplikasi sudah menggunakan versi terbaru!'),
@@ -1373,6 +1388,8 @@ class _PortalWebViewScreenState extends State<PortalWebViewScreen> with WidgetsB
           SnackBar(content: Text('Gagal memeriksa pembaruan: $e')),
         );
       }
+    } finally {
+      _isCheckingUpdate = false;
     }
   }
 
