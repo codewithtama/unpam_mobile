@@ -1,8 +1,10 @@
 import 'dart:convert';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 import 'package:webview_flutter/webview_flutter.dart';
+import 'package:webview_flutter_android/webview_flutter_android.dart';
 import 'package:url_launcher/url_launcher.dart';
 import '../theme/app_theme.dart';
 import '../providers/ai_provider.dart';
@@ -25,12 +27,13 @@ class PortalWebViewScreen extends StatefulWidget {
   State<PortalWebViewScreen> createState() => _PortalWebViewScreenState();
 }
 
-class _PortalWebViewScreenState extends State<PortalWebViewScreen> {
+class _PortalWebViewScreenState extends State<PortalWebViewScreen> with WidgetsBindingObserver {
   late final WebViewController _controller;
   int _currentNavIndex = 0;
   int _progress = 0;
   bool _isLoading = true;
   bool _hasError = false;
+  bool _isWhiteScreenDetected = false;
   String _errorMessage = '';
   String _pageTitle = 'Mentari UNPAM';
   String _currentUrl = '';
@@ -43,6 +46,10 @@ class _PortalWebViewScreenState extends State<PortalWebViewScreen> {
   bool _hasAutoLoggedInCurrentSession = false;
   bool _pendingAutoLoginAfterLoad = false;
   final UpdateCheckerService _updateChecker = UpdateCheckerService();
+
+  static const String _customUserAgent =
+      'Mozilla/5.0 (Linux; Android 13; SM-S918B) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.6613.127 Mobile Safari/537.36';
+
 
   bool _isAtTop = true;
   bool _wasAtTopOnDown = true;
@@ -59,6 +66,7 @@ class _PortalWebViewScreenState extends State<PortalWebViewScreen> {
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     _currentUrl = widget.initialUrl;
     _initController();
     WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -66,9 +74,39 @@ class _PortalWebViewScreenState extends State<PortalWebViewScreen> {
     });
   }
 
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    super.didChangeAppLifecycleState(state);
+    if (state == AppLifecycleState.resumed) {
+      _checkAndRestoreSurfaceOnResume();
+    }
+  }
+
+  Future<void> _checkAndRestoreSurfaceOnResume() async {
+    if (!mounted || _isLoading || _hasError) return;
+    try {
+      final res = await _controller.runJavaScriptReturningResult('document.readyState');
+      final str = res.toString().replaceAll('"', '').trim();
+      if (str != 'complete' && str != 'interactive') {
+        _controller.reload();
+      }
+    } catch (_) {
+      // Native surface was killed or disconnected in background
+      _controller.reload();
+    }
+  }
+
   void _initController() {
     _controller = WebViewController()
       ..setJavaScriptMode(JavaScriptMode.unrestricted)
+      ..setUserAgent(_customUserAgent)
+      ..setBackgroundColor(Colors.white)
       ..setOnScrollPositionChange((change) {
         final atTop = change.y <= 1;
         if (atTop != _isAtTop && mounted) {
@@ -123,6 +161,7 @@ class _PortalWebViewScreenState extends State<PortalWebViewScreen> {
                 _currentUrl = url;
                 _isLoading = true;
                 _hasError = false;
+                _isWhiteScreenDetected = false;
                 _isAtTop = true;
                 _isLoginPageDetected = isLogin;
                 if (!isLogin) {
@@ -149,6 +188,7 @@ class _PortalWebViewScreenState extends State<PortalWebViewScreen> {
             Future.delayed(const Duration(milliseconds: 700), () {
               if (mounted) _detectLoginForm();
             });
+            _scheduleWhiteScreenCheck();
             try {
               await _controller.runJavaScript('''
                 (function() {
@@ -177,10 +217,11 @@ class _PortalWebViewScreenState extends State<PortalWebViewScreen> {
             if (error.errorCode == -999 || error.description.contains('ERR_ABORTED')) {
               return;
             }
-            if (mounted && _progress < 30) {
+            if (mounted && (error.isForMainFrame == true || _progress < 30)) {
               setState(() {
                 _hasError = true;
                 _errorMessage = error.description;
+                _isLoading = false;
               });
             }
           },
@@ -211,8 +252,33 @@ class _PortalWebViewScreenState extends State<PortalWebViewScreen> {
             return NavigationDecision.navigate;
           },
         ),
-      )
-      ..loadRequest(Uri.parse(_currentUrl));
+      );
+
+    // Konfigurasi khusus Android untuk mencegah layar putih & kegagalan Cloudflare Turnstile
+    if (_controller.platform is AndroidWebViewController) {
+      final androidController = _controller.platform as AndroidWebViewController;
+      androidController.setMediaPlaybackRequiresUserGesture(false);
+      androidController.setMixedContentMode(MixedContentMode.alwaysAllow);
+      androidController.setAllowContentAccess(true);
+      androidController.setAllowFileAccess(true);
+
+      // Izinkan third-party cookies agar Cloudflare Turnstile & SSO berjalan lancar
+      try {
+        final cookieManager = WebViewCookieManager();
+        if (cookieManager.platform is AndroidWebViewCookieManager) {
+          (cookieManager.platform as AndroidWebViewCookieManager)
+              .setAcceptThirdPartyCookies(androidController, true);
+        }
+      } catch (e) {
+        debugPrint('Third party cookie setup error: $e');
+      }
+
+      if (kDebugMode) {
+        AndroidWebViewController.enableDebugging(true);
+      }
+    }
+
+    _controller.loadRequest(Uri.parse(_currentUrl));
   }
 
   Future<void> _updateHistoryState() async {
@@ -273,9 +339,197 @@ class _PortalWebViewScreenState extends State<PortalWebViewScreen> {
       _currentUrl = url;
       _isLoading = true;
       _hasError = false;
+      _isWhiteScreenDetected = false;
     });
     _controller.loadRequest(Uri.parse(url));
   }
+
+  void _scheduleWhiteScreenCheck() {
+    // Jalankan pemeriksaan bertahap (setelah 2.5s dan 5s) untuk mendeteksi SPA React yang macet
+    Future.delayed(const Duration(milliseconds: 2500), () {
+      if (mounted) _performWhiteScreenCheck();
+    });
+    Future.delayed(const Duration(milliseconds: 5000), () {
+      if (mounted) _performWhiteScreenCheck();
+    });
+  }
+
+  Future<void> _performWhiteScreenCheck() async {
+    if (!mounted || _isLoading || _hasError) return;
+
+    try {
+      final res = await _controller.runJavaScriptReturningResult(r'''
+        (function() {
+          try {
+            var body = document.body;
+            if (!body) return true;
+            var text = (body.innerText || body.textContent || '').trim();
+            var interactive = document.querySelectorAll('input, button, a, form, [role="button"]');
+            var rootEl = document.getElementById('root') || document.getElementById('app');
+            var rootEmpty = rootEl ? (rootEl.children.length === 0 && text.length === 0) : false;
+            return (text.length === 0 && interactive.length === 0) || rootEmpty;
+          } catch(e) {
+            return false;
+          }
+        })();
+      ''');
+
+      final isBlank = res == true || res == 'true';
+      if (mounted && isBlank != _isWhiteScreenDetected) {
+        setState(() {
+          _isWhiteScreenDetected = isBlank;
+        });
+      }
+    } catch (_) {}
+  }
+
+  Future<void> _resetMentariSession({bool showMessage = true}) async {
+    try {
+      // 1. Bersihkan localStorage dan sessionStorage Mentari di WebView
+      await _controller.runJavaScript(r'''
+        try {
+          window.localStorage.clear();
+          window.sessionStorage.clear();
+        } catch(e) {}
+      ''');
+    } catch (_) {}
+
+    try {
+      // 2. Bersihkan storage di level platform Android jika tersedia
+      if (_controller.platform is AndroidWebViewController) {
+        await (_controller.platform as AndroidWebViewController).clearLocalStorage();
+      }
+    } catch (_) {}
+
+    try {
+      // 3. Bersihkan cookies WebView
+      final cookieManager = WebViewCookieManager();
+      await cookieManager.clearCookies();
+    } catch (_) {}
+
+    try {
+      // 4. Bersihkan HTTP disk & memory cache
+      await _controller.clearCache();
+    } catch (_) {}
+
+    if (mounted) {
+      setState(() {
+        _isWhiteScreenDetected = false;
+        _hasError = false;
+        _isLoading = true;
+      });
+
+      if (showMessage) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: const Row(
+              children: [
+                Icon(Icons.check_circle_outline_rounded, color: Colors.white),
+                SizedBox(width: 10),
+                Expanded(
+                  child: Text('Cache, cookie, dan sesi Mentari berhasil direset.'),
+                ),
+              ],
+            ),
+            backgroundColor: AppTheme.primaryBlue,
+            duration: const Duration(seconds: 2),
+            behavior: SnackBarBehavior.floating,
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+          ),
+        );
+      }
+    }
+
+    _navigateToUrl(mentariUrl);
+  }
+
+  Widget _buildWhiteScreenRecoveryBanner() {
+    return Positioned(
+      top: 14,
+      left: 14,
+      right: 14,
+      child: Material(
+        elevation: 8,
+        borderRadius: BorderRadius.circular(16),
+        color: Colors.white,
+        shadowColor: Colors.black26,
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(color: AppTheme.accentGold, width: 1.5),
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  Container(
+                    padding: const EdgeInsets.all(6),
+                    decoration: BoxDecoration(
+                      color: Colors.amber.shade50,
+                      shape: BoxShape.circle,
+                    ),
+                    child: Icon(Icons.warning_amber_rounded, color: Colors.orange.shade800, size: 24),
+                  ),
+                  const SizedBox(width: 10),
+                  const Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          'Layar Mentari Blank Putih?',
+                          style: TextStyle(fontSize: 13.5, fontWeight: FontWeight.bold, color: AppTheme.textDark),
+                        ),
+                        SizedBox(height: 2),
+                        Text(
+                          'Sesi, cache, atau token React SPA terhambat.',
+                          style: TextStyle(fontSize: 11.5, color: AppTheme.textMuted),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 12),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.end,
+                children: [
+                  OutlinedButton.icon(
+                    onPressed: () {
+                      setState(() => _isWhiteScreenDetected = false);
+                      _startRefresh();
+                    },
+                    icon: const Icon(Icons.refresh_rounded, size: 16),
+                    label: const Text('Muat Ulang', style: TextStyle(fontSize: 12)),
+                    style: OutlinedButton.styleFrom(
+                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                      visualDensity: VisualDensity.compact,
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  ElevatedButton.icon(
+                    onPressed: () => _resetMentariSession(),
+                    icon: const Icon(Icons.cleaning_services_rounded, size: 16),
+                    label: const Text('Reset Sesi & Cache', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: AppTheme.primaryBlue,
+                      foregroundColor: Colors.white,
+                      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                      visualDensity: VisualDensity.compact,
+                      elevation: 0,
+                    ),
+                  ),
+                ],
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
 
   void _showAiPowerToolsMenu() {
     showModalBottomSheet(
@@ -767,6 +1021,16 @@ class _PortalWebViewScreenState extends State<PortalWebViewScreen> {
           });
 
           setTimeout(function() {
+            // Periksa apakah ada widget Cloudflare Turnstile yang belum tuntas diverifikasi
+            var turnstileInput = document.querySelector('input[name="cf-turnstile-response"]');
+            var hasTurnstileWidget = !!(turnstileInput || document.querySelector('iframe[src*="cloudflare"], iframe[src*="turnstile"], .cf-turnstile'));
+            var turnstileSolved = turnstileInput ? (turnstileInput.value && turnstileInput.value.length > 10) : false;
+
+            if (hasTurnstileWidget && !turnstileSolved) {
+              // Kredensial telah terisi; tunggu verifikasi Turnstile selesai sebelum submit otomatis
+              return;
+            }
+
             var submitBtn = null;
             for (var i = 0; i < pList.length; i++) {
               var form = pList[i].closest('form');
@@ -2221,6 +2485,11 @@ class _PortalWebViewScreenState extends State<PortalWebViewScreen> {
                                       ),
                                     ),
                                     OutlinedButton.icon(
+                                      onPressed: () => _resetMentariSession(),
+                                      icon: const Icon(Icons.cleaning_services_rounded, size: 18),
+                                      label: const Text('Reset Sesi & Cache'),
+                                    ),
+                                    OutlinedButton.icon(
                                       onPressed: () => _navigateToUrl(mentariUrl),
                                       icon: const Icon(Icons.home_rounded, size: 18),
                                       label: const Text('Ke Beranda Mentari'),
@@ -2231,6 +2500,11 @@ class _PortalWebViewScreenState extends State<PortalWebViewScreen> {
                             ),
                           ),
                         ),
+
+                      // Banner Pemulihan jika terdeteksi Layar Putih / SPA Blank
+                      if (_isWhiteScreenDetected && !_hasError && !_isLoading)
+                        _buildWhiteScreenRecoveryBanner(),
+
 
                       // Tombol Mengambang AI Tools (Dapat Digeser Bebas ke Mana Saja)
                       Positioned(
@@ -2388,6 +2662,17 @@ class _PortalWebViewScreenState extends State<PortalWebViewScreen> {
         ],
       ),
       actions: [
+        IconButton(
+          tooltip: 'Muat Ulang Halaman',
+          icon: _isRefreshing
+              ? const SizedBox(
+                  width: 18,
+                  height: 18,
+                  child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+                )
+              : const Icon(Icons.refresh_rounded, color: Colors.white, size: 22),
+          onPressed: _startRefresh,
+        ),
         Consumer<BiometricProvider>(
           builder: (ctx, bioProv, _) {
             return IconButton(
@@ -2404,18 +2689,39 @@ class _PortalWebViewScreenState extends State<PortalWebViewScreen> {
         PopupMenuButton<String>(
           icon: const Icon(Icons.more_vert_rounded, color: Colors.white, size: 20),
           onSelected: (val) {
-            if (val == 'mentari') {
+            if (val == 'refresh') {
+              _startRefresh();
+            } else if (val == 'mentari') {
               _navigateToUrl(mentariUrl);
             } else if (val == 'clear_cache') {
-              _controller.clearCache();
-              ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(content: Text('Cache web berhasil dibersihkan')),
-              );
+              _resetMentariSession();
             } else if (val == 'check_update') {
               _checkAppUpdateSilently(isManual: true);
             }
           },
           itemBuilder: (ctx) => [
+            const PopupMenuItem(
+              value: 'refresh',
+              child: Row(
+                children: [
+                  Icon(Icons.refresh_rounded, size: 18, color: AppTheme.primaryLight),
+                  SizedBox(width: 10),
+                  Text('Muat Ulang Halaman'),
+                ],
+              ),
+            ),
+            const PopupMenuDivider(),
+            const PopupMenuItem(
+              value: 'clear_cache',
+              child: Row(
+                children: [
+                  Icon(Icons.cleaning_services_rounded, size: 18, color: Colors.grey),
+                  SizedBox(width: 10),
+                  Text('Reset Sesi & Cache Mentari'),
+                ],
+              ),
+            ),
+            const PopupMenuDivider(),
             const PopupMenuItem(
               value: 'check_update',
               child: Row(
@@ -2434,17 +2740,6 @@ class _PortalWebViewScreenState extends State<PortalWebViewScreen> {
                   Icon(Icons.dashboard_rounded, size: 18, color: AppTheme.primaryLight),
                   SizedBox(width: 10),
                   Text('Buka Mentari Portal'),
-                ],
-              ),
-            ),
-            const PopupMenuDivider(),
-            const PopupMenuItem(
-              value: 'clear_cache',
-              child: Row(
-                children: [
-                  Icon(Icons.cleaning_services_rounded, size: 18, color: Colors.grey),
-                  SizedBox(width: 10),
-                  Text('Bersihkan Cache Web'),
                 ],
               ),
             ),
