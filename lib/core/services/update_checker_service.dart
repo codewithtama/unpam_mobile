@@ -1,9 +1,12 @@
+import 'dart:convert';
 import 'dart:io';
 import 'package:dio/dio.dart';
 import 'package:open_filex/open_filex.dart';
 import 'package:package_info_plus/package_info_plus.dart';
 import 'package:path_provider/path_provider.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import '../../models/app_update_info.dart';
+import '../../models/github_release.dart';
 
 class UpdateCheckerService {
   final Dio _dio = Dio();
@@ -130,5 +133,57 @@ class UpdateCheckerService {
     );
 
     return result;
+  }
+
+  /// Mengambil seluruh riwayat pembaruan langsung dari GitHub Releases API
+  Future<List<GitHubRelease>> fetchReleaseHistory({bool forceRefresh = false}) async {
+    final prefs = await SharedPreferences.getInstance();
+    const cacheKey = 'cached_github_releases_list';
+
+    // 1. Coba ambil data live dari GitHub REST API jika bukan mode offline murni
+    try {
+      const url = 'https://api.github.com/repos/$_repoOwner/$_repoName/releases?per_page=100';
+      final response = await _dio.get<List<dynamic>>(url);
+
+      if (response.statusCode == 200 && response.data != null) {
+        final List<GitHubRelease> releases = [];
+        for (final item in response.data!) {
+          if (item is Map<String, dynamic>) {
+            final release = GitHubRelease.fromJson(item);
+            if (!release.isDraft) {
+              releases.add(release);
+            }
+          }
+        }
+
+        // Urutkan rilis berdasarkan tanggal terbaru
+        releases.sort((a, b) {
+          final timeA = a.publishedAt ?? DateTime.fromMillisecondsSinceEpoch(0);
+          final timeB = b.publishedAt ?? DateTime.fromMillisecondsSinceEpoch(0);
+          return timeB.compareTo(timeA);
+        });
+
+        // Simpan hasil ke cache lokal untuk akses offline
+        try {
+          final jsonString = jsonEncode(releases.map((e) => e.toJson()).toList());
+          await prefs.setString(cacheKey, jsonString);
+        } catch (_) {}
+
+        return releases;
+      }
+    } catch (_) {
+      // Jaringan bermasalah atau rate limit GitHub, lanjut ke fallback cache
+    }
+
+    // 2. Fallback: Baca dari cache lokal
+    final cached = prefs.getString(cacheKey);
+    if (cached != null && cached.isNotEmpty) {
+      try {
+        final List<dynamic> list = jsonDecode(cached) as List<dynamic>;
+        return list.map((e) => GitHubRelease.fromJson(e as Map<String, dynamic>)).toList();
+      } catch (_) {}
+    }
+
+    return [];
   }
 }

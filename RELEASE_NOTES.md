@@ -1,12 +1,13 @@
-# Pembaruan UNPAM Mobile v1.0.16
+# Pembaruan UNPAM Mobile v1.0.17
 
-Pembaruan UNPAM Mobile v1.0.16:
+Pembaruan UNPAM Mobile v1.0.17:
 
-- Gerbang Izin Akses Wajib (Mandatory Permission Gatekeeper): Mewajibkan persetujuan seluruh izin perangkat yang dibutuhkan aplikasi sebelum pengguna dapat masuk dan menggunakan aplikasi. Apabila salah satu izin belum atau tidak disetujui, akses ke portal Mentari, MyUnpam, dan fitur aplikasi akan dibatasi demi kelancaran perkuliahan.
-- Detail Izin yang Wajib Disetujui:
-  * Notifikasi Sistem & Perkuliahan: Memastikan mahasiswa selalu mendapatkan pengingat tenggat tugas, jadwal kuliah, pembaruan materi LMS, dan notifikasi pembaruan aplikasi secara real-time.
-  * Kamera (UNPAM AI Vision OCR): Diperlukan agar fitur asisten AI dapat memindai soal kuis, modul materi kuliah, dan dokumen secara langsung melalui kamera.
-  * Foto & Media Penyimpanan: Diperlukan untuk mengunggah berkas jawaban tugas mahasiswa ke portal Mentari/MyUnpam serta memilih gambar dari galeri HP.
-- Penanganan Izin Permanen (Settings Bridge): Menyediakan deteksi otomatis jika izin diblokir permanen oleh sistem Android dengan tombol pintas langsung ke menu Pengaturan Aplikasi HP, serta verifikasi otomatis sekembalinya pengguna ke aplikasi.
-- Arsitektur AppGate: Mengintegrasikan alur Syarat & Ketentuan Pengguna (User Agreement) dan Gerbang Izin Akses secara terpusat pada startup aplikasi.
-- Bebas Bug & Zero Overflow: Seluruh tata letak antarmuka dirancang responsif dan teruji bebas dari peringatan RenderFlex Overflow.
+- Fitur Baru: Menu Riwayat Pembaruan Aplikasi di Menu Titik 3 (GitHub Releases Live Sync):
+  * Mengambil dan menyinkronkan seluruh riwayat rilis aplikasi langsung dari GitHub API (`codewithtama/unpam_mobile`) secara otomatis tanpa hardcode.
+  * Menampilkan informasi komprehensif untuk setiap versi: tag versi, tanggal rilis, changelog lengkap, ukuran berkas APK, jumlah unduhan, dan tautan langsung ke halaman rilis GitHub.
+  * Dilengkapi detektor pintar untuk menandai versi yang sedang aktif digunakan ("Versi Terpasang Saat Ini") serta tombol cepat pasang jika terdapat versi rilis yang lebih baru.
+  * Dukungan offline caching via SharedPreferences agar riwayat tetap dapat dibaca meski tanpa sambungan internet.
+- Gerbang Izin Akses Wajib (Mandatory Permission Gatekeeper): Mewajibkan persetujuan seluruh izin perangkat yang dibutuhkan aplikasi (Notifikasi, Kamera untuk AI Vision OCR, serta Akses Media/Penyimpanan untuk berkas tugas) sebelum pengguna dapat masuk dan menggunakan aplikasi.
+- Penanganan Izin Permanen (Settings Bridge): Menyediakan deteksi otomatis jika izin diblokir sistem dengan tombol pintas langsung ke menu Pengaturan Aplikasi HP, serta verifikasi otomatis sekembalinya pengguna ke aplikasi.
+- Arsitektur AppGate: Mengintegrasikan verifikasi Syarat & Ketentuan Pengguna dan Gerbang Izin Akses secara terpusat pada startup aplikasi.
+- Bebas Bug & Zero Overflow: Seluruh antarmuka dirancang responsif dan teruji bebas dari peringatan RenderFlex Overflow.

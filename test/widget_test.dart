@@ -10,6 +10,9 @@ import 'package:unpam_mobile/core/services/permission_service.dart';
 import 'package:unpam_mobile/screens/user_agreement_screen.dart';
 import 'package:unpam_mobile/screens/permission_gate_screen.dart';
 import 'package:unpam_mobile/widgets/app_gate.dart';
+import 'package:unpam_mobile/models/github_release.dart';
+import 'package:unpam_mobile/core/services/update_checker_service.dart';
+import 'package:unpam_mobile/widgets/release_history_dialog.dart';
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
@@ -298,6 +301,62 @@ void main() {
       await tester.pump(const Duration(milliseconds: 100));
 
       expect(find.text('Syarat & Ketentuan'), findsOneWidget);
+    });
+  });
+
+  group('GitHubRelease Model & ReleaseHistoryDialog Tests', () {
+    test('GitHubRelease.fromJson parses raw GitHub API payload correctly', () {
+      final raw = {
+        'id': 1234567,
+        'tag_name': 'v1.0.16',
+        'name': 'Pembaruan UNPAM Mobile v1.0.16',
+        'body': '- Menambahkan gerbang izin wajib\n- Perbaikan bug',
+        'published_at': '2026-10-18T00:55:00Z',
+        'html_url': 'https://github.com/codewithtama/unpam_mobile/releases/tag/v1.0.16',
+        'assets': [
+          {
+            'name': 'app-release.apk',
+            'size': 44040192,
+            'download_count': 18,
+            'browser_download_url': 'https://github.com/codewithtama/unpam_mobile/releases/download/v1.0.16/app-release.apk',
+          }
+        ]
+      };
+
+      final release = GitHubRelease.fromJson(raw);
+
+      expect(release.id, equals(1234567));
+      expect(release.tagName, equals('v1.0.16'));
+      expect(release.displayTitle, equals('Pembaruan UNPAM Mobile v1.0.16'));
+      expect(release.hasApkAsset, isTrue);
+      expect(release.apkSizeBytes, equals(44040192));
+      expect(release.formattedApkSize, equals('42.0 MB'));
+      expect(release.downloadCount, equals(18));
+      expect(release.publishedAt, isNotNull);
+
+      final json = release.toJson();
+      expect(json['tag_name'], equals('v1.0.16'));
+      expect(json['apk_size_bytes'], equals(44040192));
+    });
+
+    testWidgets('ReleaseHistoryDialog renders header title and close button', (WidgetTester tester) async {
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: ReleaseHistoryDialog(
+              updateService: UpdateCheckerService(),
+            ),
+          ),
+        ),
+      );
+
+      // Render awal dialog
+      await tester.pump();
+
+      expect(find.text('Riwayat Pembaruan Aplikasi'), findsOneWidget);
+      expect(find.text('Data riwayat rilis langsung dari GitHub Repository'), findsOneWidget);
+      expect(find.byIcon(Icons.close_rounded), findsOneWidget);
+      expect(find.byIcon(Icons.refresh_rounded), findsOneWidget);
     });
   });
 }

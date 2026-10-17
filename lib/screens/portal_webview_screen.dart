@@ -16,6 +16,7 @@ import '../widgets/biometric_quick_prompt_sheet.dart';
 import '../core/services/update_checker_service.dart';
 import '../core/services/notification_service.dart';
 import '../widgets/update_dialog.dart';
+import '../widgets/release_history_dialog.dart';
 
 class PortalWebViewScreen extends StatefulWidget {
   final String initialUrl;
@@ -1004,6 +1005,13 @@ class _PortalWebViewScreenState extends State<PortalWebViewScreen> with WidgetsB
         );
       }
     }
+  }
+
+  void _showReleaseHistory() {
+    ReleaseHistoryDialog.show(
+      context: context,
+      updateService: _updateChecker,
+    );
   }
 
   Future<void> _detectLoginForm() async {
@@ -3926,6 +3934,8 @@ class _PortalWebViewScreenState extends State<PortalWebViewScreen> with WidgetsB
               _resetMentariSession();
             } else if (val == 'check_update') {
               _checkAppUpdateSilently(isManual: true);
+            } else if (val == 'update_history') {
+              _showReleaseHistory();
             }
           },
           itemBuilder: (ctx) => [
@@ -3979,6 +3989,16 @@ class _PortalWebViewScreenState extends State<PortalWebViewScreen> with WidgetsB
                   Icon(Icons.system_update_rounded, size: 18, color: AppTheme.accentGold),
                   SizedBox(width: 10),
                   Text('Cek Pembaruan Aplikasi'),
+                ],
+              ),
+            ),
+            const PopupMenuItem(
+              value: 'update_history',
+              child: Row(
+                children: [
+                  Icon(Icons.history_rounded, size: 18, color: AppTheme.primaryLight),
+                  SizedBox(width: 10),
+                  Text('Riwayat Pembaruan'),
                 ],
               ),
             ),
