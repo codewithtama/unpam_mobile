@@ -10,7 +10,7 @@ plugins {
 
 android {
     namespace = "com.unpam.mobile.lms"
-    compileSdk = flutter.compileSdkVersion
+    compileSdk = maxOf(flutter.compileSdkVersion, 37)
     ndkVersion = flutter.ndkVersion
 
     compileOptions {
