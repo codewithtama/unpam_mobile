@@ -1,7 +1,7 @@
 name: unpam_mobile
 description: "Aplikasi Mobile LMS Kampus (Mentari UNPAM) - Mobile Programming"
 publish_to: 'none'
-version: 1.0.8+9
+version: 1.0.9+10
 
 environment:
   sdk: '>=3.0.0 <4.0.0'
@@ -23,6 +23,7 @@ dependencies:
   package_info_plus: ^10.2.2
   path_provider: ^2.1.6
   open_filex: ^5.0.0
+  flutter_local_notifications: ^22.3.2
 
 dev_dependencies:
   flutter_test:

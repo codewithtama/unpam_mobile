@@ -13,6 +13,7 @@ import 'ai_paraphrase_screen.dart';
 import '../providers/biometric_provider.dart';
 import '../widgets/biometric_vault_sheet.dart';
 import '../core/services/update_checker_service.dart';
+import '../core/services/notification_service.dart';
 import '../widgets/update_dialog.dart';
 
 class PortalWebViewScreen extends StatefulWidget {
@@ -69,6 +70,17 @@ class _PortalWebViewScreenState extends State<PortalWebViewScreen> with WidgetsB
     WidgetsBinding.instance.addObserver(this);
     _currentUrl = widget.initialUrl;
     _initController();
+    NotificationService().initialize(
+      onUpdateTap: (info) {
+        if (mounted) {
+          UpdateDialog.show(
+            context: context,
+            updateInfo: info,
+            updateService: _updateChecker,
+          );
+        }
+      },
+    );
     WidgetsBinding.instance.addPostFrameCallback((_) {
       Future.delayed(const Duration(seconds: 2), () {
         if (mounted) {
@@ -768,6 +780,10 @@ class _PortalWebViewScreenState extends State<PortalWebViewScreen> with WidgetsB
       if (!mounted) return;
 
       if (updateInfo != null && updateInfo.hasUpdate) {
+        // Tampilkan notifikasi sistem melayang di status bar HP
+        NotificationService().showUpdateNotification(updateInfo);
+
+        // Tampilkan dialog pop-up di layar aplikasi
         UpdateDialog.show(
           context: context,
           updateInfo: updateInfo,

@@ -4,6 +4,7 @@ import 'package:provider/provider.dart';
 import 'core/services/storage_service.dart';
 import 'core/services/ai_service.dart';
 import 'core/services/biometric_auth_service.dart';
+import 'core/services/notification_service.dart';
 import 'providers/ai_provider.dart';
 import 'providers/biometric_provider.dart';
 import 'theme/app_theme.dart';
@@ -15,6 +16,9 @@ void main() async {
 
   // Inisialisasi locale formatting untuk format tanggal Indonesia
   await initializeDateFormatting('id_ID', null);
+
+  // Inisialisasi notifikasi lokal sistem Android
+  await NotificationService().initialize();
 
   // Inisialisasi Local Storage, Biometric & AI Service
   final storage = await StorageService.getInstance();
