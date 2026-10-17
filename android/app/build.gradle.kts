@@ -43,6 +43,8 @@ android {
                 storeFile = file("upload-keystore.jks")
                 storePassword = "unpam123456"
             }
+            v1SigningEnabled = true
+            v2SigningEnabled = true
         }
     }
 
