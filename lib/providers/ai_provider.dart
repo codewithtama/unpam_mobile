@@ -4,6 +4,7 @@ import '../core/services/ai_service.dart';
 import '../core/services/storage_service.dart';
 import '../models/ai_message_model.dart';
 import '../models/paraphrase_model.dart';
+import '../models/ai_model_config.dart';
 
 class AiProvider extends ChangeNotifier {
   final AiService _aiService;
@@ -22,6 +23,17 @@ class AiProvider extends ChangeNotifier {
   bool get isLoading => _isLoading;
   String? get errorMessage => _errorMessage;
   String? get selectedCourseName => _selectedCourseName;
+
+  AiModelOption get activeModel =>
+      AiModelOption.getById(_storage.getActiveAiModelId());
+
+  List<AiModelOption> get availableModels => AiModelOption.availableModels;
+
+  bool get hasKeyForActiveModel {
+    if (activeModel.provider == AiProviderType.freeCloud) return true;
+    return _storage.hasProviderApiKey(activeModel.provider);
+  }
+
   bool get hasCustomApiKey =>
       _storage.getGeminiApiKey() != null && _storage.getGeminiApiKey()!.isNotEmpty;
 
@@ -30,14 +42,68 @@ class AiProvider extends ChangeNotifier {
       AiMessage(
         id: 'welcome_msg',
         content:
-            'Halo! Saya **UNPAM AI**, siap mendampingi perkuliahan Anda. '
-            'Anda dapat menanyakan materi kuliah, meng-upload screenshot soal kuis/tugas, '
-            'atau meminta rangkuman dan analisis jawaban langsung dari layar modul perkuliahan.',
+            'Halo! Saya **UNPAM AI**, asisten akademik cerdas Universitas Pamulang.\n\n'
+            'Kini Anda dapat memilih berbagai model AI terdepan (Google Gemini, DeepSeek R1/V3, Claude 3.5 Sonnet, Qwen 2.5, OpenAI, atau Cloud AI Gratis) melalui menu pilihan model di bagian atas.',
         isUser: false,
         timestamp: DateTime.now(),
         type: AiMessageType.text,
       ),
     );
+  }
+
+  Future<void> setActiveModel(String modelId) async {
+    await _storage.saveActiveAiModelId(modelId);
+    notifyListeners();
+  }
+
+  bool hasKeyForModel(AiModelOption option) {
+    if (option.provider == AiProviderType.freeCloud) return true;
+    return _storage.hasProviderApiKey(option.provider);
+  }
+
+  String getApiKeyForProvider(AiProviderType provider) {
+    return _storage.getProviderApiKey(provider) ?? '';
+  }
+
+  Future<bool> validateAndSaveProviderApiKey(
+    AiProviderType provider,
+    String key,
+  ) async {
+    final clean = key.trim();
+    if (clean.isEmpty) {
+      await removeProviderApiKey(provider);
+      return true;
+    }
+
+    final isValid = await _aiService.validateApiKey(provider, clean);
+    if (isValid) {
+      await _storage.saveProviderApiKey(provider, clean);
+      notifyListeners();
+    }
+    return isValid;
+  }
+
+  Future<void> removeProviderApiKey(AiProviderType provider) async {
+    await _storage.saveProviderApiKey(provider, '');
+    notifyListeners();
+  }
+
+  // --- Kompatibilitas Gemini Lama ---
+  Future<void> updateGeminiApiKey(String key) async {
+    await _storage.saveGeminiApiKey(key);
+    notifyListeners();
+  }
+
+  Future<bool> validateAndSaveApiKey(String key) async {
+    return validateAndSaveProviderApiKey(AiProviderType.gemini, key);
+  }
+
+  Future<void> removeGeminiApiKey() async {
+    await removeProviderApiKey(AiProviderType.gemini);
+  }
+
+  String getGeminiApiKey() {
+    return _storage.getGeminiApiKey() ?? '';
   }
 
   void setSelectedCourse(String? course) {
@@ -54,7 +120,6 @@ class AiProvider extends ChangeNotifier {
     final query = text.trim();
     if (query.isEmpty && (imageBytes == null || imageBytes.isEmpty)) return;
 
-    // Tambah pesan user ke list (termasuk thumbnail gambar jika ada)
     final userMsg = AiMessage(
       id: DateTime.now().millisecondsSinceEpoch.toString(),
       content: query.isEmpty
@@ -86,7 +151,7 @@ class AiProvider extends ChangeNotifier {
       _messages.add(
         AiMessage(
           id: DateTime.now().millisecondsSinceEpoch.toString(),
-          content: 'Maaf, terjadi kendala saat menghubungi asisten. Silakan coba lagi.',
+          content: 'Maaf, terjadi kendala saat menghubungi asisten AI ($e). Silakan coba lagi.',
           isUser: false,
           timestamp: DateTime.now(),
         ),
@@ -97,7 +162,6 @@ class AiProvider extends ChangeNotifier {
     }
   }
 
-  /// Interaktif: Mahasiswa menjawab opsi kuis
   void answerQuizOption({
     required String messageId,
     required int questionIndex,
@@ -111,34 +175,6 @@ class AiProvider extends ChangeNotifier {
 
     msg.quizItems![questionIndex].userSelectedIndex = selectedIndex;
     notifyListeners();
-  }
-
-  Future<void> updateGeminiApiKey(String key) async {
-    await _storage.saveGeminiApiKey(key);
-    notifyListeners();
-  }
-
-  Future<bool> validateAndSaveApiKey(String key) async {
-    final clean = key.trim();
-    if (clean.isEmpty) {
-      await removeGeminiApiKey();
-      return true;
-    }
-    final valid = await _aiService.validateGeminiApiKey(clean);
-    if (valid) {
-      await _storage.saveGeminiApiKey(clean);
-      notifyListeners();
-    }
-    return valid;
-  }
-
-  Future<void> removeGeminiApiKey() async {
-    await _storage.saveGeminiApiKey('');
-    notifyListeners();
-  }
-
-  String getGeminiApiKey() {
-    return _storage.getGeminiApiKey() ?? '';
   }
 
   Future<String> generateForumReply({
@@ -181,4 +217,3 @@ class AiProvider extends ChangeNotifier {
     notifyListeners();
   }
 }
-

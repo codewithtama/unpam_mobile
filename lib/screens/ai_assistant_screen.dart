@@ -8,6 +8,7 @@ import '../providers/ai_provider.dart';
 import '../models/ai_message_model.dart';
 import '../theme/app_theme.dart';
 import 'ai_paraphrase_screen.dart';
+import '../models/ai_model_config.dart';
 
 class AiAssistantScreen extends StatefulWidget {
   final String? initialPrompt;
@@ -231,6 +232,15 @@ class _AiAssistantScreenState extends State<AiAssistantScreen> {
         ),
         actions: [
           IconButton(
+            tooltip: 'Ganti Model AI & Kunci API',
+            icon: const Icon(
+              Icons.tune_rounded,
+              color: Colors.white,
+              size: 20,
+            ),
+            onPressed: () => _showModelSelectorDialog(context),
+          ),
+          IconButton(
             tooltip: 'AI Parafrase Akademik',
             icon: const Icon(Icons.auto_fix_high_rounded, color: Colors.white, size: 20),
             onPressed: () {
@@ -239,15 +249,6 @@ class _AiAssistantScreenState extends State<AiAssistantScreen> {
                 MaterialPageRoute(builder: (_) => const AiParaphraseScreen()),
               );
             },
-          ),
-          IconButton(
-            tooltip: 'Pengaturan Gemini API Key',
-            icon: Icon(
-              Icons.vpn_key_rounded,
-              color: aiProv.hasCustomApiKey ? AppTheme.accentGold : Colors.white70,
-              size: 20,
-            ),
-            onPressed: () => _showApiKeyDialog(context),
           ),
           IconButton(
             tooltip: 'Bersihkan Riwayat Chat',
@@ -263,50 +264,58 @@ class _AiAssistantScreenState extends State<AiAssistantScreen> {
       ),
       body: Column(
         children: [
-          // Engine Status Indicator Banner
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 5),
-            color: aiProv.hasCustomApiKey
+          // Engine Status Indicator Banner (Interactive Model Selector)
+          Material(
+            color: aiProv.hasKeyForActiveModel
                 ? const Color(0xFFFEF3C7)
                 : const Color(0xFFF1F5F9),
-            child: Row(
-              children: [
-                Icon(
-                  aiProv.hasCustomApiKey
-                      ? Icons.bolt_rounded
-                      : Icons.cloud_done_rounded,
-                  size: 15,
-                  color: aiProv.hasCustomApiKey
-                      ? const Color(0xFFD97706)
-                      : AppTheme.primaryBlue,
-                ),
-                const SizedBox(width: 8),
-                Expanded(
-                  child: Text(
-                    aiProv.hasCustomApiKey
-                        ? 'Engine: Google Gemini Flash (Vision OCR Aktif)'
-                        : 'Engine: Cloud AI Standar (Bebas Kuota, Tanpa API Key)',
-                    style: TextStyle(
-                      fontSize: 11,
-                      fontWeight: FontWeight.w600,
-                      color: aiProv.hasCustomApiKey
-                          ? const Color(0xFF92400E)
-                          : AppTheme.textDark,
+            child: InkWell(
+              onTap: () => _showModelSelectorDialog(context),
+              child: Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
+                child: Row(
+                  children: [
+                    Icon(
+                      aiProv.activeModel.supportsVision
+                          ? Icons.remove_red_eye_rounded
+                          : Icons.psychology_rounded,
+                      size: 16,
+                      color: aiProv.hasKeyForActiveModel
+                          ? const Color(0xFFD97706)
+                          : AppTheme.primaryBlue,
                     ),
-                  ),
-                ),
-                InkWell(
-                  onTap: () => _showApiKeyDialog(context),
-                  child: Text(
-                    aiProv.hasCustomApiKey ? 'Ubah' : 'Atur Gemini Key',
-                    style: const TextStyle(
-                      fontSize: 11,
-                      color: AppTheme.primaryBlue,
-                      fontWeight: FontWeight.bold,
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Text(
+                        'Model: ${aiProv.activeModel.name}${aiProv.activeModel.supportsVision ? " (Vision OCR)" : ""}',
+                        style: TextStyle(
+                          fontSize: 11.5,
+                          fontWeight: FontWeight.bold,
+                          color: aiProv.hasKeyForActiveModel
+                              ? const Color(0xFF92400E)
+                              : AppTheme.textDark,
+                        ),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
                     ),
-                  ),
+                    const Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Text(
+                          'Ganti',
+                          style: TextStyle(
+                            fontSize: 11,
+                            color: AppTheme.primaryBlue,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                        Icon(Icons.keyboard_arrow_right_rounded, size: 16, color: AppTheme.primaryBlue),
+                      ],
+                    ),
+                  ],
                 ),
-              ],
+              ),
             ),
           ),
           const Divider(height: 1, color: AppTheme.cardBorder),
@@ -816,186 +825,461 @@ class _AiAssistantScreenState extends State<AiAssistantScreen> {
     );
   }
 
-  void _showApiKeyDialog(BuildContext context) {
+  void _showModelSelectorDialog(BuildContext context) {
     final aiProv = context.read<AiProvider>();
-    final controller = TextEditingController(text: aiProv.getGeminiApiKey());
+    AiModelOption? editingOption;
+    final keyController = TextEditingController();
     bool obscure = true;
     bool isSaving = false;
     String? statusMessage;
     bool? isSuccess;
 
-    showDialog(
+    showModalBottomSheet(
       context: context,
-      builder: (dialogCtx) {
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (bottomSheetCtx) {
         return StatefulBuilder(
-          builder: (ctx, setDialogState) {
-            return AlertDialog(
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
-              title: const Row(
+          builder: (ctx, setModalState) {
+            final activeOption = editingOption ?? aiProv.activeModel;
+            final isEditing = editingOption != null;
+
+            return Container(
+              constraints: BoxConstraints(
+                maxHeight: MediaQuery.of(ctx).size.height * 0.85,
+              ),
+              decoration: const BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+              ),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
                 children: [
-                  Icon(Icons.vpn_key_rounded, color: AppTheme.accentGold, size: 22),
-                  SizedBox(width: 8),
-                  Text('Kunci API Gemini', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+                  Container(
+                    margin: const EdgeInsets.only(top: 10, bottom: 8),
+                    width: 40,
+                    height: 4,
+                    decoration: BoxDecoration(
+                      color: Colors.grey.shade300,
+                      borderRadius: BorderRadius.circular(2),
+                    ),
+                  ),
+                  Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
+                    child: Row(
+                      children: [
+                        Container(
+                          padding: const EdgeInsets.all(8),
+                          decoration: BoxDecoration(
+                            color: AppTheme.primaryBlue.withOpacity(0.1),
+                            borderRadius: BorderRadius.circular(10),
+                          ),
+                          child: const Icon(Icons.psychology_alt_rounded, color: AppTheme.primaryBlue, size: 22),
+                        ),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                isEditing ? 'Kunci API ${activeOption.shortName}' : 'Pilih Model & Mesin AI',
+                                style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: AppTheme.textDark),
+                              ),
+                              Text(
+                                isEditing
+                                    ? 'Kelola atau perbarui API Key untuk model ini'
+                                    : 'Gunakan Gemini, DeepSeek, Claude, Qwen, ChatGPT, atau Cloud AI',
+                                style: const TextStyle(fontSize: 11, color: AppTheme.textMuted),
+                              ),
+                            ],
+                          ),
+                        ),
+                        if (isEditing)
+                          IconButton(
+                            icon: const Icon(Icons.arrow_back_rounded),
+                            onPressed: () {
+                              setModalState(() {
+                                editingOption = null;
+                                statusMessage = null;
+                              });
+                            },
+                          )
+                        else
+                          IconButton(
+                            icon: const Icon(Icons.close_rounded),
+                            onPressed: () => Navigator.pop(ctx),
+                          ),
+                      ],
+                    ),
+                  ),
+                  const Divider(height: 1, color: AppTheme.cardBorder),
+                  Flexible(
+                    child: SingleChildScrollView(
+                      padding: const EdgeInsets.fromLTRB(16, 12, 16, 24),
+                      child: isEditing
+                          ? _buildKeyConfigForm(
+                              ctx: ctx,
+                              option: activeOption,
+                              controller: keyController,
+                              obscure: obscure,
+                              isSaving: isSaving,
+                              statusMessage: statusMessage,
+                              isSuccess: isSuccess,
+                              aiProv: aiProv,
+                              onToggleObscure: () => setModalState(() => obscure = !obscure),
+                              onSave: () async {
+                                final text = keyController.text.trim();
+                                setModalState(() {
+                                  isSaving = true;
+                                  statusMessage = 'Memverifikasi API Key ke server ${activeOption.shortName}...';
+                                  isSuccess = null;
+                                });
+
+                                final ok = await aiProv.validateAndSaveProviderApiKey(
+                                  activeOption.provider,
+                                  text,
+                                );
+
+                                if (!ctx.mounted) return;
+                                setModalState(() {
+                                  isSaving = false;
+                                  if (ok) {
+                                    statusMessage = '✅ Kunci valid! Model ${activeOption.shortName} siap digunakan.';
+                                    isSuccess = true;
+                                  } else {
+                                    statusMessage = '❌ Kunci tidak valid atau server tidak merespons.';
+                                    isSuccess = false;
+                                  }
+                                });
+
+                                if (ok) {
+                                  await aiProv.setActiveModel(activeOption.id);
+                                  await Future.delayed(const Duration(milliseconds: 600));
+                                  if (ctx.mounted) {
+                                    setModalState(() => editingOption = null);
+                                  }
+                                }
+                              },
+                              onDelete: () async {
+                                setModalState(() => isSaving = true);
+                                await aiProv.removeProviderApiKey(activeOption.provider);
+                                keyController.clear();
+                                if (!ctx.mounted) return;
+                                setModalState(() {
+                                  isSaving = false;
+                                  editingOption = null;
+                                });
+                              },
+                            )
+                          : Column(
+                              children: aiProv.availableModels.map((opt) {
+                                final isSelected = opt.id == aiProv.activeModel.id;
+                                final hasKey = aiProv.hasKeyForModel(opt);
+
+                                return Card(
+                                  elevation: 0,
+                                  margin: const EdgeInsets.only(bottom: 8),
+                                  shape: RoundedRectangleBorder(
+                                    borderRadius: BorderRadius.circular(14),
+                                    side: BorderSide(
+                                      color: isSelected
+                                          ? AppTheme.primaryBlue
+                                          : AppTheme.cardBorder,
+                                      width: isSelected ? 1.8 : 1,
+                                    ),
+                                  ),
+                                  color: isSelected
+                                      ? AppTheme.primaryBlue.withOpacity(0.04)
+                                      : Colors.white,
+                                  child: ListTile(
+                                    contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 4),
+                                    leading: CircleAvatar(
+                                      radius: 18,
+                                      backgroundColor: isSelected
+                                          ? AppTheme.primaryBlue
+                                          : Colors.grey.shade100,
+                                      child: Icon(
+                                        _getIconForProvider(opt.provider),
+                                        size: 18,
+                                        color: isSelected ? Colors.white : AppTheme.primaryBlue,
+                                      ),
+                                    ),
+                                    title: Row(
+                                      children: [
+                                        Expanded(
+                                          child: Text(
+                                            opt.name,
+                                            style: TextStyle(
+                                              fontWeight: isSelected ? FontWeight.bold : FontWeight.w600,
+                                              fontSize: 13,
+                                              color: isSelected ? AppTheme.primaryBlue : AppTheme.textDark,
+                                            ),
+                                          ),
+                                        ),
+                                        if (opt.supportsVision)
+                                          Container(
+                                            margin: const EdgeInsets.only(left: 4),
+                                            padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1.5),
+                                            decoration: BoxDecoration(
+                                              color: Colors.purple.shade50,
+                                              borderRadius: BorderRadius.circular(4),
+                                              border: Border.all(color: Colors.purple.shade200),
+                                            ),
+                                            child: const Text(
+                                              'OCR',
+                                              style: TextStyle(fontSize: 9.5, fontWeight: FontWeight.bold, color: Colors.purple),
+                                            ),
+                                          ),
+                                      ],
+                                    ),
+                                    subtitle: Padding(
+                                      padding: const EdgeInsets.only(top: 3),
+                                      child: Text(
+                                        opt.description,
+                                        style: const TextStyle(fontSize: 11, color: AppTheme.textMuted, height: 1.3),
+                                      ),
+                                    ),
+                                    trailing: Row(
+                                      mainAxisSize: MainAxisSize.min,
+                                      children: [
+                                        if (opt.provider != AiProviderType.freeCloud)
+                                          IconButton(
+                                            icon: Icon(
+                                              Icons.key_rounded,
+                                              size: 18,
+                                              color: hasKey ? AppTheme.accentGold : Colors.grey.shade400,
+                                            ),
+                                            tooltip: hasKey ? 'Edit API Key' : 'Pasang API Key',
+                                            onPressed: () {
+                                              keyController.text = aiProv.getApiKeyForProvider(opt.provider);
+                                              setModalState(() {
+                                                editingOption = opt;
+                                                statusMessage = null;
+                                                isSuccess = null;
+                                              });
+                                            },
+                                          ),
+                                        Radio<String>(
+                                          value: opt.id,
+                                          groupValue: aiProv.activeModel.id,
+                                          activeColor: AppTheme.primaryBlue,
+                                          onChanged: (val) async {
+                                            if (val != null) {
+                                              if (opt.provider != AiProviderType.freeCloud && !hasKey) {
+                                                keyController.text = aiProv.getApiKeyForProvider(opt.provider);
+                                                setModalState(() {
+                                                  editingOption = opt;
+                                                  statusMessage = null;
+                                                  isSuccess = null;
+                                                });
+                                                return;
+                                              }
+                                              await aiProv.setActiveModel(val);
+                                              if (ctx.mounted) Navigator.pop(ctx);
+                                            }
+                                          },
+                                        ),
+                                      ],
+                                    ),
+                                    onTap: () async {
+                                      if (opt.provider != AiProviderType.freeCloud && !hasKey) {
+                                        keyController.text = aiProv.getApiKeyForProvider(opt.provider);
+                                        setModalState(() {
+                                          editingOption = opt;
+                                          statusMessage = null;
+                                          isSuccess = null;
+                                        });
+                                        return;
+                                      }
+                                      await aiProv.setActiveModel(opt.id);
+                                      if (ctx.mounted) Navigator.pop(ctx);
+                                    },
+                                  ),
+                                );
+                              }).toList(),
+                            ),
+                    ),
+                  ),
                 ],
               ),
-              content: SingleChildScrollView(
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Container(
-                      padding: const EdgeInsets.all(10),
-                      decoration: BoxDecoration(
-                        color: aiProv.hasCustomApiKey
-                            ? AppTheme.successGreen.withOpacity(0.12)
-                            : AppTheme.primaryLight.withOpacity(0.1),
-                        borderRadius: BorderRadius.circular(10),
-                      ),
-                      child: Row(
-                        children: [
-                          Icon(
-                            aiProv.hasCustomApiKey ? Icons.check_circle_rounded : Icons.info_outline_rounded,
-                            size: 18,
-                            color: aiProv.hasCustomApiKey ? AppTheme.successGreen : AppTheme.primaryBlue,
-                          ),
-                          const SizedBox(width: 8),
-                          Expanded(
-                            child: Text(
-                              aiProv.hasCustomApiKey
-                                  ? 'Mode Google Gemini 1.5 Flash Aktif (Vision OCR Aktif)'
-                                  : 'Mode Cloud AI Gratis Aktif (Bebas Kuota, Tanpa API Key)',
-                              style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w600),
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                    const SizedBox(height: 12),
-                    const Text(
-                      'Gemini API Key gratis resmi dari Google memberikan kecepatan instan dan kemampuan membaca screenshot soal kuis.',
-                      style: TextStyle(fontSize: 12, color: AppTheme.textMuted, height: 1.4),
-                    ),
-                    const SizedBox(height: 8),
-                    InkWell(
-                      onTap: () async {
-                        final uri = Uri.parse('https://aistudio.google.com/app/apikey');
-                        if (await canLaunchUrl(uri)) {
-                          await launchUrl(uri, mode: LaunchMode.externalApplication);
-                        }
-                      },
-                      child: const Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          Icon(Icons.open_in_new_rounded, size: 14, color: AppTheme.primaryBlue),
-                          SizedBox(width: 4),
-                          Text(
-                            'Dapatkan API Key Gratis di Google AI Studio',
-                            style: TextStyle(
-                              fontSize: 12,
-                              color: AppTheme.primaryBlue,
-                              fontWeight: FontWeight.bold,
-                              decoration: TextDecoration.underline,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                    const SizedBox(height: 14),
-                    TextField(
-                      controller: controller,
-                      obscureText: obscure,
-                      style: const TextStyle(fontSize: 13),
-                      decoration: InputDecoration(
-                        labelText: 'Google Gemini API Key',
-                        hintText: 'Paste API Key di sini...',
-                        isDense: true,
-                        prefixIcon: const Icon(Icons.key_outlined, size: 18),
-                        suffixIcon: IconButton(
-                          icon: Icon(obscure ? Icons.visibility_off : Icons.visibility, size: 18),
-                          onPressed: () => setDialogState(() => obscure = !obscure),
-                        ),
-                        border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
-                      ),
-                    ),
-                    if (statusMessage != null) ...[
-                      const SizedBox(height: 8),
-                      Text(
-                        statusMessage!,
-                        style: TextStyle(
-                          fontSize: 11,
-                          fontWeight: FontWeight.w600,
-                          color: isSuccess == true ? AppTheme.successGreen : AppTheme.dangerRed,
-                        ),
-                      ),
-                    ],
-                  ],
-                ),
-              ),
-              actions: [
-                if (aiProv.hasCustomApiKey)
-                  TextButton(
-                    onPressed: isSaving
-                        ? null
-                        : () async {
-                            setDialogState(() => isSaving = true);
-                            await aiProv.removeGeminiApiKey();
-                            if (ctx.mounted) Navigator.pop(ctx);
-                          },
-                    child: const Text('Hapus Key', style: TextStyle(color: AppTheme.dangerRed)),
-                  ),
-                TextButton(
-                  onPressed: isSaving ? null : () => Navigator.pop(ctx),
-                  child: const Text('Tutup'),
-                ),
-                ElevatedButton(
-                  onPressed: isSaving
-                      ? null
-                      : () async {
-                          final text = controller.text.trim();
-                          if (text.isEmpty) {
-                            await aiProv.removeGeminiApiKey();
-                            if (ctx.mounted) Navigator.pop(ctx);
-                            return;
-                          }
-                          setDialogState(() {
-                            isSaving = true;
-                            statusMessage = 'Memverifikasi API Key ke Google...';
-                            isSuccess = null;
-                          });
-                          final ok = await aiProv.validateAndSaveApiKey(text);
-                          if (!ctx.mounted) return;
-                          setDialogState(() {
-                            isSaving = false;
-                            if (ok) {
-                              statusMessage = '✅ Kunci API Valid! Gemini Flash Aktif.';
-                              isSuccess = true;
-                            } else {
-                              statusMessage = '❌ Kunci API tidak valid atau gagal terhubung.';
-                              isSuccess = false;
-                            }
-                          });
-                          if (ok) {
-                            await Future.delayed(const Duration(milliseconds: 700));
-                            if (ctx.mounted) Navigator.pop(ctx);
-                          }
-                        },
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: AppTheme.primaryBlue,
-                    foregroundColor: Colors.white,
-                  ),
-                  child: isSaving
-                      ? const SizedBox(
-                          width: 14,
-                          height: 14,
-                          child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
-                        )
-                      : const Text('Simpan & Uji'),
-                ),
-              ],
             );
           },
         );
       },
     );
   }
+
+  IconData _getIconForProvider(AiProviderType provider) {
+    switch (provider) {
+      case AiProviderType.gemini:
+        return Icons.auto_awesome;
+      case AiProviderType.deepseek:
+        return Icons.psychology_rounded;
+      case AiProviderType.claude:
+        return Icons.forum_rounded;
+      case AiProviderType.qwen:
+        return Icons.language_rounded;
+      case AiProviderType.openai:
+        return Icons.bolt_rounded;
+      case AiProviderType.openrouter:
+        return Icons.hub_rounded;
+      case AiProviderType.freeCloud:
+        return Icons.cloud_done_rounded;
+    }
+  }
+
+  Widget _buildKeyConfigForm({
+    required BuildContext ctx,
+    required AiModelOption option,
+    required TextEditingController controller,
+    required bool obscure,
+    required bool isSaving,
+    required String? statusMessage,
+    required bool? isSuccess,
+    required AiProvider aiProv,
+    required VoidCallback onToggleObscure,
+    required VoidCallback onSave,
+    required VoidCallback onDelete,
+  }) {
+    final hasKey = aiProv.hasKeyForModel(option);
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Container(
+          padding: const EdgeInsets.all(12),
+          decoration: BoxDecoration(
+            color: hasKey ? AppTheme.successGreen.withOpacity(0.08) : AppTheme.primaryBlue.withOpacity(0.06),
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(
+              color: hasKey ? AppTheme.successGreen.withOpacity(0.3) : AppTheme.primaryBlue.withOpacity(0.2),
+            ),
+          ),
+          child: Row(
+            children: [
+              Icon(
+                hasKey ? Icons.check_circle_rounded : Icons.info_outline_rounded,
+                size: 20,
+                color: hasKey ? AppTheme.successGreen : AppTheme.primaryBlue,
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Text(
+                  hasKey
+                      ? 'Kunci API ${option.shortName} tersimpan dan siap digunakan.'
+                      : 'Masukkan API Key resmi ${option.shortName} untuk mengaktifkan model ini.',
+                  style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600),
+                ),
+              ),
+            ],
+          ),
+        ),
+        const SizedBox(height: 12),
+        Text(
+          option.description,
+          style: const TextStyle(fontSize: 12, color: AppTheme.textMuted, height: 1.4),
+        ),
+        if (option.apiKeyDocsUrl.isNotEmpty) ...[
+          const SizedBox(height: 8),
+          InkWell(
+            onTap: () async {
+              final uri = Uri.parse(option.apiKeyDocsUrl);
+              if (await canLaunchUrl(uri)) {
+                await launchUrl(uri, mode: LaunchMode.externalApplication);
+              }
+            },
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const Icon(Icons.open_in_new_rounded, size: 14, color: AppTheme.primaryBlue),
+                const SizedBox(width: 4),
+                Text(
+                  'Dapatkan API Key di ${option.shortName} Console',
+                  style: const TextStyle(
+                    fontSize: 12,
+                    color: AppTheme.primaryBlue,
+                    fontWeight: FontWeight.bold,
+                    decoration: TextDecoration.underline,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+        const SizedBox(height: 16),
+        TextField(
+          controller: controller,
+          obscureText: obscure,
+          style: const TextStyle(fontSize: 13),
+          decoration: InputDecoration(
+            labelText: 'Kunci API ${option.shortName}',
+            hintText: 'Tempel / paste API Key di sini...',
+            isDense: true,
+            prefixIcon: const Icon(Icons.key_outlined, size: 18),
+            suffixIcon: IconButton(
+              icon: Icon(obscure ? Icons.visibility_off : Icons.visibility, size: 18),
+              onPressed: onToggleObscure,
+            ),
+            border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+          ),
+        ),
+        if (statusMessage != null) ...[
+          const SizedBox(height: 10),
+          Row(
+            children: [
+              if (isSaving)
+                const SizedBox(
+                  width: 14,
+                  height: 14,
+                  child: CircularProgressIndicator(strokeWidth: 2),
+                )
+              else
+                Icon(
+                  isSuccess == true ? Icons.check_circle_rounded : Icons.error_outline_rounded,
+                  size: 16,
+                  color: isSuccess == true ? AppTheme.successGreen : AppTheme.dangerRed,
+                ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Text(
+                  statusMessage,
+                  style: TextStyle(
+                    fontSize: 11.5,
+                    fontWeight: FontWeight.w600,
+                    color: isSuccess == true ? AppTheme.successGreen : AppTheme.dangerRed,
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ],
+        const SizedBox(height: 20),
+        Row(
+          mainAxisAlignment: MainAxisAlignment.end,
+          children: [
+            if (hasKey)
+              TextButton(
+                onPressed: isSaving ? null : onDelete,
+                child: const Text('Hapus Key', style: TextStyle(color: AppTheme.dangerRed)),
+              ),
+            const SizedBox(width: 8),
+            ElevatedButton.icon(
+              style: ElevatedButton.styleFrom(
+                backgroundColor: AppTheme.primaryBlue,
+                foregroundColor: Colors.white,
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 10),
+              ),
+              onPressed: isSaving ? null : onSave,
+              icon: isSaving
+                  ? const SizedBox(width: 14, height: 14, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
+                  : const Icon(Icons.check_rounded, size: 16),
+              label: Text(isSaving ? 'Memverifikasi...' : 'Simpan & Aktifkan'),
+            ),
+          ],
+        ),
+      ],
+    );
+  }
+
 }

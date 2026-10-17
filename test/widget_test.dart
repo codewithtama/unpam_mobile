@@ -4,6 +4,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:unpam_mobile/core/services/storage_service.dart';
 import 'package:unpam_mobile/core/services/ai_service.dart';
 import 'package:unpam_mobile/providers/ai_provider.dart';
+import 'package:unpam_mobile/models/ai_model_config.dart';
 import 'package:unpam_mobile/screens/user_agreement_screen.dart';
 
 void main() {
@@ -90,6 +91,36 @@ void main() {
       expect(aiProv.messages.length, equals(1));
       expect(aiProv.messages.first.isUser, isFalse);
       expect(aiProv.isLoading, isFalse);
+    });
+
+    test('AiProvider supports switching between Gemini, DeepSeek, Claude, and Qwen models', () async {
+      final aiService = AiService(storage);
+      final aiProv = AiProvider(aiService, storage);
+
+      expect(aiProv.availableModels.length, greaterThanOrEqualTo(6));
+
+      // Switch to DeepSeek
+      await aiProv.setActiveModel('deepseek');
+      expect(aiProv.activeModel.id, equals('deepseek'));
+      expect(aiProv.hasKeyForActiveModel, isFalse);
+
+      await storage.saveProviderApiKey(AiProviderType.deepseek, 'sk-deepseek-test');
+      expect(aiProv.hasKeyForActiveModel, isTrue);
+      expect(aiProv.getApiKeyForProvider(AiProviderType.deepseek), equals('sk-deepseek-test'));
+
+      // Switch to Claude
+      await aiProv.setActiveModel('claude');
+      expect(aiProv.activeModel.id, equals('claude'));
+      expect(aiProv.activeModel.supportsVision, isTrue);
+
+      // Switch to Qwen
+      await aiProv.setActiveModel('qwen');
+      expect(aiProv.activeModel.id, equals('qwen'));
+
+      // Switch back to Cloud AI
+      await aiProv.setActiveModel('free_cloud');
+      expect(aiProv.activeModel.id, equals('free_cloud'));
+      expect(aiProv.hasKeyForActiveModel, isTrue);
     });
   });
 

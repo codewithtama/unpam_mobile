@@ -4,6 +4,7 @@ import 'package:dio/dio.dart';
 import '../services/storage_service.dart';
 import '../../models/ai_message_model.dart';
 import '../../models/paraphrase_model.dart';
+import '../../models/ai_model_config.dart';
 
 class AiService {
   final StorageService _storage;
@@ -15,36 +16,110 @@ class AiService {
   AiService(this._storage) {
     _dio.options = BaseOptions(
       connectTimeout: const Duration(seconds: 25),
-      receiveTimeout: const Duration(seconds: 35),
+      receiveTimeout: const Duration(seconds: 45),
       headers: {'Content-Type': 'application/json'},
     );
   }
 
-  /// Memvalidasi keaslian Gemini API Key via endpoint models resmi Google tanpa menghabiskan kuota token
-  Future<bool> validateGeminiApiKey(String key) async {
+  /// Memvalidasi keaslian API Key untuk setiap provider LLM
+  Future<bool> validateApiKey(AiProviderType provider, String key) async {
     final cleanKey = key.trim();
     if (cleanKey.isEmpty) return false;
 
-    final url =
-        'https://generativelanguage.googleapis.com/v1beta/models?key=$cleanKey';
-
     try {
-      final res = await _dio.get<Map<String, dynamic>>(
-        url,
-        options: Options(
-          sendTimeout: const Duration(seconds: 10),
-          receiveTimeout: const Duration(seconds: 15),
-        ),
-      );
-      return res.statusCode == 200;
+      switch (provider) {
+        case AiProviderType.gemini:
+          final url =
+              'https://generativelanguage.googleapis.com/v1beta/models?key=$cleanKey';
+          final res = await _dio.get<Map<String, dynamic>>(
+            url,
+            options: Options(
+              sendTimeout: const Duration(seconds: 10),
+              receiveTimeout: const Duration(seconds: 15),
+            ),
+          );
+          return res.statusCode == 200;
+
+        case AiProviderType.deepseek:
+          final res = await _dio.get<Map<String, dynamic>>(
+            'https://api.deepseek.com/models',
+            options: Options(
+              headers: {'Authorization': 'Bearer $cleanKey'},
+              sendTimeout: const Duration(seconds: 10),
+              receiveTimeout: const Duration(seconds: 15),
+            ),
+          );
+          return res.statusCode == 200;
+
+        case AiProviderType.claude:
+          final res = await _dio.post<Map<String, dynamic>>(
+            'https://api.anthropic.com/v1/messages',
+            data: {
+              'model': 'claude-3-haiku-20240307',
+              'max_tokens': 10,
+              'messages': [
+                {'role': 'user', 'content': 'hi'}
+              ],
+            },
+            options: Options(
+              headers: {
+                'x-api-key': cleanKey,
+                'anthropic-version': '2023-06-01',
+                'content-type': 'application/json',
+              },
+              sendTimeout: const Duration(seconds: 10),
+              receiveTimeout: const Duration(seconds: 15),
+            ),
+          );
+          return res.statusCode == 200;
+
+        case AiProviderType.openai:
+          final res = await _dio.get<Map<String, dynamic>>(
+            'https://api.openai.com/v1/models',
+            options: Options(
+              headers: {'Authorization': 'Bearer $cleanKey'},
+              sendTimeout: const Duration(seconds: 10),
+              receiveTimeout: const Duration(seconds: 15),
+            ),
+          );
+          return res.statusCode == 200;
+
+        case AiProviderType.qwen:
+          final res = await _dio.get<Map<String, dynamic>>(
+            'https://dashscope-intl.aliyuncs.com/compatible-mode/v1/models',
+            options: Options(
+              headers: {'Authorization': 'Bearer $cleanKey'},
+              sendTimeout: const Duration(seconds: 10),
+              receiveTimeout: const Duration(seconds: 15),
+            ),
+          );
+          return res.statusCode == 200;
+
+        case AiProviderType.openrouter:
+          final res = await _dio.get<Map<String, dynamic>>(
+            'https://openrouter.ai/api/v1/auth/key',
+            options: Options(
+              headers: {'Authorization': 'Bearer $cleanKey'},
+              sendTimeout: const Duration(seconds: 10),
+              receiveTimeout: const Duration(seconds: 15),
+            ),
+          );
+          return res.statusCode == 200;
+
+        case AiProviderType.freeCloud:
+          return true;
+      }
     } catch (_) {
       return false;
     }
   }
 
-  /// Memproses prompt mahasiswa secara cerdas menggunakan Real LLM Engine:
-  /// 1. Jika ada Gemini API Key: gunakan Google Gemini 1.5/2.0 Flash (Multimodal OCR gambar + teks).
-  /// 2. Jika tidak ada Gemini API Key atau terkena limit: gunakan Cloud AI Engine (OpenAI/LLaMA) untuk menghasilkan jawaban asli, BUKAN template statis.
+  /// Backward compatibility untuk validasi Gemini API Key
+  Future<bool> validateGeminiApiKey(String key) async {
+    return validateApiKey(AiProviderType.gemini, key);
+  }
+
+  /// Memproses prompt mahasiswa menggunakan model AI aktif yang dipilih
   Future<AiMessage> askAssistant({
     required String prompt,
     String? courseName,
@@ -54,9 +129,11 @@ class AiService {
   }) async {
     final cleanPrompt = prompt.trim();
     final hasImage = imageBytes != null && imageBytes.isNotEmpty;
-    final cacheKey = '${courseName ?? "all"}_${cleanPrompt.toLowerCase()}';
+    final activeModelId = _storage.getActiveAiModelId();
+    final activeOption = AiModelOption.getById(activeModelId);
+    final cacheKey = '${activeModelId}_${courseName ?? "all"}_${cleanPrompt.toLowerCase()}';
 
-    // 1. Cek Cache jika teks saja (hemat waktu & token)
+    // 1. Cek Cache jika teks saja (hemat waktu & kuota token)
     if (!hasImage && _cache.containsKey(cacheKey)) {
       final cached = _cache[cacheKey]!;
       return AiMessage(
@@ -70,70 +147,81 @@ class AiService {
       );
     }
 
-    final apiKey = _storage.getGeminiApiKey();
+    final apiKey = _storage.getProviderApiKey(activeOption.provider);
     final now = DateTime.now();
     final inCooldown = _rateLimitedUntil != null && now.isBefore(_rateLimitedUntil!);
 
-    // JIKA USER MENYEDIAKAN GEMINI API KEY & TIDAK COOLDOWN
-    if (apiKey != null && apiKey.isNotEmpty && !inCooldown) {
+    // JIKA USER MEMILIH MODEL DENGAN API KEY & MEMILIKI KEY VALID
+    if (activeOption.provider != AiProviderType.freeCloud &&
+        apiKey != null &&
+        apiKey.isNotEmpty &&
+        !inCooldown) {
       try {
-        final result = await _askGemini(
-          apiKey: apiKey,
-          prompt: cleanPrompt,
-          courseName: courseName,
-          imageBytes: imageBytes,
-          mimeType: mimeType,
-        );
-        if (!hasImage) _cache[cacheKey] = result;
-        return result;
-      } on DioException catch (e) {
-        final code = e.response?.statusCode;
-        if (code == 429) {
-          _rateLimitedUntil = now.add(const Duration(seconds: 45));
-          // Fallback ke Cloud AI jika bukan gambar
-          if (!hasImage) {
-            return await _askFreeCloudAi(
+        // Cek jika gambar dikirimkan ke model yang belum mendukung Vision
+        if (hasImage && !activeOption.supportsVision) {
+          // Jika ada kunci Gemini tersimpan, otomatis pinjam mata Vision Gemini
+          final geminiKey = _storage.getGeminiApiKey();
+          if (geminiKey != null && geminiKey.isNotEmpty) {
+            return await _askGemini(
+              apiKey: geminiKey,
               prompt: cleanPrompt,
               courseName: courseName,
-              rateLimitNotice:
-                  '[Info] Batas kuota Gemini (Rate Limit 429) tercapai. Asisten otomatis beralih ke Cloud AI untuk menjawab soal Anda.\n\n',
-            );
-          } else {
-            return AiMessage(
-              id: DateTime.now().millisecondsSinceEpoch.toString(),
-              content:
-                  '[Peringatan] Kuota request Google Gemini API Anda mencapai batas harian / menit (Rate Limit 429). Mohon tunggu sekitar 1 menit sebelum mengirim gambar kembali.',
-              isUser: false,
-              timestamp: DateTime.now(),
-              relatedCourseName: courseName,
+              imageBytes: imageBytes,
+              mimeType: mimeType,
             );
           }
-        } else if (code == 400 || code == 403) {
           return AiMessage(
             id: DateTime.now().millisecondsSinceEpoch.toString(),
             content:
-                '[Error] API Key Google Gemini Tidak Valid / Akses Ditolak ($code)\n\n'
-                'Google menolak kunci API yang tersimpan. Silakan periksa kembali API Key Anda melalui tombol kunci di pojok kanan atas.',
+                'Model ${activeOption.name} berfokus pada penalaran teks murni dan belum mendukung input gambar screenshot secara langsung.\n\n'
+                '💡 Saran: Untuk menganalisis screenshot soal kuis dengan Vision OCR, pilih model **Google Gemini** atau **Anthropic Claude 3.5** melalui pemilih model di bagian atas.',
             isUser: false,
             timestamp: DateTime.now(),
             relatedCourseName: courseName,
           );
         }
 
-        // Jika error jaringan lain pada Gemini, fallback ke Cloud AI
+        final resultText = await _executeModelCall(
+          option: activeOption,
+          apiKey: apiKey,
+          prompt: cleanPrompt,
+          courseName: courseName,
+          imageBytes: imageBytes,
+          mimeType: mimeType,
+        );
+
+        final msg = _parseQuizAndBuildMessage(resultText, courseName);
+        if (!hasImage) _cache[cacheKey] = msg;
+        return msg;
+      } on DioException catch (e) {
+        final code = e.response?.statusCode;
+        if (code == 429) {
+          _rateLimitedUntil = now.add(const Duration(seconds: 45));
+          if (!hasImage) {
+            return await _askFreeCloudAi(
+              prompt: cleanPrompt,
+              courseName: courseName,
+              rateLimitNotice:
+                  '[Info] Batas kuota ${activeOption.shortName} (Rate Limit 429) tercapai. Asisten otomatis beralih ke Cloud AI untuk menjawab soal Anda.\n\n',
+            );
+          }
+        } else if (code == 401 || code == 403) {
+          return AiMessage(
+            id: DateTime.now().millisecondsSinceEpoch.toString(),
+            content:
+                '[Error] API Key ${activeOption.shortName} Ditolak ($code)\n\n'
+                'Kunci API yang tersimpan tidak valid atau saldo akun habis. Silakan periksa kunci API Anda melalui tombol pengaturan model.',
+            isUser: false,
+            timestamp: DateTime.now(),
+            relatedCourseName: courseName,
+          );
+        }
+
+        // Fallback ke Cloud AI jika terjadi gangguan jaringan pada provider
         if (!hasImage) {
           return await _askFreeCloudAi(
             prompt: cleanPrompt,
             courseName: courseName,
-          );
-        } else {
-          return AiMessage(
-            id: DateTime.now().millisecondsSinceEpoch.toString(),
-            content:
-                'Gagal menghubungi server Gemini (${e.message}). Pastikan koneksi internet Anda stabil.',
-            isUser: false,
-            timestamp: DateTime.now(),
-            relatedCourseName: courseName,
           );
         }
       } catch (e) {
@@ -153,26 +241,30 @@ class AiService {
       }
     }
 
-    // JIKA TIDAK ADA GEMINI API KEY
-    // Jika melampirkan gambar tanpa Gemini API Key:
+    // JIKA TIDAK ADA KEY ATAU MODEL FREE_CLOUD DIPILIH
     if (hasImage) {
+      final geminiKey = _storage.getGeminiApiKey();
+      if (geminiKey != null && geminiKey.isNotEmpty) {
+        return await _askGemini(
+          apiKey: geminiKey,
+          prompt: cleanPrompt,
+          courseName: courseName,
+          imageBytes: imageBytes,
+          mimeType: mimeType,
+        );
+      }
       return AiMessage(
         id: DateTime.now().millisecondsSinceEpoch.toString(),
         content:
             '[Screenshot Gambar Diterima]\n\n'
-            'Untuk membaca dan menganalisis soal kuis langsung dari screenshot gambar dengan Google Vision AI, silakan masukkan Google Gemini API Key Anda.\n\n'
-            'API Key ini gratis resmi dari Google:\n'
-            '1. Ketuk tombol kunci di pojok kanan atas layar ini.\n'
-            '2. Buka link Google AI Studio dan salin API Key Anda.\n'
-            '3. Tempel dan simpan di aplikasi.\n\n'
-            'Catatan: Untuk pertanyaan berupa teks atau soal yang diekstrak langsung dari web portal, Anda dapat langsung bertanya tanpa memerlukan API Key!',
+            'Untuk membaca dan menganalisis soal kuis langsung dari screenshot gambar menggunakan Vision OCR, silakan masukkan API Key Gemini atau Claude Anda di menu pengaturan model (ikon kunci / model di kanan atas).\n\n'
+            'Catatan: Untuk pertanyaan berupa teks atau soal yang diekstrak langsung dari web portal LMS, Anda dapat langsung bertanya tanpa memerlukan API Key!',
         isUser: false,
         timestamp: DateTime.now(),
         relatedCourseName: courseName,
       );
     }
 
-    // Eksekusi Real Cloud AI (Zero Setup, Real Answers)
     final result = await _askFreeCloudAi(
       prompt: cleanPrompt,
       courseName: courseName,
@@ -181,13 +273,104 @@ class AiService {
     return result;
   }
 
+  /// Eksekutor panggilan API ke masing-masing provider LLM
+  Future<String> _executeModelCall({
+    required AiModelOption option,
+    required String apiKey,
+    required String prompt,
+    String? courseName,
+    Uint8List? imageBytes,
+    String? mimeType,
+  }) async {
+    final systemPrompt =
+        'Anda adalah UNPAM AI, asisten akademik cerdas untuk mahasiswa Universitas Pamulang. '
+        'Jawab pertanyaan atau tugas mahasiswa secara tepat, mendalam, akurat, to-the-point, dan edukatif dalam Bahasa Indonesia yang profesional dan ramah. '
+        'Jika pertanyaan adalah soal kuis pilihan ganda, sebutkan opsi jawaban yang benar secara tegas di awal, kemudian berikan pembahasan rasional dan konsep dasarnya. '
+        'Jika pertanyaan adalah tugas pemrograman, berikan kode solusi yang bersih, modular, aman, dan siap dijalankan beserta penjelasannya. '
+        'Jika pengguna meminta latihan soal/kuis, sertakan 2-3 soal pilihan ganda di akhir dengan format JSON khusus dalam tag ```json_quiz [{"question": "...", "options": ["A. ...", "B. ...", "C. ...", "D. ..."], "correctIndex": 0, "explanation": "..."}] ```. '
+        'Konteks Mata Kuliah: ${courseName ?? "Umum / Universitas Pamulang"}.';
+
+    switch (option.provider) {
+      case AiProviderType.gemini:
+        final geminiMsg = await _askGemini(
+          apiKey: apiKey,
+          prompt: prompt,
+          courseName: courseName,
+          imageBytes: imageBytes,
+          mimeType: mimeType,
+        );
+        return geminiMsg.content;
+
+      case AiProviderType.deepseek:
+        return await _callOpenAiCompatible(
+          url: 'https://api.deepseek.com/chat/completions',
+          apiKey: apiKey,
+          model: option.defaultModelId,
+          systemPrompt: systemPrompt,
+          userPrompt: prompt,
+        );
+
+      case AiProviderType.claude:
+        return await _callClaude(
+          apiKey: apiKey,
+          model: option.defaultModelId,
+          systemPrompt: systemPrompt,
+          userPrompt: prompt,
+          imageBytes: imageBytes,
+          mimeType: mimeType,
+        );
+
+      case AiProviderType.qwen:
+        return await _callOpenAiCompatible(
+          url: 'https://dashscope-intl.aliyuncs.com/compatible-mode/v1/chat/completions',
+          apiKey: apiKey,
+          model: option.defaultModelId,
+          systemPrompt: systemPrompt,
+          userPrompt: prompt,
+        );
+
+      case AiProviderType.openai:
+        return await _callOpenAiWithVision(
+          url: 'https://api.openai.com/v1/chat/completions',
+          apiKey: apiKey,
+          model: option.defaultModelId,
+          systemPrompt: systemPrompt,
+          userPrompt: prompt,
+          imageBytes: imageBytes,
+          mimeType: mimeType,
+        );
+
+      case AiProviderType.openrouter:
+        return await _callOpenAiWithVision(
+          url: 'https://openrouter.ai/api/v1/chat/completions',
+          apiKey: apiKey,
+          model: option.defaultModelId,
+          systemPrompt: systemPrompt,
+          userPrompt: prompt,
+          imageBytes: imageBytes,
+          mimeType: mimeType,
+          extraHeaders: {
+            'HTTP-Referer': 'https://mentari.unpam.ac.id',
+            'X-Title': 'UNPAM Mobile App',
+          },
+        );
+
+      case AiProviderType.freeCloud:
+        final cloudMsg = await _askFreeCloudAi(
+          prompt: prompt,
+          courseName: courseName,
+        );
+        return cloudMsg.content;
+    }
+  }
+
+  // --- Implementasi Protokol Provider Khusus ---
+
   static const List<String> _geminiCandidateModels = [
-    'gemini-3.5-flash-lite',
-    'gemini-3.5-flash',
-    'gemini-3.8-flash',
-    'gemini-flash-latest',
     'gemini-2.5-flash',
+    'gemini-2.0-flash',
     'gemini-1.5-flash',
+    'gemini-flash-latest',
   ];
 
   /// Engine Google Gemini (Multimodal Vision OCR & Fast Text)
@@ -242,11 +425,7 @@ class AiService {
         final response = await _dio.post<Map<String, dynamic>>(
           url,
           data: body,
-          options: Options(
-            headers: {
-              'Content-Type': 'application/json',
-            },
-          ),
+          options: Options(headers: {'Content-Type': 'application/json'}),
         );
 
         final candidates = response.data?['candidates'] as List<dynamic>?;
@@ -259,24 +438,170 @@ class AiService {
       } on DioException catch (e) {
         lastDioError = e;
         final code = e.response?.statusCode;
-        if (code == 400 || code == 403) {
-          rethrow;
-        }
-        if (code == 429) {
+        if (code == 400 || code == 401 || code == 403 || code == 429) {
           rethrow;
         }
         continue;
       }
     }
 
-    if (lastDioError != null) {
-      throw lastDioError;
-    }
-
+    if (lastDioError != null) throw lastDioError;
     throw Exception('Tidak ada model Gemini yang merespons.');
   }
 
-  /// Engine Real Cloud LLM (OpenAI / LLaMA) Bebas API Key
+  /// Protokol Anthropic Claude (Messages API)
+  Future<String> _callClaude({
+    required String apiKey,
+    required String model,
+    required String systemPrompt,
+    required String userPrompt,
+    Uint8List? imageBytes,
+    String? mimeType,
+  }) async {
+    final List<Map<String, dynamic>> contentParts = [];
+    if (imageBytes != null && imageBytes.isNotEmpty) {
+      contentParts.add({
+        'type': 'image',
+        'source': {
+          'type': 'base64',
+          'media_type': mimeType ?? 'image/jpeg',
+          'data': base64Encode(imageBytes),
+        }
+      });
+    }
+
+    contentParts.add({
+      'type': 'text',
+      'text': userPrompt,
+    });
+
+    final response = await _dio.post<Map<String, dynamic>>(
+      'https://api.anthropic.com/v1/messages',
+      data: {
+        'model': model,
+        'max_tokens': 2048,
+        'system': systemPrompt,
+        'messages': [
+          {'role': 'user', 'content': contentParts}
+        ],
+      },
+      options: Options(
+        headers: {
+          'x-api-key': apiKey,
+          'anthropic-version': '2023-06-01',
+          'content-type': 'application/json',
+        },
+        sendTimeout: const Duration(seconds: 30),
+        receiveTimeout: const Duration(seconds: 50),
+      ),
+    );
+
+    final content = response.data?['content'] as List<dynamic>?;
+    if (content != null && content.isNotEmpty) {
+      final text = content.first['text']?.toString() ?? '';
+      if (text.isNotEmpty) return text;
+    }
+    throw Exception('Respons kosong dari Claude API');
+  }
+
+  /// Protokol OpenAI-Compatible Standard (DeepSeek, Qwen, Groq, dll)
+  Future<String> _callOpenAiCompatible({
+    required String url,
+    required String apiKey,
+    required String model,
+    required String systemPrompt,
+    required String userPrompt,
+    Map<String, String>? extraHeaders,
+  }) async {
+    final headers = <String, String>{
+      'Authorization': 'Bearer $apiKey',
+      'Content-Type': 'application/json',
+      ...?extraHeaders,
+    };
+
+    final response = await _dio.post<Map<String, dynamic>>(
+      url,
+      data: {
+        'model': model,
+        'messages': [
+          {'role': 'system', 'content': systemPrompt},
+          {'role': 'user', 'content': userPrompt},
+        ],
+        'temperature': 0.4,
+      },
+      options: Options(
+        headers: headers,
+        sendTimeout: const Duration(seconds: 30),
+        receiveTimeout: const Duration(seconds: 50),
+      ),
+    );
+
+    final choices = response.data?['choices'] as List<dynamic>?;
+    if (choices != null && choices.isNotEmpty) {
+      final msg = choices.first['message'];
+      final content = msg?['content']?.toString() ?? '';
+      if (content.isNotEmpty) return content;
+    }
+    throw Exception('Respons kosong dari server $model');
+  }
+
+  /// Protokol OpenAI Vision Multimodal (GPT-4o & OpenRouter Vision)
+  Future<String> _callOpenAiWithVision({
+    required String url,
+    required String apiKey,
+    required String model,
+    required String systemPrompt,
+    required String userPrompt,
+    Uint8List? imageBytes,
+    String? mimeType,
+    Map<String, String>? extraHeaders,
+  }) async {
+    final List<Map<String, dynamic>> userContent = [];
+    if (imageBytes != null && imageBytes.isNotEmpty) {
+      final b64 = base64Encode(imageBytes);
+      final media = mimeType ?? 'image/jpeg';
+      userContent.add({
+        'type': 'image_url',
+        'image_url': {'url': 'data:$media;base64,$b64'}
+      });
+    }
+
+    userContent.add({
+      'type': 'text',
+      'text': userPrompt,
+    });
+
+    final response = await _dio.post<Map<String, dynamic>>(
+      url,
+      data: {
+        'model': model,
+        'messages': [
+          {'role': 'system', 'content': systemPrompt},
+          {'role': 'user', 'content': userContent},
+        ],
+        'temperature': 0.4,
+      },
+      options: Options(
+        headers: {
+          'Authorization': 'Bearer $apiKey',
+          'Content-Type': 'application/json',
+          ...?extraHeaders,
+        },
+        sendTimeout: const Duration(seconds: 30),
+        receiveTimeout: const Duration(seconds: 50),
+      ),
+    );
+
+    final choices = response.data?['choices'] as List<dynamic>?;
+    if (choices != null && choices.isNotEmpty) {
+      final msg = choices.first['message'];
+      final text = msg?['content']?.toString() ?? '';
+      if (text.isNotEmpty) return text;
+    }
+    throw Exception('Respons kosong dari model $model');
+  }
+
+  /// Engine Real Cloud LLM Bebas API Key
   Future<AiMessage> _askFreeCloudAi({
     required String prompt,
     String? courseName,
@@ -287,7 +612,6 @@ class AiService {
         'Jawab pertanyaan atau tugas mahasiswa secara tepat, to-the-point, akurat, dan edukatif dalam Bahasa Indonesia. '
         'Jika pertanyaan adalah soal kuis pilihan ganda, sebutkan opsi jawaban yang benar beserta penjelasan lengkapnya. '
         'Jika pertanyaan berupa tugas pemrograman, sertakan contoh kode yang benar dan penjelasannya. '
-        'Jangan memberikan jawaban template kosong atau jawaban umum yang tidak berhubungan. Jawablah langsung sesuai pertanyaan yang diajukan. '
         'Konteks mata kuliah saat ini: ${courseName ?? "Umum Universitas Pamulang"}.';
 
     try {
@@ -302,8 +626,8 @@ class AiService {
           'jsonMode': false,
         },
         options: Options(
-          sendTimeout: const Duration(seconds: 20),
-          receiveTimeout: const Duration(seconds: 30),
+          sendTimeout: const Duration(seconds: 25),
+          receiveTimeout: const Duration(seconds: 35),
         ),
       );
 
@@ -313,7 +637,6 @@ class AiService {
         return _parseQuizAndBuildMessage(content, courseName);
       }
     } catch (_) {
-      // Fallback ke GET endpoint jika POST mengalami kendala
       try {
         final query = '$systemPrompt\n\nPertanyaan: $prompt';
         final getUrl = 'https://text.pollinations.ai/${Uri.encodeComponent(query.substring(0, query.length.clamp(0, 1500)))}';
@@ -327,7 +650,7 @@ class AiService {
         return AiMessage(
           id: DateTime.now().millisecondsSinceEpoch.toString(),
           content:
-              'Tidak dapat memuat jawaban dari server AI ($err). Pastikan perangkat Anda terhubung ke internet, atau gunakan API Key Gemini Anda sendiri untuk koneksi langsung.',
+              'Tidak dapat memuat jawaban dari server AI ($err). Pastikan perangkat Anda terhubung ke internet, atau masukkan API Key Anda untuk koneksi langsung.',
           isUser: false,
           timestamp: DateTime.now(),
           relatedCourseName: courseName,
@@ -338,7 +661,7 @@ class AiService {
     return AiMessage(
       id: DateTime.now().millisecondsSinceEpoch.toString(),
       content:
-          'Maaf, server AI saat ini sedang sibuk. Silakan ulangi pertanyaan Anda atau masukkan Google Gemini API Key Anda untuk prioritas akses instan.',
+          'Maaf, server AI saat ini sedang sibuk. Silakan ulangi pertanyaan Anda atau gunakan API Key kustom Anda untuk prioritas akses instan.',
       isUser: false,
       timestamp: DateTime.now(),
       relatedCourseName: courseName,
@@ -373,54 +696,24 @@ class AiService {
     );
   }
 
-  /// Menghubungi LLM (Gemini dengan fallback Cloud AI) untuk menghasilkan output string mentah
+  /// Menghubungi LLM aktif untuk menghasilkan string mentah (Diskusi, Kuis, Parafrase)
   Future<String> askRawLlm({
     required String systemPrompt,
     required String userPrompt,
   }) async {
-    final apiKey = _storage.getGeminiApiKey();
-    final now = DateTime.now();
-    final inCooldown = _rateLimitedUntil != null && now.isBefore(_rateLimitedUntil!);
+    final activeModelId = _storage.getActiveAiModelId();
+    final activeOption = AiModelOption.getById(activeModelId);
+    final apiKey = _storage.getProviderApiKey(activeOption.provider);
 
-    if (apiKey != null && apiKey.isNotEmpty && !inCooldown) {
-      final body = {
-        'contents': [
-          {
-            'parts': [
-              {'text': '$systemPrompt\n\n$userPrompt'}
-            ]
-          }
-        ],
-        'generationConfig': {
-          'temperature': 0.3,
-          'maxOutputTokens': 2048,
-        }
-      };
-
-      for (final model in _geminiCandidateModels) {
-        final url =
-            'https://generativelanguage.googleapis.com/v1beta/models/$model:generateContent?key=$apiKey';
-        try {
-          final response = await _dio.post<Map<String, dynamic>>(
-            url,
-            data: body,
-            options: Options(headers: {'Content-Type': 'application/json'}),
-          );
-          final candidates = response.data?['candidates'] as List<dynamic>?;
-          if (candidates != null && candidates.isNotEmpty) {
-            final text = candidates.first['content']?['parts']?[0]?['text']?.toString() ?? '';
-            if (text.trim().isNotEmpty) return text.trim();
-          }
-        } on DioException catch (e) {
-          final code = e.response?.statusCode;
-          if (code == 429) {
-            _rateLimitedUntil = now.add(const Duration(seconds: 45));
-            break;
-          }
-          continue;
-        } catch (_) {
-          continue;
-        }
+    if (activeOption.provider != AiProviderType.freeCloud && apiKey != null && apiKey.isNotEmpty) {
+      try {
+        return await _executeModelCall(
+          option: activeOption,
+          apiKey: apiKey,
+          prompt: userPrompt,
+        );
+      } catch (_) {
+        // Fallback otomatis ke Cloud AI jika terjadi kendala pada model aktif
       }
     }
 
@@ -537,8 +830,7 @@ class AiService {
     try {
       final List<dynamic> decoded = jsonDecode(jsonStr);
       return decoded.map((e) => Map<String, dynamic>.from(e as Map)).toList();
-    } catch (e) {
-      // Fallback: ekstrak manual jika decoding gagal
+    } catch (_) {
       final List<Map<String, dynamic>> fallbackList = [];
       for (final q in questions) {
         fallbackList.add({
@@ -623,4 +915,3 @@ class AiService {
     );
   }
 }
-
