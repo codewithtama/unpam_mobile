@@ -41,7 +41,7 @@ jobs:
 
       - name: Konfigurasi Keystore Penandatanganan Rilis
         env:
-          KEYSTORE_BASE64: ${{ secrets.KEYSTORE_BASE64 }}
+          KEYSTORE_BASE64: ${{ secrets['KEYSTORE_BASE64'] }}
         run: |
           mkdir -p android/app
           if [ -n "$KEYSTORE_BASE64" ]; then

@@ -8,6 +8,7 @@ class BiometricProvider extends ChangeNotifier {
   bool _hasSavedCredentials = false;
   String? _savedNim;
   bool _isAutoLoginEnabled = true;
+  bool _isPromptDismissed = false;
   bool _isLoading = false;
 
   BiometricProvider(this._service) {
@@ -18,6 +19,7 @@ class BiometricProvider extends ChangeNotifier {
   bool get hasSavedCredentials => _hasSavedCredentials;
   String? get savedNim => _savedNim;
   bool get isAutoLoginEnabled => _isAutoLoginEnabled;
+  bool get isPromptDismissed => _isPromptDismissed;
   bool get isLoading => _isLoading;
 
   Future<void> _init() async {
@@ -25,6 +27,7 @@ class BiometricProvider extends ChangeNotifier {
     _hasSavedCredentials = await _service.hasSavedCredentials();
     _savedNim = await _service.getSavedNim();
     _isAutoLoginEnabled = _service.isAutoLoginEnabled();
+    _isPromptDismissed = _service.isBiometricPromptDismissed();
     notifyListeners();
   }
 
@@ -75,6 +78,12 @@ class BiometricProvider extends ChangeNotifier {
   Future<void> setAutoLoginEnabled(bool enabled) async {
     _isAutoLoginEnabled = enabled;
     await _service.setAutoLoginEnabled(enabled);
+    notifyListeners();
+  }
+
+  Future<void> setPromptDismissed(bool dismissed) async {
+    _isPromptDismissed = dismissed;
+    await _service.setBiometricPromptDismissed(dismissed);
     notifyListeners();
   }
 }

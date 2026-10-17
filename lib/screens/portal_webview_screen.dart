@@ -12,6 +12,7 @@ import 'ai_assistant_screen.dart';
 import 'ai_paraphrase_screen.dart';
 import '../providers/biometric_provider.dart';
 import '../widgets/biometric_vault_sheet.dart';
+import '../widgets/biometric_quick_prompt_sheet.dart';
 import '../core/services/update_checker_service.dart';
 import '../core/services/notification_service.dart';
 import '../widgets/update_dialog.dart';
@@ -46,6 +47,9 @@ class _PortalWebViewScreenState extends State<PortalWebViewScreen> with WidgetsB
   bool _isLoggedOutDetected = false;
   bool _hasAutoLoggedInCurrentSession = false;
   bool _pendingAutoLoginAfterLoad = false;
+  bool _isBiometricPromptShowing = false;
+  String? _capturedNim;
+  String? _capturedPassword;
   final UpdateCheckerService _updateChecker = UpdateCheckerService();
 
   static const String _customUserAgent =
@@ -142,6 +146,12 @@ class _PortalWebViewScreenState extends State<PortalWebViewScreen> with WidgetsB
           }
         },
       )
+      ..addJavaScriptChannel(
+        'BiometricCaptureChannel',
+        onMessageReceived: (message) {
+          _handleCapturedCredentials(message.message);
+        },
+      )
       ..setNavigationDelegate(
         NavigationDelegate(
           onProgress: (progress) {
@@ -201,8 +211,12 @@ class _PortalWebViewScreenState extends State<PortalWebViewScreen> with WidgetsB
               _updateHistoryState();
             }
             _detectLoginForm();
+            _injectLoginCaptureScript();
             Future.delayed(const Duration(milliseconds: 700), () {
-              if (mounted) _detectLoginForm();
+              if (mounted) {
+                _detectLoginForm();
+                _injectLoginCaptureScript();
+              }
             });
             _scheduleWhiteScreenCheck();
             try {
@@ -897,6 +911,14 @@ class _PortalWebViewScreenState extends State<PortalWebViewScreen> with WidgetsB
           _isLoggedOutDetected = false;
         });
 
+        if (isLoginDetected) {
+          _injectLoginCaptureScript();
+        } else if (hasProfile) {
+          if (_capturedNim != null && _capturedPassword != null) {
+            _checkAndShowBiometricPrompt();
+          }
+        }
+
         final bioProv = context.read<BiometricProvider>();
         if (bioProv.hasSavedCredentials && bioProv.isAutoLoginEnabled) {
           if (_pendingAutoLoginAfterLoad || (isLoginDetected && !_hasAutoLoggedInCurrentSession)) {
@@ -917,6 +939,231 @@ class _PortalWebViewScreenState extends State<PortalWebViewScreen> with WidgetsB
           _isLoginPageDetected = true;
         });
       }
+    }
+  }
+
+  void _handleCapturedCredentials(String rawPayload) {
+    debugPrint('[BiometricCapture] Received: $rawPayload');
+    try {
+      final dynamic decoded = jsonDecode(rawPayload);
+      if (decoded is Map<String, dynamic>) {
+        final event = decoded['event']?.toString();
+        final nim = (decoded['nim'] ?? '').toString().trim();
+        final pass = (decoded['password'] ?? '').toString().trim();
+
+        if (nim.isNotEmpty && pass.isNotEmpty) {
+          _capturedNim = nim;
+          _capturedPassword = pass;
+        }
+
+        if (event == 'LOGIN_SUCCESS') {
+          debugPrint('[BiometricCapture] LOGIN_SUCCESS event received! Showing quick access prompt...');
+          _checkAndShowBiometricPrompt();
+        }
+      }
+    } catch (e) {
+      debugPrint('BiometricCaptureChannel error: $e');
+    }
+  }
+
+  Future<void> _injectLoginCaptureScript() async {
+    try {
+      await _controller.runJavaScript(r'''
+        (function() {
+          if (window._unpamBioCaptureAttached) return;
+          window._unpamBioCaptureAttached = true;
+
+          var lastTypedNim = '';
+          var lastTypedPass = '';
+          var successNotified = false;
+
+          function findInputs() {
+            var p = document.querySelector('input[type="password"], input[name="password"], input#password');
+            var u = document.querySelector('input[name="username"], input#username, input[autocomplete="username"], input[name="user"], input[name="identity"], input[name="nim"], input[name="login"]');
+
+            if (!u && p) {
+              var container = p.closest('form') || p.closest('[role="form"]') || p.parentElement;
+              if (container) {
+                u = container.querySelector('input[type="text"], input:not([type]), input[type="number"]');
+              }
+            }
+            if (!u && p) {
+              var all = Array.from(document.querySelectorAll('input'));
+              var pIndex = all.indexOf(p);
+              if (pIndex > 0) {
+                for (var i = pIndex - 1; i >= 0; i--) {
+                  var t = (all[i].type || 'text').toLowerCase();
+                  if (t === 'text' || t === 'email' || t === 'number' || t === '') {
+                    u = all[i];
+                    break;
+                  }
+                }
+              }
+            }
+            return { u: u, p: p };
+          }
+
+          function readAndCache() {
+            var inputs = findInputs();
+            if (inputs.u && inputs.u.value) lastTypedNim = inputs.u.value.trim();
+            if (inputs.p && inputs.p.value) lastTypedPass = inputs.p.value.trim();
+
+            if (lastTypedNim && lastTypedPass && window.BiometricCaptureChannel) {
+              window.BiometricCaptureChannel.postMessage(JSON.stringify({
+                event: 'CREDENTIALS_TYPED',
+                nim: lastTypedNim,
+                password: lastTypedPass
+              }));
+            }
+          }
+
+          function hasAuthToken() {
+            try {
+              var acc = window.localStorage.getItem('access');
+              if (acc && acc !== 'null' && acc !== 'undefined' && acc !== '""' && acc.length > 20) {
+                return true;
+              }
+            } catch(e) {}
+            return false;
+          }
+
+          function hasProfileDom() {
+            return !!document.querySelector('.usermenu .userbutton, .userpicture, [data-testid="AccountCircleIcon"], [aria-label*="akun" i], [aria-label*="profile" i], .avatar');
+          }
+
+          function notifySuccess() {
+            if (successNotified) return;
+            readAndCache();
+            if (lastTypedNim && lastTypedPass && window.BiometricCaptureChannel) {
+              successNotified = true;
+              window.BiometricCaptureChannel.postMessage(JSON.stringify({
+                event: 'LOGIN_SUCCESS',
+                nim: lastTypedNim,
+                password: lastTypedPass
+              }));
+            }
+          }
+
+          // Intercept user typing & clicks
+          document.addEventListener('input', readAndCache, true);
+          document.addEventListener('change', readAndCache, true);
+          document.addEventListener('blur', readAndCache, true);
+
+          function onSubmitOrClick() {
+            readAndCache();
+            var polls = 0;
+            var timer = setInterval(function() {
+              polls++;
+              if (hasAuthToken() || hasProfileDom()) {
+                clearInterval(timer);
+                notifySuccess();
+              } else if (polls >= 20) {
+                clearInterval(timer);
+              }
+            }, 500);
+          }
+
+          document.addEventListener('submit', onSubmitOrClick, true);
+          document.addEventListener('click', function(e) {
+            var t = e.target;
+            if (t && (t.matches('button, button *, input[type="submit"], [role="button"]') || t.closest('button, [role="button"]'))) {
+              onSubmitOrClick();
+            }
+          }, true);
+
+          // Monkey patch localStorage.setItem for instant JWT token detection
+          try {
+            var origSet = window.localStorage.setItem;
+            window.localStorage.setItem = function(k, v) {
+              origSet.apply(this, arguments);
+              if ((k === 'access' || k === 'token') && v && v !== 'null' && v.length > 20) {
+                setTimeout(notifySuccess, 300);
+              }
+            };
+          } catch(e) {}
+
+          readAndCache();
+        })();
+      ''');
+    } catch (e) {
+      debugPrint('Error injecting capture script: $e');
+    }
+  }
+
+  Future<void> _checkAndShowBiometricPrompt() async {
+    if (_isBiometricPromptShowing) {
+      debugPrint('[BiometricPrompt] Already showing prompt, skip.');
+      return;
+    }
+    if (_capturedNim == null || _capturedPassword == null) {
+      debugPrint('[BiometricPrompt] Missing credentials: nim=$_capturedNim, pass=${_capturedPassword != null}');
+      return;
+    }
+
+    final bioProv = context.read<BiometricProvider>();
+    debugPrint('[BiometricPrompt] Guard check: isAvailable=${bioProv.isAvailable}, hasSaved=${bioProv.hasSavedCredentials}, isDismissed=${bioProv.isPromptDismissed}, savedNim=${bioProv.savedNim}, capturedNim=$_capturedNim');
+
+    if (bioProv.hasSavedCredentials && bioProv.savedNim == _capturedNim) {
+      debugPrint('[BiometricPrompt] Credentials already saved for this exact NIM ($_capturedNim), skip.');
+      _capturedPassword = null;
+      return;
+    }
+
+    if (!bioProv.isAvailable) {
+      debugPrint('[BiometricPrompt] Biometrics not available on this device, skip.');
+      _capturedPassword = null;
+      return;
+    }
+
+    if (bioProv.isPromptDismissed) {
+      debugPrint('[BiometricPrompt] Prompt previously dismissed by user, skip.');
+      _capturedPassword = null;
+      return;
+    }
+
+    final currentNim = _capturedNim!;
+    final currentPassword = _capturedPassword!;
+    _capturedPassword = null;
+    _isBiometricPromptShowing = true;
+
+    await Future.delayed(const Duration(milliseconds: 600));
+
+    if (!mounted) {
+      _isBiometricPromptShowing = false;
+      return;
+    }
+
+    try {
+      final res = await BiometricQuickPromptSheet.show(
+        context,
+        nim: currentNim,
+        password: currentPassword,
+      );
+      if (res == true && mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Row(
+              children: [
+                Icon(Icons.check_circle_rounded, color: Colors.white, size: 20),
+                SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    'Akses Cepat Biometrik Aktif! Login berikutnya akan otomatis via Sidik Jari.',
+                    style: TextStyle(fontSize: 13),
+                  ),
+                ),
+              ],
+            ),
+            backgroundColor: AppTheme.primaryBlue,
+            duration: Duration(seconds: 4),
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+      }
+    } catch (e) {
+      debugPrint('Error showing biometric quick prompt: $e');
+    } finally {
+      _isBiometricPromptShowing = false;
     }
   }
 
@@ -1194,7 +1441,8 @@ class _PortalWebViewScreenState extends State<PortalWebViewScreen> with WidgetsB
       ),
       builder: (ctx) {
         return SafeArea(
-          child: Padding(
+          child: SingleChildScrollView(
+            physics: const BouncingScrollPhysics(),
             padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
             child: Column(
               mainAxisSize: MainAxisSize.min,

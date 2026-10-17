@@ -763,7 +763,9 @@ class _AiParaphraseScreenState extends State<AiParaphraseScreen> {
           children: [
             Icon(Icons.menu_book_rounded, color: AppTheme.primaryBlue),
             SizedBox(width: 8),
-            Text('Panduan Parafrase'),
+            Expanded(
+              child: Text('Panduan Parafrase'),
+            ),
           ],
         ),
         content: const SingleChildScrollView(

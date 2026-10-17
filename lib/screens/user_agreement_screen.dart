@@ -78,9 +78,11 @@ class _UserAgreementScreenState extends State<UserAgreementScreen> {
           children: [
             Icon(Icons.warning_amber_rounded, color: AppTheme.dangerRed, size: 24),
             SizedBox(width: 8),
-            Text(
-              'Tolak Ketentuan?',
-              style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+            Expanded(
+              child: Text(
+                'Tolak Ketentuan?',
+                style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+              ),
             ),
           ],
         ),

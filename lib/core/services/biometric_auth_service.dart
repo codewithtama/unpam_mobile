@@ -75,6 +75,7 @@ class BiometricAuthService {
 
     // Aktifkan auto-login secara default saat menyimpan kredensial
     await setAutoLoginEnabled(true);
+    await setBiometricPromptDismissed(false);
   }
 
   /// Memeriksa apakah kredensial telah tersimpan di Secure Storage
@@ -125,6 +126,7 @@ class BiometricAuthService {
     await _secureStorage.delete(key: ApiConstants.secureNimKey);
     await _secureStorage.delete(key: ApiConstants.securePasswordKey);
     await setAutoLoginEnabled(false);
+    await setBiometricPromptDismissed(false);
   }
 
   /// Pengaturan status auto-login
@@ -134,5 +136,15 @@ class BiometricAuthService {
 
   Future<void> setAutoLoginEnabled(bool enabled) async {
     await _prefs.setBool(ApiConstants.biometricAutoLoginEnabledKey, enabled);
+  }
+
+  /// Memeriksa apakah user telah menolak pengingat aktivasi biometrik
+  bool isBiometricPromptDismissed() {
+    return _prefs.getBool(ApiConstants.biometricPromptDismissedKey) ?? false;
+  }
+
+  /// Mengatur preferensi penolakan prompt aktivasi biometrik
+  Future<void> setBiometricPromptDismissed(bool dismissed) async {
+    await _prefs.setBool(ApiConstants.biometricPromptDismissedKey, dismissed);
   }
 }
