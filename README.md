@@ -1,106 +1,192 @@
-# UNPAM Mobil
+# UNPAM Mobile — Portal LMS & SIAKAD Terpadu Mahasiswa
+
+[![Flutter](https://img.shields.io/badge/Flutter-3.41.7-02569B?logo=flutter&logoColor=white)](https://flutter.dev)
+[![Dart](https://img.shields.io/badge/Dart-3.11.5-0175C2?logo=dart&logoColor=white)](https://dart.dev)
+[![Release](https://img.shields.io/badge/Release-v1.0.17-10B981?logo=github&logoColor=white)](https://github.com/codewithtama/unpam_mobile/releases/tag/v1.0.17)
+[![Platform](https://img.shields.io/badge/Platform-Android%20(API%2021%2B)-3DDC84?logo=android&logoColor=white)](https://android.com)
+[![License](https://img.shields.io/badge/License-Academic-blue.svg)](#keamanan--kepatuhan-privasi)
+
+**UNPAM Mobile** adalah aplikasi portal terpadu untuk civitas akademika Universitas Pamulang yang menyatukan sistem pembelajaran digital (**Mentari LMS**) dan sistem informasi akademik (**MyUnpam SIAKAD**) ke dalam satu aplikasi native modern berkinerja tinggi. Aplikasi ini dilengkapi dengan asisten cerdas **UNPAM AI Multi-Engine**, autentikasi biometrik terenkripsi, gerbang persetujuan izin wajib, penanganan berkas perkuliahan otomatis, serta sinkronisasi riwayat pembaruan langsung dari GitHub API tanpa hardcode.
+
 ---
 
-
-Aplikasi dirancang dengan arsitektur **Native Portal Wrapper** yang membungkus web engine Chromium murni untuk menangani seluruh aktivitas akademik (melihat jadwal kuliah, 21 sesi pertemuan, pengerjaan kuis, forum diskusi, presensi, dan pengumpulan tugas) tanpa risiko kegagalan scraping atau pemblokiran Cloudflare Turnstile.
+## Daftar Isi
+1. [Fitur Utama](#fitur-utama)
+2. [Arsitektur Sistem](#arsitektur-sistem)
+3. [Daftar Fitur Mendalam](#daftar-fitur-mendalam)
+4. [Struktur Direktori Proyek](#struktur-direktori-proyek)
+5. [Spesifikasi Model AI (Per Oktober 2026)](#spesifikasi-model-ai-per-oktober-2026)
+6. [Prasyarat & Cara Menjalankan](#prasyarat--cara-menjalankan)
+7. [Kompilasi & Rilis APK](#kompilasi--rilis-apk)
+8. [Keamanan & Kepatuhan Privasi](#keamanan--kepatuhan-privasi)
 
 ---
 
 ## Fitur Utama
 
-### 1. Native Mentari Portal Wrapper
-- **Chromium Web Engine Asli:** Menjalankan portal resmi `https://mentari.unpam.ac.id/` dengan performa penuh, rendering JavaScript lengkap, penanganan cookie sesi `httpOnly`, dan kepatuhan terhadap proteksi Cloudflare Turnstile CAPTCHA.
-- **Tampilan 100% Native:** Header aplikasi dirancang elegan dengan identitas universitas, title dinamis, tombol muat ulang cepat, dan avatar inisial mahasiswa tanpa bilah alamat peramban (URL address bar).
-- **Penanganan Tautan Eksternal:** Secara otomatis mendeteksi dan mengarahkan tautan Google Meet, Zoom, WhatsApp dosen/grup kelas, dan dokumen unduhan langsung ke aplikasi native di smartphone.
-- **Pull-to-Refresh & Navigasi Cerdas:** Mendukung gestur tarik ke bawah untuk memuat ulang halaman serta integrasi riwayat navigasi tombol kembali Android.
-
-### 2. UNPAM AI (Real Dual-Engine Intelligence & Automation)
-- **Asisten Perkuliahan Cerdas (Draggable Floating Pill):** Tombol aksi mengambang yang dapat digeser bebas (draggable) ke posisi mana saja di layar tanpa menghalangi konten perkuliahan.
-- **AI Forum Diskusi:** Membaca judul dan topik pertanyaan diskusi dosen secara kontekstual, membantu merancang draf argumen akademis yang berbobot dan mengalir alami, serta menyematkannya langsung ke kolom komentar forum di Mentari.
-- **AI Quiz:** Menelaah butir-butir soal pilihan ganda di halaman kuis, menyajikan rekomendasi rujukan jawaban beserta ulasan konsep keilmuannya, dan memberikan penanda visual yang rapi pada lembar kuis.
-- **Ekstraksi DOM Otomatis & Konsultasi:** Mengambil teks soal kuis, instruksi tugas, atau materi modul yang sedang tampil di layar WebView dan mengirimkannya langsung ke UNPAM AI sebagai konteks pembelajaran.
-- **Dual-Engine LLM Fallback:**
-  - **Default (Cloud AI Publik):** Berjalan gratis tanpa konfigurasi menggunakan model OpenAI / LLaMA via Pollinations API untuk menjawab pertanyaan teks akademik.
-  - **Google Gemini Engine:** Mendukung kunci API pribadi Google Generative Language dengan multi-model fallback otomatis (`gemini-3.5-flash-lite`, `gemini-3.5-flash`, `gemini-3.8-flash`, `gemini-flash-latest`, `gemini-2.5-flash`, `gemini-1.5-flash`) untuk penalaran tinggi dan analisis visual gambar/screenshot kuis.
-- **Interactive Quiz Generator:** Menghasilkan latihan kuis interaktif dengan pilihan ganda, kunci jawaban, dan pembahasan konsep secara otomatis.
-
-### 3. Akses Langsung & Navigasi Bersih 2-Tab
-- **Persetujuan Pengguna (User Agreement):** Pada peluncuran pertama aplikasi, pengguna diwajibkan meninjau Syarat & Ketentuan Penggunaan. Layar persetujuan ini diproteksi tanpa opsi keluar bebas dan dilengkapi pengatur waktu (countdown timer) 15 detik sebelum opsi persetujuan atau penolakan diaktifkan.
-- **Mentari:** Akses langsung ke portal perkuliahan utama Universitas Pamulang.
-- **UNPAM AI:** Ruang konsultasi akademik, pembahasan soal, dan penalaran tugas berbasis AI.
+* **Dual-Isolated Web Engine (Mentari LMS & MyUnpam SIAKAD)**: Memisahkan web controller Mentari dan MyUnpam menggunakan arsitektur `IndexedStack` sehingga berpindah menu tidak me-reload sesi atau menghilangkan jawaban kuis mahasiswa yang sedang berlangsung.
+* **UNPAM AI Academic Assistant (Multi-Model AI)**: Asisten cerdas yang mendukung beragam provider LLM kelas dunia (Google Gemini 3.7/3.5, DeepSeek V4, Anthropic Claude 5.5, Alibaba Qwen 3.8-Max, OpenAI GPT-4o, dan OpenRouter).
+* **Vision OCR Soal Kuis & Modul**: Memindai foto soal kuis atau tugas kuliah langsung dari kamera atau galeri dengan analisis optik multimodal.
+* **AI Otomatis Isi Kuesioner Dosen**: Menganalisis form kuesioner evaluasi dosen di Mentari dan merancang draf catatan apresiasi konstruktif secara cerdas.
+* **AI Parafrase Akademik**: Mengolah redaksi teks karya tulis dengan 4 pilihan gaya bahasa (Formal, Santai, Akademis, Ringkas) untuk mencegah duplikasi/plagiarisme.
+* **Biometric Auto-Login Vault**: Masuk ke portal Mentari secara instan menggunakan sidik jari atau wajah dengan enkripsi perangkat keras (`flutter_secure_storage`).
+* **Gerbang Izin Akses Wajib (Mandatory Permission Gatekeeper)**: Mewajibkan persetujuan seluruh izin perangkat penting (Notifikasi, Kamera, dan Penyimpanan Media) sebelum aplikasi dapat digunakan demi kelancaran fitur perkuliahan.
+* **Riwayat Pembaruan Live dari GitHub API (Menu Titik 3)**: Menampilkan seluruh riwayat versi rilis beserta changelog lengkap yang ditarik langsung secara dinamis dari GitHub Releases tanpa hardcode.
+* **Pembaruan Aplikasi Otomatis (In-App OTA Updater)**: Mendeteksi rilis versi terbaru secara real-time, menampilkan notifikasi melayang di status bar, dan menginstal APK secara langsung.
+* **Syarat & Ketentuan Terproteksi (15s Mandatory Timer)**: Layar persetujuan etika penggunaan akademik dengan penghitung waktu mundur 15 detik untuk menjamin kepatuhan pengguna.
 
 ---
 
 ## Arsitektur Sistem
 
-```
-                      +---------------------------------------+
-                      |       Aplikasi Flutter (Android)      |
-                      +---------------------------------------+
-                                          |
-                      +-------------------+-------------------+
-                      | (Pertama kali buka: Belum disetujui)  | (Sudah disetujui)
-                      v                                       v
-          +-----------------------+               +-----------------------+
-          |  UserAgreementScreen  |               |  PortalWebViewScreen  |
-          | (15s Mandatory Timer  |               | (Native Chromium Shell|
-          |  & PopScope Protected)|               +-----------------------+
-          +-----------------------+                           |
-                      |                                       v
-                      | (Disetujui)               +-----------------------+
-                      +-------------------------> |   UNPAM AI Engine     |
-                                                  |  (Dual-Engine LLM)    |
-                                                  +-----------------------+
-                                                              |
-                                                              v
-                                                  +-----------------------+
-                                                  |    StorageService     |
-                                                  |  (SharedPreferences   |
-                                                  |   Local Key-Value)    |
-                                                  +-----------------------+
+```mermaid
+graph TD
+    A[Mulai Aplikasi] --> B[AppGate Router]
+    B -->|Syarat & Ketentuan Belum Disetujui| C[UserAgreementScreen<br>Timer Wajib 15 Detik]
+    C -->|Setuju| D[PermissionGateScreen<br>Gerbang Izin Wajib]
+    B -->|Ada Izin Belum Disetujui| D
+    D -->|Semua Izin Disetujui| E[PortalWebViewScreen<br>Shell Native Terpadu]
+    B -->|Semua Valid| E
+
+    subgraph "PortalWebViewScreen (Bottom Navigation 3 Menu)"
+        E --> F[Tab 0: Mentari LMS<br>mentari.unpam.ac.id]
+        E --> G[Tab 1: MyUnpam SIAKAD<br>my.unpam.ac.id]
+        E --> H[Tab 2: UNPAM AI Screen<br>Ruang Konsultasi Akademik]
+        
+        F -.-> I[Draggable Floating AI Pill]
+        G -.-> I
+        I --> J[AI Forum Diskusi / AI Quiz / OCR]
+    end
+
+    subgraph "Layanan Inti & Keamanan"
+        E --> K[BiometricAuthService<br>Secure Hardware Keystore]
+        E --> L[UpdateCheckerService<br>GitHub Releases REST API]
+        E --> M[NotificationService<br>Heads-Up Local Notification]
+        H --> N[AiService Multi-Provider<br>Gemini / DeepSeek / Claude / Qwen]
+    end
 ```
 
 ---
 
-## Struktur Direktori Repositori
+## Daftar Fitur Mendalam
+
+### 1. Dual-Portal Mentari & MyUnpam
+* **Mentari LMS (`mentari.unpam.ac.id`)**: Akses penuh ke materi kuliah, 21 sesi pertemuan, forum diskusi, penugasan, presensi, dan pengerjaan kuis interaktif tanpa gangguan proteksi Cloudflare Turnstile CAPTCHA.
+* **MyUnpam SIAKAD (`my.unpam.ac.id`)**: Akses terpadu ke Sistem Informasi Akademik Mahasiswa: Pengisian KRS, Kartu Hasil Studi (KHS), Transkrip Nilai, Informasi Keuangan & Pembayaran Kuliah, serta Jadwal Ujian.
+* **Penanganan Cerdas Berkas Cetak**: Otomatis mendeteksi unduhan berkas PDF (Cetak KRS, Cetak KHS, Kartu Ujian, dan Modul) agar langsung diteruskan ke aplikasi pembaca PDF eksternal di Android.
+
+### 2. UNPAM AI Multi-Engine & Vision OCR
+* **Draggable Floating Action Pill**: Tombol aksi mengambang yang dapat digeser bebas di atas WebView perkuliahan tanpa menutupi materi penting.
+* **Fitur AI Terpadu**:
+  * **AI Forum Diskusi**: Menganalisis topik pertanyaan diskusi dosen dan merancang argumen akademis yang orisinal.
+  * **AI Quiz Recommender**: Menganalisis butir soal pilihan ganda, memberikan rujukan jawaban ilmiah beserta pembahasannya.
+  * **Vision OCR Camera & Gallery**: Mengambil foto soal ujian dari kamera secara langsung atau memilih tangkapan layar dari galeri untuk dianalisis oleh AI multimodal.
+  * **AI Parafrase Akademik**: Memformat ulang paragraf dengan perbandingan visual *side-by-side* dan opsi salin instan.
+  * **AI Pengisian Kuesioner Dosen**: Mode cepat (semua "Ya") atau mode analisis mendalam untuk mengapresiasi kinerja pengajaran dosen.
+
+### 3. Biometric Auto-Login Vault
+* Mengeliminasi keharusan mengetik ulang NIM dan kata sandi Mentari setiap kali membuka aplikasi.
+* Kredensial disimpan dengan enkripsi perangkat keras menggunakan `flutter_secure_storage` (Android Keystore).
+* Dilengkapi lembar cepat konfirmasi sidik jari/wajah saat halaman formulir login terdeteksi.
+
+### 4. Gerbang Persetujuan Izin Wajib (Mandatory Gatekeeper)
+* Sebelum masuk ke portal, aplikasi memverifikasi 3 izin perangkat:
+  1. **Notifikasi Sistem**: Menerima pengingat tenggat tugas, jadwal kuliah, dan rilis pembaruan aplikasi.
+  2. **Kamera**: Diperlukan fitur UNPAM AI Vision OCR untuk memindai soal ujian dan catatan kuliah.
+  3. **Penyimpanan & Galeri Foto**: Mengunggah berkas jawaban tugas mahasiswa ke portal Mentari/MyUnpam.
+* Pengguna tidak dapat menggunakan aplikasi jika izin belum diberikan. Jika diblokir permanen oleh sistem, disediakan tombol langsung menuju menu Pengaturan HP (`openAppSettings()`) dan status diperbarui otomatis begitu kembali ke aplikasi.
+
+### 5. Riwayat Pembaruan Live dari GitHub (Menu Titik 3)
+* Diakses melalui menu titik tiga (`⋮`) di AppBar kanan atas $\rightarrow$ **"Riwayat Pembaruan"**.
+* Terhubung secara live ke endpoint REST GitHub:
+  `GET https://api.github.com/repos/codewithtama/unpam_mobile/releases?per_page=100`
+* Menampilkan daftar rilis kronologis dari versi pertama hingga versi terkini lengkap dengan:
+  * Badge **"Versi Terpasang Saat Ini"** pada versi yang sedang digunakan.
+  * Tag rilis, judul, dan changelog pembaruan.
+  * Tanggal rilis dalam bahasa Indonesia (WIB).
+  * Ukuran file APK dan statistik jumlah unduhan.
+  * Tombol **"Pasang"** langsung dari dialog riwayat rilis.
+  * Dukungan *offline cache* via `SharedPreferences`.
+
+---
+
+## Struktur Direktori Proyek
 
 ```text
 unpam_mobile/
-├── android/                             # Konfigurasi native Android (Gradle, Manifest, App Icons)
-├── assets/                              # Aset statis & logo institusi
+├── .github/
+│   └── workflows/
+│       └── release-apk.yml               # CI/CD otomatis kompilasi APK rilis saat tag v* di-push
+├── android/                              # Konfigurasi native Android (Gradle, Manifest, Keystore)
+├── assets/                               # Aset statis (ikon, logo institusi UNPAM)
 ├── lib/
 │   ├── core/
 │   │   ├── constants/
-│   │   │   └── api_constants.dart       # Endpoint portal Mentari & storage keys
+│   │   │   └── api_constants.dart        # URL Mentari, MyUnpam, model AI, dan storage keys
 │   │   └── services/
-│   │       ├── ai_service.dart          # Real Dual-Engine AI (Cloud AI & Gemini Fallback)
-│   │       └── storage_service.dart     # Service penyimpanan lokal SharedPreferences
+│   │       ├── ai_service.dart           # Engine komunikasi multi-provider AI & Vision OCR
+│   │       ├── biometric_auth_service.dart # Layanan autentikasi biometrik & secure storage
+│   │       ├── notification_service.dart # Layanan notifikasi lokal status bar Android
+│   │       ├── permission_service.dart   # Manajemen & verifikasi status izin perangkat
+│   │       ├── storage_service.dart      # Abstraksi SharedPreferences & cache sesi
+│   │       └── update_checker_service.dart # Service GitHub Releases API & instalasi APK OTA
 │   ├── models/
-│   │   └── ai_message_model.dart        # Model pesan percakapan & kuis interaktif
+│   │   ├── ai_message_model.dart         # Model data pesan chat AI & kuis interaktif
+│   │   ├── ai_model_config.dart          # Konfigurasi spesifikasi model AI terkini
+│   │   ├── app_update_info.dart          # Metadata pembaruan & logika pembanding SemVer
+│   │   ├── github_release.dart           # Model payload rilis GitHub API & format tanggal
+│   │   └── paraphrase_model.dart         # Model gaya parafrase & perbandingan teks
 │   ├── providers/
-│   │   └── ai_provider.dart             # State management UNPAM AI & riwayat konsultasi
+│   │   ├── ai_provider.dart              # State management UNPAM AI & penyimpanan riwayat
+│   │   └── biometric_provider.dart       # State management status biometrik & kredensial
 │   ├── screens/
-│   │   ├── ai_assistant_screen.dart     # Antarmuka UNPAM AI & dialog API Key
-│   │   ├── portal_webview_screen.dart   # Shell Chromium Mentari & Draggable AI Button
-│   │   └── user_agreement_screen.dart   # Persetujuan pengguna dengan timer 15 detik
+│   │   ├── ai_assistant_screen.dart      # Layar percakapan AI, kuis, & Vision OCR
+│   │   ├── ai_paraphrase_screen.dart     # Layar alat parafrase teks akademik
+│   │   ├── permission_gate_screen.dart   # Layar gerbang persetujuan izin wajib
+│   │   ├── portal_webview_screen.dart    # Shell utama Mentari, MyUnpam, & Floating AI
+│   │   └── user_agreement_screen.dart    # Layar syarat & ketentuan dengan timer 15 detik
 │   ├── theme/
-│   │   └── app_theme.dart               # Sistem token warna institusi (Navy, Gold, Surface)
-│   └── main.dart                        # Titik masuk aplikasi, routing persetujuan & Provider
+│   │   └── app_theme.dart                # Desain sistem token warna institusi (Navy & Gold)
+│   ├── widgets/
+│   │   ├── app_gate.dart                 # Gateway penentu navigasi pada saat aplikasi dibuka
+│   │   ├── biometric_quick_prompt_sheet.dart # Dialog konfirmasi biometrik saat form login tampil
+│   │   ├── biometric_vault_sheet.dart    # Pengaturan kredensial login biometrik
+│   │   ├── release_history_dialog.dart   # Dialog riwayat pembaruan sinkron GitHub API
+│   │   └── update_dialog.dart            # Dialog konfirmasi & progress download update APK
+│   └── main.dart                         # Entrypoint aplikasi, registrasi provider & tema
 ├── test/
-│   └── widget_test.dart                 # Automated unit & integration tests
-├── pubspec.yaml                         # Dependensi proyek Flutter
-└── README.md                            # Dokumentasi teknis proyek
+│   └── widget_test.dart                  # Automated unit test & widget test suite (13 tests)
+├── pubspec.yaml                          # Dependensi & versi aplikasi
+├── RELEASE_NOTES.md                      # Changelog rilis publik aplikasi
+└── README.md                             # Dokumentasi komprehensif proyek
 ```
 
 ---
 
-## Cara Instalasi & Menjalankan
+## Spesifikasi Model AI (Per Oktober 2026)
 
-### Prasyarat
-- **Flutter SDK:** Versi `^3.19.0` atau yang lebih baru
-- **Dart SDK:** Versi `^3.0.0`
-- **Android SDK:** Min SDK 21 (Android 5.0 Lollipop), Target SDK 34
-- **Perangkat / Emulator:** Android fisik atau emulator dengan koneksi internet aktif
+Pengguna dapat memilih mesin kecerdasan buatan favorit di menu pengaturan AI:
+
+| Provider | Model Rekomendasi Terkini | Model ID API | Kemampuan Utama |
+| :--- | :--- | :--- | :--- |
+| **Google Gemini** | Gemini 3.7 Flash, 3.5 Flash | `gemini-3.7-flash`, `gemini-3.5-flash` | Multimodal Vision OCR foto soal kuis, penalaran instan |
+| **DeepSeek** | DeepSeek V4 Flash, V4 Pro | `deepseek-v4-flash`, `deepseek-v4-pro` | Konteks 1 Juta token, penalaran logika matematis mendalam |
+| **Anthropic Claude**| Claude 5.5 (Sonnet, Haiku, Opus)| `claude-sonnet-5-5`, `claude-haiku-5-5` | Kerapian tata bahasa akademis, argumentasi terstruktur |
+| **Alibaba Qwen** | Qwen 3.8-Max, 3.7-Max | `qwen-3.8-max`, `qwen-3.7-max` | Failover dual-region, kapabilitas teknis komprehensif |
+| **OpenAI** | GPT-4o | `gpt-4o` | Penalaran multimodal umum dan penalaran cepat |
+| **OpenRouter** | Router Bebas | Format `provider/model` | Akses ke ratusan model open-source/komersial global |
+| **Cloud AI Gratis** | Cloud Native Serverless | Bawaan (Default) | Langsung dapat digunakan tanpa perlu memasukkan API key |
+
+---
+
+## Prasyarat & Cara Menjalankan
+
+### Prasyarat Pengembangan
+* **Flutter SDK**: Versi `3.19.0` atau lebih baru (direkomendasikan `3.41.7`)
+* **Dart SDK**: Versi `3.0.0` atau lebih baru (direkomendasikan `3.11.5`)
+* **Java Development Kit (JDK)**: Versi 17
+* **Android SDK**: Min SDK 21 (Android 5.0 Lollipop), Target SDK 34 (Android 14)
+* Perangkat Android fisik atau emulator dengan koneksi internet aktif.
 
 ### Langkah Menjalankan Aplikasi
 ```bash
@@ -108,43 +194,44 @@ unpam_mobile/
 git clone https://github.com/codewithtama/unpam_mobile.git
 cd unpam_mobile
 
-# 2. Unduh dependensi
+# 2. Unduh paket dependensi
 flutter pub get
 
-# 3. Jalankan analisis statis kode
+# 3. Jalankan static analysis (Pastikan 0 warning / 0 error)
 flutter analyze
 
-# 4. Jalankan pengujian unit otomatis
+# 4. Jalankan rangkaian pengujian otomatis
 flutter test
 
 # 5. Jalankan aplikasi pada perangkat Android
 flutter run
 ```
 
-### Kompilasi Release APK
-Untuk mengompilasi berkas APK produksi siap instal:
-```bash
-flutter build apk --split-per-abi --release
-```
-Berkas APK hasil build akan tersedia di:
-- `build/app/outputs/flutter-apk/app-arm64-v8a-release.apk` (disarankan untuk smartphone Android modern)
-- `build/app/outputs/flutter-apk/app-armeabi-v7a-release.apk`
-- `build/app/outputs/flutter-apk/app-x86_64-release.apk`
-
 ---
 
-## Konfigurasi Kunci API UNPAM AI (Opsional)
+## Kompilasi & Rilis APK
 
-Secara default, fitur UNPAM AI langsung dapat digunakan secara **gratis** melalui Cloud AI Engine bawaan. Untuk mahasiswa yang ingin mengaktifkan inferensi berkecepatan tinggi dan fitur membaca screenshot gambar/soal visual:
-1. Buka tab **UNPAM AI** di dalam aplikasi.
-2. Klik ikon kunci (**Pengaturan Gemini API Key**).
-3. Masukkan kunci API dari [Google AI Studio](https://aistudio.google.com/).
-4. Aplikasi akan secara otomatis memvalidasi kunci via endpoint discovery dan memilih model terbaik (`gemini-3.5-flash-lite` / `gemini-3.5-flash`).
+Proyek ini telah dikonfigurasi dengan skema penandatanganan ganda (**APK Signature Scheme v1 JAR + v2 Full**) agar terbebas dari kesalahan paket tidak valid pada perangkat vendor Android (Xiaomi MIUI/HyperOS, Samsung OneUI, ColorOS, dll).
+
+### Kompilasi Lokal
+```bash
+# Membangun file APK rilis mandiri
+flutter build apk --release
+```
+Berkas APK hasil build akan berlokasi di:
+`build/app/outputs/flutter-apk/app-release.apk`
+
+### CI/CD Otomatis via GitHub Actions
+Setiap kali tag rilis di-push ke GitHub (contoh `git tag v1.0.17 && git push origin refs/tags/v1.0.17`), workflow `.github/workflows/release-apk.yml` akan secara otomatis:
+1. Memeriksa integritas kode dan dependensi.
+2. Mengompilasi berkas APK release bertandatangan resmi.
+3. Menerbitkan GitHub Release baru dengan melampirkan berkas `app-release.apk` secara otomatis.
 
 ---
 
 ## Keamanan & Kepatuhan Privasi
 
-1. **Autentikasi Terenkripsi:** Proses autentikasi mahasiswa dilakukan langsung pada peramban resmi Mentari UNPAM. Kredensial akun (password) tidak pernah dibaca, dicegat, atau disimpan oleh aplikasi.
-2. **Keamanan Kunci API:** Kunci API Google Gemini disimpan secara privat di `SharedPreferences` perangkat pengguna dan hanya dikirimkan langsung ke endpoint resmi `generativelanguage.googleapis.com` melalui protokol TLS 1.3 terenkripsi.
-3. **Data Isolation:** Seluruh riwayat konsultasi UNPAM AI tersimpan secara lokal di perangkat tanpa server perantara pihak ketiga.
+1. **Integritas Sesi Mahasiswa**: Seluruh proses autentikasi akun Mentari dan MyUnpam berlangsung langsung di dalam peramban resmi Universitas Pamulang. Kata sandi tidak pernah dikirimkan ke server pihak ketiga mana pun.
+2. **Penyimpanan Biometrik Terisolasi**: Kredensial login biometrik dienkripsi langsung oleh perangkat keras keamanan Android (*Hardware-backed Keystore*) melalui `flutter_secure_storage`.
+3. **Kerahasiaan Kunci API AI**: Kunci API pengguna (Gemini, DeepSeek, Claude, Qwen, dsb.) disimpan secara eksklusif di perangkat lokal pengguna dan hanya dikirimkan langsung ke endpoint resmi masing-masing penyedia AI melalui saluran HTTPS TLS 1.3 terenkripsi.
+4. **Pencegahan RenderFlex Overflow**: Seluruh komponen antarmuka dirancang fleksibel dengan toleransi terhadap skala teks besar (*Large Text Accessibility / WCAG AA*).
