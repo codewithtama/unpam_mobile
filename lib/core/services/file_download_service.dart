@@ -59,21 +59,33 @@ class FileDownloadService {
     if (rawUrl.isEmpty) return false;
     final lower = rawUrl.toLowerCase().trim();
 
-    // Data URI berkas PDF
-    if (lower.startsWith('data:application/pdf') || lower.startsWith('data:application/octet-stream')) {
+    // Data URI berkas PDF atau stream biner
+    if (lower.startsWith('data:application/pdf') ||
+        lower.startsWith('data:application/octet-stream') ||
+        lower.startsWith('data:binary/octet-stream')) {
       return true;
     }
 
-    // Ekstensi berkas umum perkuliahan
-    if (lower.endsWith('.pdf') ||
-        lower.endsWith('.docx') ||
-        lower.endsWith('.doc') ||
-        lower.endsWith('.xlsx') ||
-        lower.endsWith('.xls') ||
-        lower.endsWith('.pptx') ||
-        lower.endsWith('.ppt') ||
-        lower.endsWith('.zip') ||
-        lower.endsWith('.rar')) {
+    // Ekstensi berkas umum perkuliahan dalam path URL (bahkan jika ada query params)
+    final uri = Uri.tryParse(rawUrl);
+    final path = (uri?.path ?? rawUrl).toLowerCase();
+    if (path.endsWith('.pdf') ||
+        path.endsWith('.docx') ||
+        path.endsWith('.doc') ||
+        path.endsWith('.xlsx') ||
+        path.endsWith('.xls') ||
+        path.endsWith('.pptx') ||
+        path.endsWith('.ppt') ||
+        path.endsWith('.zip') ||
+        path.endsWith('.rar')) {
+      return true;
+    }
+
+    // Mengandung ekstensi dokumen langsung dalam URL atau parameter
+    if (lower.contains('.pdf') ||
+        lower.contains('.docx') ||
+        lower.contains('.xlsx') ||
+        lower.contains('.zip')) {
       return true;
     }
 
@@ -85,23 +97,45 @@ class FileDownloadService {
         lower.contains('format=pdf') ||
         lower.contains('type=pdf') ||
         lower.contains('download=pdf') ||
-        lower.contains('cetak=pdf')) {
+        lower.contains('output=pdf') ||
+        lower.contains('view=pdf') ||
+        lower.contains('as=pdf') ||
+        lower.contains('cetak=pdf') ||
+        lower.contains('cetak=1') ||
+        lower.contains('print=1') ||
+        lower.contains('export=1') ||
+        lower.contains('download=1')) {
       return true;
     }
 
-    // Pola cetak SIAKAD MyUnpam
-    if (lower.contains('cetak_krs') ||
+    // Pola cetak, ujian (UTS/UAS), dan dokumen akademik SIAKAD MyUnpam
+    if (lower.contains('cetak_uts') ||
+        lower.contains('cetak_uas') ||
+        lower.contains('kartu_uts') ||
+        lower.contains('kartu_uas') ||
+        lower.contains('kartu_ujian') ||
+        lower.contains('kartuujian') ||
+        lower.contains('jadwal_ujian/cetak') ||
+        lower.contains('cetak_krs') ||
         lower.contains('cetak_khs') ||
         lower.contains('cetak_transkrip') ||
         lower.contains('cetak_kartu') ||
         lower.contains('cetak_tagihan') ||
         lower.contains('cetak_kwitansi') ||
+        lower.contains('cetak_spm') ||
         lower.contains('krs_cetak') ||
         lower.contains('khs_cetak') ||
-        lower.contains('kartu_ujian') ||
+        lower.contains('uts_cetak') ||
+        lower.contains('uas_cetak') ||
         lower.contains('/krs/cetak') ||
         lower.contains('/khs/cetak') ||
+        lower.contains('/uts/cetak') ||
+        lower.contains('/uas/cetak') ||
+        lower.contains('/ujian/cetak') ||
         lower.contains('/transkrip/cetak') ||
+        lower.contains('/kartu/cetak') ||
+        lower.contains('/cetak/') ||
+        lower.contains('/print/') ||
         lower.contains('/download/')) {
       return true;
     }
@@ -323,13 +357,17 @@ class FileDownloadService {
     final timestamp = DateTime.now().millisecondsSinceEpoch;
     String prefix = 'Dokumen_UNPAM';
 
-    if (lower.contains('krs')) {
+    if (lower.contains('uts')) {
+      prefix = 'Kartu_UTS_UNPAM';
+    } else if (lower.contains('uas')) {
+      prefix = 'Kartu_UAS_UNPAM';
+    } else if (lower.contains('krs')) {
       prefix = 'Cetak_KRS_UNPAM';
     } else if (lower.contains('khs')) {
       prefix = 'Cetak_KHS_UNPAM';
     } else if (lower.contains('transkrip')) {
       prefix = 'Transkrip_Nilai_UNPAM';
-    } else if (lower.contains('kartu')) {
+    } else if (lower.contains('kartu') || lower.contains('ujian')) {
       prefix = 'Kartu_Ujian_UNPAM';
     } else if (lower.contains('kwitansi') || lower.contains('tagihan')) {
       prefix = 'Kwitansi_Pembayaran_UNPAM';

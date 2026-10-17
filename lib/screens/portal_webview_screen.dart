@@ -67,6 +67,7 @@ class _PortalWebViewScreenState extends State<PortalWebViewScreen> with WidgetsB
   final UpdateCheckerService _updateChecker = UpdateCheckerService();
   bool _isCheckingUpdate = false;
   bool _isUpdateDialogShowing = false;
+  bool _isHandlingRawPdf = false;
 
   static const String _customUserAgent =
       'Mozilla/5.0 (Linux; Android 13; SM-S918B) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.6613.127 Mobile Safari/537.36';
@@ -281,6 +282,7 @@ class _PortalWebViewScreenState extends State<PortalWebViewScreen> with WidgetsB
               debugPrint('Error injecting scroll sync: \$e');
             }
             _injectDownloadInterceptorScript(_controller);
+            _detectAndInterceptRawPdfInWebView(_controller);
           },
           onWebResourceError: (error) {
             if (_isRefreshing && mounted) {
@@ -527,6 +529,7 @@ class _PortalWebViewScreenState extends State<PortalWebViewScreen> with WidgetsB
             // 1. Injeksi interceptor unduhan berkas PDF
             if (_myUnpamController != null) {
               _injectDownloadInterceptorScript(_myUnpamController!);
+              _detectAndInterceptRawPdfInWebView(_myUnpamController!);
             }
 
             // 2. Tangani otomatis jika baru saja logout atau di halaman konfirmasi SSO
@@ -1173,10 +1176,20 @@ class _PortalWebViewScreenState extends State<PortalWebViewScreen> with WidgetsB
     );
 
     final activeUrl = _currentNavIndex == 1 ? _myUnpamCurrentUrl : _currentUrl;
-    final cookies = await FileDownloadService().getSessionCookiesForUrl(url.isNotEmpty ? url : activeUrl);
+    String targetUrl = url.trim();
+    if (!targetUrl.startsWith('data:') &&
+        !targetUrl.startsWith('http://') &&
+        !targetUrl.startsWith('https://')) {
+      final base = Uri.tryParse(activeUrl);
+      if (base != null) {
+        targetUrl = base.resolve(targetUrl).toString();
+      }
+    }
+
+    final cookies = await FileDownloadService().getSessionCookiesForUrl(targetUrl.isNotEmpty ? targetUrl : activeUrl);
 
     final result = await FileDownloadService().downloadAndOpenFile(
-      url: url,
+      url: targetUrl,
       customFileName: customName,
       explicitCookies: cookies,
       userAgent: _customUserAgent,
@@ -1235,6 +1248,114 @@ class _PortalWebViewScreenState extends State<PortalWebViewScreen> with WidgetsB
     }
   }
 
+  /// Mendeteksi jika WebView secara tidak sengaja memuat aliran data mentah PDF (%PDF-1.x) sebagai teks,
+  /// lalu mengekstrak berkas biner asli melalui fetch browser yang memegang cookies sesi kampus,
+  /// mengembalikan WebView ke halaman portal sebelumnya, dan membukanya di penampil PDF eksternal.
+  Future<void> _detectAndInterceptRawPdfInWebView(WebViewController controller) async {
+    if (_isHandlingRawPdf || !mounted) return;
+
+    try {
+      final isPdfRaw = await controller.runJavaScriptReturningResult(r'''
+        (function() {
+          try {
+            var ct = (document.contentType || '').toLowerCase();
+            if (ct.indexOf('application/pdf') !== -1 || ct.indexOf('application/octet-stream') !== -1) {
+              return true;
+            }
+            var t = (document.body ? document.body.innerText : '') || (document.documentElement ? document.documentElement.innerText : '');
+            var sample = t.substring(0, 100).trim();
+            if (sample.indexOf('%PDF-') === 0 || sample.indexOf('%pdf-') === 0) {
+              return true;
+            }
+            var pre = document.querySelector('pre');
+            if (pre && pre.innerText && pre.innerText.trim().indexOf('%PDF-') === 0) {
+              return true;
+            }
+            return false;
+          } catch(e) {
+            return false;
+          }
+        })()
+      ''');
+
+      final bool isPdf = isPdfRaw == true || isPdfRaw.toString().trim() == 'true';
+      if (!isPdf || !mounted) return;
+
+      _isHandlingRawPdf = true;
+
+      final currentUrl = await controller.currentUrl() ?? '';
+      debugPrint('Raw PDF stream detected on current WebView page: $currentUrl');
+
+      if (!mounted) {
+        _isHandlingRawPdf = false;
+        return;
+      }
+
+      // 1. Ekstrak Base64 binary PDF melalui same-origin fetch yang mewarisi semua cookie & header autentikasi
+      String? dataUri;
+      try {
+        final fetchResult = await controller.runJavaScriptReturningResult(r'''
+          (async function() {
+            try {
+              var resp = await fetch(window.location.href, {
+                method: 'GET',
+                credentials: 'include'
+              });
+              if (!resp.ok) return 'ERR_' + resp.status;
+              var blob = await resp.blob();
+              return new Promise(function(resolve) {
+                var reader = new FileReader();
+                reader.onloadend = function() {
+                  resolve(reader.result || '');
+                };
+                reader.onerror = function() {
+                  resolve('');
+                };
+                reader.readAsDataURL(blob);
+              });
+            } catch(e) {
+              return 'ERR_' + e;
+            }
+          })()
+        ''');
+
+        if (fetchResult is String) {
+          String cleaned = fetchResult.trim();
+          if (cleaned.startsWith('"') && cleaned.endsWith('"') && cleaned.length >= 2) {
+            cleaned = cleaned.substring(1, cleaned.length - 1);
+          }
+          if (cleaned.startsWith('data:application/pdf') || cleaned.startsWith('data:')) {
+            dataUri = cleaned;
+          }
+        }
+      } catch (e) {
+        debugPrint('Failed to extract PDF via in-page fetch: $e');
+      }
+
+      // 2. Segera kembalikan WebView ke halaman portal sebelumnya agar layar tidak terkunci pada kode mentah %PDF-
+      try {
+        final canBack = await controller.canGoBack();
+        if (canBack && mounted) {
+          await controller.goBack();
+        }
+      } catch (e) {
+        debugPrint('Go back error after raw PDF intercept: $e');
+      }
+
+      // 3. Simpan dan buka PDF di aplikasi penampil PDF perangkat
+      if (mounted) {
+        final pdfToOpen = (dataUri != null && dataUri.isNotEmpty) ? dataUri : currentUrl;
+        if (pdfToOpen.isNotEmpty) {
+          await _handleAcademicFileDownload(pdfToOpen, customName: 'Kartu_Ujian_UNPAM.pdf');
+        }
+      }
+    } catch (e) {
+      debugPrint('Error detecting raw PDF: $e');
+    } finally {
+      _isHandlingRawPdf = false;
+    }
+  }
+
   Future<void> _injectDownloadInterceptorScript(WebViewController controller) async {
     try {
       await controller.runJavaScript(r'''
@@ -1242,10 +1363,20 @@ class _PortalWebViewScreenState extends State<PortalWebViewScreen> with WidgetsB
           if (window.__campusDownloadInterceptorInstalled) return;
           window.__campusDownloadInterceptorInstalled = true;
 
+          function toAbsoluteUrl(u) {
+            try {
+              return new URL(u, window.location.href).href;
+            } catch(e) {
+              return u;
+            }
+          }
+
           function isDocumentUrl(u) {
             if (!u || typeof u !== 'string') return false;
             var low = u.toLowerCase().trim();
-            if (low.startsWith('data:application/pdf') || low.startsWith('data:application/octet-stream')) return true;
+            if (low.startsWith('data:application/pdf') ||
+                low.startsWith('data:application/octet-stream') ||
+                low.startsWith('data:binary/octet-stream')) return true;
             if (low.indexOf('.pdf') !== -1 ||
                 low.indexOf('.docx') !== -1 ||
                 low.indexOf('.xlsx') !== -1 ||
@@ -1259,28 +1390,54 @@ class _PortalWebViewScreenState extends State<PortalWebViewScreen> with WidgetsB
                 low.indexOf('format=pdf') !== -1 ||
                 low.indexOf('type=pdf') !== -1 ||
                 low.indexOf('download=pdf') !== -1 ||
-                low.indexOf('cetak=pdf') !== -1) return true;
-            if (low.indexOf('cetak_krs') !== -1 ||
+                low.indexOf('output=pdf') !== -1 ||
+                low.indexOf('view=pdf') !== -1 ||
+                low.indexOf('as=pdf') !== -1 ||
+                low.indexOf('cetak=pdf') !== -1 ||
+                low.indexOf('cetak=1') !== -1 ||
+                low.indexOf('print=1') !== -1 ||
+                low.indexOf('export=1') !== -1 ||
+                low.indexOf('download=1') !== -1) return true;
+            if (low.indexOf('cetak_uts') !== -1 ||
+                low.indexOf('cetak_uas') !== -1 ||
+                low.indexOf('kartu_uts') !== -1 ||
+                low.indexOf('kartu_uas') !== -1 ||
+                low.indexOf('kartu_ujian') !== -1 ||
+                low.indexOf('kartuujian') !== -1 ||
+                low.indexOf('jadwal_ujian/cetak') !== -1 ||
+                low.indexOf('cetak_krs') !== -1 ||
                 low.indexOf('cetak_khs') !== -1 ||
                 low.indexOf('cetak_transkrip') !== -1 ||
                 low.indexOf('cetak_kartu') !== -1 ||
                 low.indexOf('cetak_tagihan') !== -1 ||
                 low.indexOf('cetak_kwitansi') !== -1 ||
+                low.indexOf('cetak_spm') !== -1 ||
                 low.indexOf('krs_cetak') !== -1 ||
                 low.indexOf('khs_cetak') !== -1 ||
-                low.indexOf('kartu_ujian') !== -1 ||
+                low.indexOf('uts_cetak') !== -1 ||
+                low.indexOf('uas_cetak') !== -1 ||
                 low.indexOf('/krs/cetak') !== -1 ||
                 low.indexOf('/khs/cetak') !== -1 ||
-                low.indexOf('/transkrip/cetak') !== -1) return true;
+                low.indexOf('/uts/cetak') !== -1 ||
+                low.indexOf('/uas/cetak') !== -1 ||
+                low.indexOf('/ujian/cetak') !== -1 ||
+                low.indexOf('/transkrip/cetak') !== -1 ||
+                low.indexOf('/kartu/cetak') !== -1 ||
+                low.indexOf('/cetak/') !== -1 ||
+                low.indexOf('/print/') !== -1 ||
+                low.indexOf('/download/') !== -1) return true;
             return false;
           }
 
           var originalWindowOpen = window.open;
           window.open = function(url, target, features) {
-            if (url && isDocumentUrl(url)) {
-              if (window.CampusDownloadChannel) {
-                window.CampusDownloadChannel.postMessage(url);
-                return null;
+            if (url) {
+              var absUrl = toAbsoluteUrl(url);
+              if (isDocumentUrl(absUrl) || isDocumentUrl(url)) {
+                if (window.CampusDownloadChannel) {
+                  window.CampusDownloadChannel.postMessage(absUrl);
+                  return null;
+                }
               }
             }
             return originalWindowOpen ? originalWindowOpen.call(window, url, target, features) : null;
@@ -1288,18 +1445,50 @@ class _PortalWebViewScreenState extends State<PortalWebViewScreen> with WidgetsB
 
           document.addEventListener('click', function(ev) {
             var el = ev.target;
-            while (el && el.tagName !== 'A' && el.tagName !== 'BUTTON' && el !== document.body) {
+            while (el && el.tagName !== 'A' && el.tagName !== 'BUTTON' && el.tagName !== 'INPUT' && el !== document.body) {
               el = el.parentElement;
             }
-            if (el && el.tagName === 'A') {
+            if (!el || el === document.body) return;
+
+            // 1. Tag <a>
+            if (el.tagName === 'A') {
               var href = el.getAttribute('href') || el.href || '';
+              var absHref = toAbsoluteUrl(href);
               var downloadAttr = el.getAttribute('download');
-              if (downloadAttr !== null || isDocumentUrl(href)) {
-                if (window.CampusDownloadChannel && href && !href.startsWith('javascript:')) {
-                  ev.preventDefault();
-                  ev.stopPropagation();
-                  window.CampusDownloadChannel.postMessage(el.href || href);
-                }
+              var onclickAttr = el.getAttribute('onclick') || '';
+              var text = (el.innerText || el.textContent || '').toLowerCase().trim();
+
+              var isDoc = downloadAttr !== null ||
+                          isDocumentUrl(absHref) ||
+                          isDocumentUrl(href) ||
+                          isDocumentUrl(onclickAttr) ||
+                          ((text.indexOf('cetak') !== -1 || text.indexOf('download') !== -1 || text.indexOf('unduh') !== -1 || text.indexOf('print') !== -1) &&
+                           (text.indexOf('uts') !== -1 || text.indexOf('uas') !== -1 || text.indexOf('krs') !== -1 || text.indexOf('khs') !== -1 || text.indexOf('kartu') !== -1 || text.indexOf('pdf') !== -1 || text.indexOf('ujian') !== -1));
+
+              if (isDoc && window.CampusDownloadChannel && absHref && !absHref.startsWith('javascript:')) {
+                ev.preventDefault();
+                ev.stopPropagation();
+                window.CampusDownloadChannel.postMessage(absHref);
+                return;
+              }
+            }
+
+            // 2. Tag <button> atau <input type="submit" / "button">
+            if (el.tagName === 'BUTTON' || (el.tagName === 'INPUT' && (el.type === 'submit' || el.type === 'button'))) {
+              var form = el.form || el.closest('form');
+              var formAction = form ? (form.getAttribute('action') || form.action || '') : '';
+              var absAction = formAction ? toAbsoluteUrl(formAction) : '';
+              var text = (el.innerText || el.value || '').toLowerCase().trim();
+
+              var isDocBtn = (absAction && isDocumentUrl(absAction)) ||
+                             ((text.indexOf('cetak') !== -1 || text.indexOf('download') !== -1 || text.indexOf('unduh') !== -1 || text.indexOf('print') !== -1) &&
+                              (text.indexOf('uts') !== -1 || text.indexOf('uas') !== -1 || text.indexOf('krs') !== -1 || text.indexOf('khs') !== -1 || text.indexOf('kartu') !== -1 || text.indexOf('pdf') !== -1 || text.indexOf('ujian') !== -1));
+
+              if (isDocBtn && window.CampusDownloadChannel && absAction) {
+                ev.preventDefault();
+                ev.stopPropagation();
+                window.CampusDownloadChannel.postMessage(absAction);
+                return;
               }
             }
           }, true);

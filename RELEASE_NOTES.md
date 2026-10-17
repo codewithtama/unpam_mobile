@@ -1,10 +1,9 @@
-# Pembaruan UNPAM Mobile v1.0.19
+# Pembaruan UNPAM Mobile v1.0.20
 
-Pembaruan UNPAM Mobile v1.0.19:
+Pembaruan UNPAM Mobile v1.0.20:
 
-- **Perbaikan Notifikasi & Deteksi Pembaruan Otomatis (OTA)**:
-  * Pembuatan Android Notification Channel v2 khusus dengan prioritas `Importance.max` dan `Priority.high` agar notifikasi update selalu muncul melayang (*heads-up banner*) di status bar HP tanpa perlu dicek manual.
-  * Pengecekan otomatis kini berlangsung saat aplikasi dibuka (startup) dan setiap kali pengguna kembali ke aplikasi (*app resume*).
-  * Menghilangkan kendala *early return* inisialisasi notifikasi sehingga ketukan pada notifikasi status bar langsung membuka dialog pembaruan (`UpdateDialog`).
-  * Dukungan fallback multi-layer pengecekan rilis GitHub (REST API `/releases/latest`, fallback `/releases?per_page=1`, dan parsing Atom XML feed `releases.atom`) untuk menjamin pengecekan tidak terhalang *rate limit* IP.
-  * Serialisasi payload lengkap `AppUpdateInfo` untuk mendukung pembukaan dialog update meskipun aplikasi dibuka dari kondisi tertutup penuh (*cold start*).
+- **Perbaikan Total Unduhan PDF & Cetak Kartu Ujian (UTS/UAS/KRS/KHS)**:
+  * Mengatasi kendala layar hitam teks mentah `%PDF-1.4 1 0 obj` saat mencetak dokumen akademik di portal MyUnpam.
+  * Injeksi pendeteksi otomatis aliran PDF mentah (*Raw PDF Stream Sniffer*) pada WebView: jika PDF termuat ke layar, aplikasi secara instan mengekstrak biner dokumen via *same-origin fetch*, mengembalikan layar WebView ke portal, dan membuka dokumen di aplikasi penampil PDF bawaan HP (*Google Drive PDF Viewer*, *WPS Office*, dll).
+  * Menambahkan intersepsi klik tombol dan form pengiriman (*button/submit interception*) untuk aksi cetak kartu ujian UTS, UAS, KRS, KHS, dan transkrip nilai.
+  * Dukungan resolusi URL relatif ke absolut untuk seluruh tautan unduhan dan cetak akademik.

@@ -371,6 +371,12 @@ void main() {
       expect(FileDownloadService.isDocumentUrl('https://my.unpam.ac.id/cetak_khs.php?ta=20252'), isTrue);
       expect(FileDownloadService.isDocumentUrl('https://my.unpam.ac.id/cetak_transkrip.php'), isTrue);
       expect(FileDownloadService.isDocumentUrl('https://my.unpam.ac.id/kartu_ujian.php'), isTrue);
+      expect(FileDownloadService.isDocumentUrl('https://my.unpam.ac.id/cetak_uts'), isTrue);
+      expect(FileDownloadService.isDocumentUrl('https://my.unpam.ac.id/cetak_uas'), isTrue);
+      expect(FileDownloadService.isDocumentUrl('https://my.unpam.ac.id/kartu_uts'), isTrue);
+      expect(FileDownloadService.isDocumentUrl('https://my.unpam.ac.id/jadwal_ujian/cetak'), isTrue);
+      expect(FileDownloadService.isDocumentUrl('https://my.unpam.ac.id/uts/cetak'), isTrue);
+      expect(FileDownloadService.isDocumentUrl('https://my.unpam.ac.id/dokumen.pdf?token=123'), isTrue);
       expect(FileDownloadService.isDocumentUrl('https://my.unpam.ac.id/export?format=pdf'), isTrue);
       expect(FileDownloadService.isDocumentUrl('data:application/pdf;base64,JVBERi0xLjQK...'), isTrue);
     });
