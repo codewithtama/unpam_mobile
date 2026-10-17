@@ -1,15 +1,12 @@
-# Pembaruan UNPAM Mobile v1.0.15
+# Pembaruan UNPAM Mobile v1.0.16
 
-Pembaruan UNPAM Mobile v1.0.15:
+Pembaruan UNPAM Mobile v1.0.16:
 
-- Fitur Baru: Integrasi Portal MyUnpam (`my.unpam.ac.id`) menggunakan Dual-Isolated WebView (`IndexedStack`). Mahasiswa dapat mengakses sistem informasi akademik (SIAKAD, isi KRS, KHS/Nilai, presensi, dan jadwal ujian) tanpa me-reload atau mengganggu sesi pengerjaan kuis/tugas di Mentari.
-- Navigasi Baru 3 Menu: Bottom Navigation Bar kini menyediakan akses terpadu ke Mentari (LMS), MyUnpam (SIAKAD), dan UNPAM AI (Asisten Akademik).
-- Penanganan Cerdas Cetak Berkas Dokumen: Otomatis mendeteksi unduhan berkas PDF (Cetak KRS, KHS, Transkrip, dan Kartu Ujian) di MyUnpam agar dapat langsung dibuka/diunduh via aplikasi pembaca PDF eksternal tanpa risiko blank screen.
-- Pembaruan Spesifikasi Model AI Terkini (Per Oktober 2026):
-  * Google Gemini: Mendukung Gemini 3.7 Flash & 3.5 Flash dengan Vision OCR multimodal soal kuis.
-  * DeepSeek: Generasi V4 (Flash / Pro) dengan 1M token context window dan penalaran mendalam.
-  * Anthropic Claude: Generasi Claude 5.5 (Sonnet 5.5 / Haiku 5.5 / Opus 5.5) dengan verifikasi API key non-token.
-  * Alibaba Qwen: Qwen 3.8-Max (Flagship) & Qwen 3.7-Max dengan dual-endpoint failover regional.
-  * OpenRouter: Format fleksibel `provider/model` untuk ratusan model terkini.
-- Peningkatan Dialog Pembaruan: Menambahkan petunjuk solusi aman untuk instalasi pembaruan over-the-air pada perangkat Android / MIUI / HyperOS.
-- Jaminan Zero Overflow & Peningkatan Kestabilan: Pengoptimalan tata letak antarmuka agar selalu bebas dari pesan RenderFlex Overflow.
+- Gerbang Izin Akses Wajib (Mandatory Permission Gatekeeper): Mewajibkan persetujuan seluruh izin perangkat yang dibutuhkan aplikasi sebelum pengguna dapat masuk dan menggunakan aplikasi. Apabila salah satu izin belum atau tidak disetujui, akses ke portal Mentari, MyUnpam, dan fitur aplikasi akan dibatasi demi kelancaran perkuliahan.
+- Detail Izin yang Wajib Disetujui:
+  * Notifikasi Sistem & Perkuliahan: Memastikan mahasiswa selalu mendapatkan pengingat tenggat tugas, jadwal kuliah, pembaruan materi LMS, dan notifikasi pembaruan aplikasi secara real-time.
+  * Kamera (UNPAM AI Vision OCR): Diperlukan agar fitur asisten AI dapat memindai soal kuis, modul materi kuliah, dan dokumen secara langsung melalui kamera.
+  * Foto & Media Penyimpanan: Diperlukan untuk mengunggah berkas jawaban tugas mahasiswa ke portal Mentari/MyUnpam serta memilih gambar dari galeri HP.
+- Penanganan Izin Permanen (Settings Bridge): Menyediakan deteksi otomatis jika izin diblokir permanen oleh sistem Android dengan tombol pintas langsung ke menu Pengaturan Aplikasi HP, serta verifikasi otomatis sekembalinya pengguna ke aplikasi.
+- Arsitektur AppGate: Mengintegrasikan alur Syarat & Ketentuan Pengguna (User Agreement) dan Gerbang Izin Akses secara terpusat pada startup aplikasi.
+- Bebas Bug & Zero Overflow: Seluruh tata letak antarmuka dirancang responsif dan teruji bebas dari peringatan RenderFlex Overflow.

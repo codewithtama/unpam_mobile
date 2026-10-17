@@ -3,7 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import '../core/services/storage_service.dart';
 import '../theme/app_theme.dart';
-import 'portal_webview_screen.dart';
+import 'permission_gate_screen.dart';
 
 class UserAgreementScreen extends StatefulWidget {
   final StorageService storageService;
@@ -63,7 +63,9 @@ class _UserAgreementScreenState extends State<UserAgreementScreen> {
       return;
     }
     Navigator.of(context).pushReplacement(
-      MaterialPageRoute(builder: (_) => const PortalWebViewScreen()),
+      MaterialPageRoute(
+        builder: (_) => PermissionGateScreen(storageService: widget.storageService),
+      ),
     );
   }
 

@@ -236,6 +236,7 @@ class _UpdateDialogState extends State<UpdateDialog> {
                   style: const TextStyle(fontSize: 12, height: 1.45, color: AppTheme.textDark),
                 ),
               ),
+            ),
             const SizedBox(height: 8),
             Row(
               children: [

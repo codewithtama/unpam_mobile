@@ -81,6 +81,9 @@ class _PortalWebViewScreenState extends State<PortalWebViewScreen> with WidgetsB
   WebViewController get _activeController =>
       (_currentNavIndex == 1 && _myUnpamController != null) ? _myUnpamController! : _controller;
 
+  String get _activeUrl =>
+      _currentNavIndex == 1 ? (_myUnpamCurrentUrl.isNotEmpty ? _myUnpamCurrentUrl : myUnpamUrl) : _currentUrl;
+
   @override
   void initState() {
     super.initState();
@@ -516,12 +519,18 @@ class _PortalWebViewScreenState extends State<PortalWebViewScreen> with WidgetsB
 
   void _navigateToUrl(String url) {
     setState(() {
-      _currentUrl = url;
-      _isLoading = true;
-      _hasError = false;
-      _isWhiteScreenDetected = false;
+      if (_currentNavIndex == 1) {
+        _myUnpamCurrentUrl = url;
+        _isMyUnpamLoading = true;
+        _myUnpamHasError = false;
+      } else {
+        _currentUrl = url;
+        _isLoading = true;
+        _hasError = false;
+        _isWhiteScreenDetected = false;
+      }
     });
-    _controller.loadRequest(Uri.parse(url));
+    _activeController.loadRequest(Uri.parse(url));
   }
 
   void _scheduleWhiteScreenCheck() {
@@ -3473,7 +3482,9 @@ class _PortalWebViewScreenState extends State<PortalWebViewScreen> with WidgetsB
     });
 
     try {
-      await _activeController.reload();
+      if (_activeUrl.isNotEmpty) {
+        await _activeController.reload();
+      }
     } catch (e) {
       debugPrint('WebView reload error: $e');
     }
@@ -3710,6 +3721,7 @@ class _PortalWebViewScreenState extends State<PortalWebViewScreen> with WidgetsB
                                   ],
                                 ),
                               ],
+                            ),
                           ),
                         ),
 

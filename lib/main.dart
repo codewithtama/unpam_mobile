@@ -8,8 +8,7 @@ import 'core/services/notification_service.dart';
 import 'providers/ai_provider.dart';
 import 'providers/biometric_provider.dart';
 import 'theme/app_theme.dart';
-import 'screens/portal_webview_screen.dart';
-import 'screens/user_agreement_screen.dart';
+import 'widgets/app_gate.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -46,15 +45,11 @@ class UnpamMobileApp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final bool isAgreementAccepted = storageService.isUserAgreementAccepted();
-
     return MaterialApp(
       title: 'UNPAM LMS Mobile',
       debugShowCheckedModeBanner: false,
       theme: AppTheme.lightTheme,
-      home: isAgreementAccepted
-          ? const PortalWebViewScreen()
-          : UserAgreementScreen(storageService: storageService),
+      home: AppGate(storageService: storageService),
     );
   }
 }

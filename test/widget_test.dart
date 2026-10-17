@@ -5,7 +5,11 @@ import 'package:unpam_mobile/core/services/storage_service.dart';
 import 'package:unpam_mobile/core/services/ai_service.dart';
 import 'package:unpam_mobile/providers/ai_provider.dart';
 import 'package:unpam_mobile/models/ai_model_config.dart';
+import 'package:permission_handler/permission_handler.dart';
+import 'package:unpam_mobile/core/services/permission_service.dart';
 import 'package:unpam_mobile/screens/user_agreement_screen.dart';
+import 'package:unpam_mobile/screens/permission_gate_screen.dart';
+import 'package:unpam_mobile/widgets/app_gate.dart';
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
@@ -234,6 +238,66 @@ void main() {
       await tester.pump();
 
       expect(storage.isUserAgreementAccepted(), isTrue);
+    });
+  });
+
+  group('Mandatory Permission Gatekeeper & AppGate Tests', () {
+    late StorageService storage;
+
+    setUp(() async {
+      SharedPreferences.setMockInitialValues({});
+      storage = await StorageService.getInstance();
+      await storage.resetAll();
+
+      PermissionService().mockStatuses = {
+        AppPermissionType.notification: PermissionStatus.denied,
+        AppPermissionType.camera: PermissionStatus.denied,
+        AppPermissionType.photosOrStorage: PermissionStatus.denied,
+      };
+    });
+
+    tearDown(() {
+      PermissionService().resetMock();
+    });
+
+    testWidgets('PermissionGateScreen renders mandatory permission titles, cards, and buttons', (WidgetTester tester) async {
+      await tester.pumpWidget(
+        MaterialApp(
+          home: PermissionGateScreen(
+            storageService: storage,
+            autoProceed: false,
+          ),
+        ),
+      );
+
+      // Selesaikan async load di initState
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 100));
+
+      expect(find.text('Persetujuan Izin Wajib'), findsOneWidget);
+      expect(find.text('Notifikasi Sistem & Perkuliahan'), findsOneWidget);
+      expect(find.text('Kamera (UNPAM AI Vision OCR)'), findsOneWidget);
+      expect(find.text('Foto & Media Penyimpanan'), findsOneWidget);
+      expect(find.text('Izinkan Seluruh Akses'), findsOneWidget);
+      expect(find.text('Tolak & Keluar dari Aplikasi'), findsOneWidget);
+    });
+
+    testWidgets('AppGate renders UserAgreementScreen on fresh install', (WidgetTester tester) async {
+      expect(storage.isUserAgreementAccepted(), isFalse);
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: AppGate(
+            storageService: storage,
+          ),
+        ),
+      );
+
+      // Selesaikan async gate destination check
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 100));
+
+      expect(find.text('Syarat & Ketentuan'), findsOneWidget);
     });
   });
 }
