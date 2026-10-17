@@ -24,7 +24,7 @@ class UpdateDialog extends StatefulWidget {
   }) {
     return showDialog(
       context: context,
-      barrierDismissible: false,
+      barrierDismissible: true,
       builder: (_) => UpdateDialog(
         updateInfo: updateInfo,
         updateService: updateService,
@@ -112,9 +112,14 @@ class _UpdateDialogState extends State<UpdateDialog> {
   @override
   Widget build(BuildContext context) {
     final info = widget.updateInfo;
-    final dateStr = info.publishedAt != null
-        ? DateFormat('dd MMM yyyy, HH:mm', 'id_ID').format(info.publishedAt!)
-        : null;
+    String? dateStr;
+    if (info.publishedAt != null) {
+      try {
+        dateStr = DateFormat('dd MMM yyyy, HH:mm', 'id_ID').format(info.publishedAt!);
+      } catch (_) {
+        dateStr = DateFormat('dd MMM yyyy, HH:mm').format(info.publishedAt!);
+      }
+    }
 
     return AlertDialog(
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),

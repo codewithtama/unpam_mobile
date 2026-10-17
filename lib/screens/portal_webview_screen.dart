@@ -70,7 +70,11 @@ class _PortalWebViewScreenState extends State<PortalWebViewScreen> with WidgetsB
     _currentUrl = widget.initialUrl;
     _initController();
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      _checkAppUpdateSilently();
+      Future.delayed(const Duration(seconds: 2), () {
+        if (mounted) {
+          _checkAppUpdateSilently();
+        }
+      });
     });
   }
 

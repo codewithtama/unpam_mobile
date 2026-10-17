@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:intl/date_symbol_data_local.dart';
 import 'package:provider/provider.dart';
 import 'core/services/storage_service.dart';
 import 'core/services/ai_service.dart';
@@ -11,6 +12,9 @@ import 'screens/user_agreement_screen.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
+
+  // Inisialisasi locale formatting untuk format tanggal Indonesia
+  await initializeDateFormatting('id_ID', null);
 
   // Inisialisasi Local Storage, Biometric & AI Service
   final storage = await StorageService.getInstance();
