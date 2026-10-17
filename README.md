@@ -1,14 +1,6 @@
-# UNPAM Mobile (Mentari Portal & UNPAM AI)
-
-> **Tugas Proyek Mata Kuliah:** Mobile Programming (04SIFE001)  
-> **Dosen Pengampu:** SAMSO SUPRIYATNA S.Kom., M.Kom.  
-> **Mahasiswa:** DIMAS ALFA PRATAMA (NIM: 241011750041)  
-> **Program Studi:** Sistem Informasi (S1)  
-> **Semester:** 20261 • Shift E (Sabtu)  
-
+# UNPAM Mobil
 ---
 
-Aplikasi Android modern berbasis **Flutter** yang mengintegrasikan portal perkuliahan resmi Universitas Pamulang (**Mentari UNPAM**) dengan asisten kecerdasan buatan cerdas (**UNPAM AI**) dan **Kartu Tanda Mahasiswa (KTM) Digital** dalam satu ekosistem terpadu.
 
 Aplikasi dirancang dengan arsitektur **Native Portal Wrapper** yang membungkus web engine Chromium murni untuk menangani seluruh aktivitas akademik (melihat jadwal kuliah, 21 sesi pertemuan, pengerjaan kuis, forum diskusi, presensi, dan pengumpulan tugas) tanpa risiko kegagalan scraping atau pemblokiran Cloudflare Turnstile.
 
