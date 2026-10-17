@@ -1,6 +1,6 @@
 Selamat malam! 🎉
 
-Pembaruan UNPAM Mobile v1.0.9:
-- Menambahkan notifikasi ganda: Notifikasi Status Bar HP (Android Heads-up) & Pop-up Dialog di dalam aplikasi.
-- Ketuk notifikasi status bar untuk langsung membuka dialog unduh dan pasang pembaruan.
-- Peningkatan performa dan integrasi penuh Android 13+ permission.
+Pembaruan UNPAM Mobile v1.0.10:
+- Perbaikan tuntas masalah "Paket tidak valid" saat instalasi pembaruan melalui penerapan keystore penandatanganan rilis yang konsisten dan optimasi penyimpanan cache installer.
+- Notifikasi status bar sistem (heads-up notification) saat pembaruan baru terdeteksi.
+- Dukungan Java 17 Core Library Desugaring untuk stabilitas modul notifikasi latar belakang.

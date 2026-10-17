@@ -86,21 +86,42 @@ class UpdateCheckerService {
     required void Function(int received, int total) onProgress,
     CancelToken? cancelToken,
   }) async {
-    final tempDir = await getTemporaryDirectory();
-    final savePath = '${tempDir.path}/unpam_update.apk';
+    Directory? targetDir;
+    if (Platform.isAndroid) {
+      try {
+        final externalDirs = await getExternalCacheDirectories();
+        if (externalDirs != null && externalDirs.isNotEmpty) {
+          targetDir = externalDirs.first;
+        }
+      } catch (_) {}
+    }
+    targetDir ??= await getTemporaryDirectory();
+
+    final savePath = '${targetDir.path}/unpam_update.apk';
 
     final file = File(savePath);
     if (await file.exists()) {
       await file.delete();
     }
 
-    // Mengunduh APK dengan streaming progress
+    // Mengunduh APK dengan streaming progress & header biner netral
     await _dio.download(
       downloadUrl,
       savePath,
       cancelToken: cancelToken,
       onReceiveProgress: onProgress,
+      options: Options(
+        headers: {'Accept': '*/*'},
+        receiveTimeout: const Duration(minutes: 5),
+      ),
     );
+
+    if (!await file.exists() || await file.length() == 0) {
+      return OpenResult(
+        type: ResultType.fileNotFound,
+        message: 'File APK tidak ditemukan atau kosong setelah diunduh',
+      );
+    }
 
     // Membuka installer Android APK menggunakan Package Archive MIME type
     final result = await OpenFilex.open(
