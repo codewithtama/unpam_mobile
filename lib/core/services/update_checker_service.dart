@@ -89,13 +89,13 @@ class UpdateCheckerService {
     Directory? targetDir;
     if (Platform.isAndroid) {
       try {
-        final externalDirs = await getExternalCacheDirectories();
-        if (externalDirs != null && externalDirs.isNotEmpty) {
-          targetDir = externalDirs.first;
-        }
+        // Gunakan getExternalStorageDirectory() (context.getExternalFilesDir(null))
+        // agar canonical path dikenali oleh open_filex sebagai app-specific dir
+        // dan tidak memicu penolakan izin MANAGE_EXTERNAL_STORAGE pada Android 11+ (API 30+)
+        targetDir = await getExternalStorageDirectory();
       } catch (_) {}
     }
-    targetDir ??= await getTemporaryDirectory();
+    targetDir ??= await getApplicationSupportDirectory();
 
     final savePath = '${targetDir.path}/unpam_update.apk';
 

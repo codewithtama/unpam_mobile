@@ -197,6 +197,18 @@ class AiProvider extends ChangeNotifier {
     );
   }
 
+  Future<Map<String, dynamic>> analyzeQuestionnaire({
+    required List<Map<String, dynamic>> questions,
+    String? courseName,
+    bool includeFeedbackDraft = true,
+  }) async {
+    return await _aiService.analyzeQuestionnaire(
+      questions: questions,
+      courseName: courseName ?? _selectedCourseName,
+      includeFeedbackDraft: includeFeedbackDraft,
+    );
+  }
+
   Future<ParaphraseResult> paraphraseText({
     required String text,
     required ParaphraseMode mode,

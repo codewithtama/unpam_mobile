@@ -122,6 +122,44 @@ void main() {
       expect(aiProv.activeModel.id, equals('free_cloud'));
       expect(aiProv.hasKeyForActiveModel, isTrue);
     });
+
+    test('AiProvider analyzeQuestionnaire provides fallback answers and polite feedback draft', () async {
+      final aiService = AiService(storage);
+      final aiProv = AiProvider(aiService, storage);
+
+      final dummyQuestions = [
+        {
+          'index': 0,
+          'number': '1',
+          'questionText': 'Dosen melaksanakan perkuliahan secara daring sesuai jadwal.',
+          'options': [
+            {'optionIndex': 0, 'optionText': 'Ya'},
+            {'optionIndex': 1, 'optionText': 'Tidak'},
+          ]
+        },
+        {
+          'index': 1,
+          'number': '2',
+          'questionText': 'Penggunaan LMS dalam perkuliahan daring.',
+          'options': [
+            {'optionIndex': 0, 'optionText': 'Sangat Baik'},
+            {'optionIndex': 1, 'optionText': 'Kurang'},
+          ]
+        }
+      ];
+
+      final result = await aiProv.analyzeQuestionnaire(
+        questions: dummyQuestions,
+        courseName: 'Pemrograman Mobile',
+      );
+
+      expect(result['answers'], isNotNull);
+      final answers = result['answers'] as List<dynamic>;
+      expect(answers.length, equals(2));
+      expect(answers[0]['recommendedOptionIndex'], equals(0)); // Memilih "Ya"
+      expect(answers[1]['recommendedOptionIndex'], equals(0)); // Memilih "Sangat Baik"
+      expect(result['feedbackSuggestion'], isNotEmpty);
+    });
   });
 
   group('UserAgreementScreen Countdown & Consent Tests', () {

@@ -650,7 +650,33 @@ class _PortalWebViewScreenState extends State<PortalWebViewScreen> with WidgetsB
                   },
                 ),
 
-                // Opsi 3: Tanya AI Halaman Ini
+                // Opsi 3: AI Pengisi Kuesioner
+                ListTile(
+                  contentPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 4),
+                  leading: Container(
+                    padding: const EdgeInsets.all(10),
+                    decoration: BoxDecoration(
+                      color: Colors.teal.shade50,
+                      shape: BoxShape.circle,
+                    ),
+                    child: Icon(Icons.assignment_turned_in_rounded, color: Colors.teal.shade700, size: 22),
+                  ),
+                  title: const Text(
+                    'AI Pengisi Kuesioner',
+                    style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold),
+                  ),
+                  subtitle: const Text(
+                    'Deteksi butir evaluasi dosen/perkuliahan & isi otomatis sesuai preferensi',
+                    style: TextStyle(fontSize: 12, color: AppTheme.textMuted),
+                  ),
+                  trailing: const Icon(Icons.arrow_forward_ios_rounded, size: 14, color: AppTheme.textMuted),
+                  onTap: () {
+                    Navigator.pop(ctx);
+                    _handleQuestionnaireAutoFill();
+                  },
+                ),
+
+                // Opsi 4: Tanya AI Halaman Ini
                 ListTile(
                   contentPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 4),
                   leading: Container(
@@ -2159,6 +2185,731 @@ class _PortalWebViewScreenState extends State<PortalWebViewScreen> with WidgetsB
       return int.tryParse(resStr) ?? solutions.length;
     } catch (e) {
       debugPrint('Gagal highlight kuis: $e');
+      return 0;
+    }
+  }
+
+  Future<void> _handleQuestionnaireAutoFill() async {
+    if (!mounted) return;
+
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (ctx) => const Center(
+        child: Card(
+          margin: EdgeInsets.all(24),
+          child: Padding(
+            padding: EdgeInsets.symmetric(horizontal: 24, vertical: 20),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                CircularProgressIndicator(strokeWidth: 3, color: Colors.teal),
+                SizedBox(width: 18),
+                Expanded(
+                  child: Text(
+                    'Memindai butir kuesioner pada halaman web Mentari...',
+                    style: TextStyle(fontSize: 14, fontWeight: FontWeight.w500),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+
+    List<Map<String, dynamic>> extractedQuestions = [];
+    bool hasFeedbackField = false;
+
+    try {
+      final raw = await _controller.runJavaScriptReturningResult(
+        r'''
+        (function() {
+          var results = [];
+          var hasFeedback = false;
+
+          // 1. Deteksi Baris Tabel (Format utama di Mentari Portal)
+          var rows = document.querySelectorAll('table tbody tr, table tr');
+          if (rows.length > 0) {
+            for (var i = 0; i < rows.length; i++) {
+              var row = rows[i];
+              var radios = row.querySelectorAll('input[type="radio"]');
+              if (radios.length === 0) continue;
+
+              var cells = row.querySelectorAll('td, th');
+              var qNum = (results.length + 1).toString();
+              var qText = '';
+
+              if (cells.length >= 2) {
+                var col0 = cells[0].innerText.trim();
+                if (/^\d+$/.test(col0)) {
+                  qNum = col0;
+                }
+                var col1 = cells[1].innerText.trim();
+                var jIdx = col1.indexOf('Jawaban');
+                if (jIdx !== -1) {
+                  qText = col1.substring(0, jIdx).trim();
+                } else {
+                  qText = col1;
+                }
+              } else {
+                var rText = row.innerText.trim();
+                var jIdx = rText.indexOf('Jawaban');
+                if (jIdx !== -1) {
+                  qText = rText.substring(0, jIdx).trim();
+                } else {
+                  qText = rText.split('\n')[0].trim();
+                }
+              }
+
+              if (!qText || qText.length < 3) {
+                qText = 'Butir Kuesioner #' + qNum;
+              }
+
+              var opts = [];
+              for (var j = 0; j < radios.length; j++) {
+                var r = radios[j];
+                var label = row.querySelector('label[for="' + r.id + '"]') || r.closest('label');
+                var optText = '';
+                if (label) {
+                  optText = label.innerText.trim();
+                } else if (r.parentElement) {
+                  optText = r.parentElement.innerText.trim();
+                }
+                if (!optText || optText === 'Jawaban') {
+                  optText = (r.value && r.value !== 'on') ? r.value : (j === 0 ? 'Ya' : 'Tidak');
+                }
+                optText = optText.replace(/^Jawaban\s*/i, '').trim();
+
+                r.setAttribute('data-unpam-kues-q', results.length.toString());
+                r.setAttribute('data-unpam-kues-opt', j.toString());
+
+                opts.push({
+                  optionIndex: j,
+                  optionId: r.id || '',
+                  radioName: r.name || '',
+                  optionText: optText,
+                  value: r.value || ''
+                });
+              }
+
+              if (opts.length > 0) {
+                results.push({
+                  index: results.length,
+                  number: qNum,
+                  questionText: qText,
+                  options: opts
+                });
+              }
+            }
+          }
+
+          // 2. Fallback jika bukan tabel (grouping by radio name)
+          if (results.length === 0) {
+            var allRadios = document.querySelectorAll('input[type="radio"]');
+            var groupMap = {};
+            allRadios.forEach(function(r) {
+              var name = r.getAttribute('name') || 'kues_group';
+              if (!groupMap[name]) groupMap[name] = [];
+              groupMap[name].push(r);
+            });
+
+            var gIdx = 0;
+            for (var gName in groupMap) {
+              var list = groupMap[gName];
+              if (list.length === 0) continue;
+              var parent = list[0].closest('tr, .form-group, .card, div.row, fieldset, li') || list[0].parentElement;
+              var qText = '';
+              if (parent) {
+                var textLines = parent.innerText.split('\n');
+                qText = textLines[0] ? textLines[0].trim() : '';
+              }
+              if (!qText || qText.length < 3) {
+                qText = 'Butir Kuesioner #' + (gIdx + 1);
+              }
+
+              var opts = [];
+              list.forEach(function(r, oIdx) {
+                var label = document.querySelector('label[for="' + r.id + '"]') || r.closest('label') || r.parentElement;
+                var optText = label ? label.innerText.trim() : (oIdx === 0 ? 'Ya' : 'Tidak');
+                optText = optText.replace(/^Jawaban\s*/i, '').trim();
+                r.setAttribute('data-unpam-kues-q', gIdx.toString());
+                r.setAttribute('data-unpam-kues-opt', oIdx.toString());
+
+                opts.push({
+                  optionIndex: oIdx,
+                  optionId: r.id || '',
+                  radioName: gName,
+                  optionText: optText,
+                  value: r.value || ''
+                });
+              });
+
+              results.push({
+                index: gIdx,
+                number: (gIdx + 1).toString(),
+                questionText: qText,
+                options: opts
+              });
+              gIdx++;
+            }
+          }
+
+          // 3. Deteksi textarea catatan/saran evaluasi
+          var textareas = document.querySelectorAll('textarea');
+          for (var t = 0; t < textareas.length; t++) {
+            var ta = textareas[t];
+            if (ta.offsetParent !== null) {
+              ta.setAttribute('data-unpam-kues-feedback', '1');
+              hasFeedback = true;
+              break;
+            }
+          }
+
+          return JSON.stringify({
+            questions: results,
+            hasFeedbackField: hasFeedback
+          });
+        })()
+        ''',
+      );
+
+      String extractedStr = raw.toString();
+      if (extractedStr.startsWith('"') && extractedStr.endsWith('"')) {
+        extractedStr = jsonDecode(extractedStr);
+      }
+      final Map<String, dynamic> data = jsonDecode(extractedStr) as Map<String, dynamic>;
+      final List<dynamic> list = data['questions'] as List<dynamic>? ?? [];
+      extractedQuestions = list.map((e) => Map<String, dynamic>.from(e as Map)).toList();
+      hasFeedbackField = data['hasFeedbackField'] == true;
+    } catch (e) {
+      debugPrint('Gagal ekstrak kuesioner: $e');
+    }
+
+    if (mounted) Navigator.pop(context); // Tutup loading dialog
+
+    if (extractedQuestions.isEmpty) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text(
+              'Tidak ditemukan butir kuesioner pada halaman ini. Pastikan Anda membuka lembar Kuesioner Pertemuan / Evaluasi Dosen di Mentari.',
+            ),
+            backgroundColor: Colors.black87,
+          ),
+        );
+      }
+      return;
+    }
+
+    if (!mounted) return;
+    _showQuestionnaireSolverDialog(
+      questions: extractedQuestions,
+      hasFeedbackField: hasFeedbackField,
+    );
+  }
+
+  void _showQuestionnaireSolverDialog({
+    required List<Map<String, dynamic>> questions,
+    required bool hasFeedbackField,
+  }) {
+    // Siapkan pilihan awal: prioritaskan opsi "Ya", "Sangat Baik", "Sangat Setuju", "4", "5", atau indeks 0
+    final Map<int, int> selectedOptions = {};
+    for (int i = 0; i < questions.length; i++) {
+      final opts = questions[i]['options'] as List<dynamic>? ?? [];
+      int bestIdx = 0;
+      for (int j = 0; j < opts.length; j++) {
+        final text = (opts[j]['optionText'] ?? '').toString().toLowerCase();
+        if (text == 'ya' ||
+            text.startsWith('ya') ||
+            text.contains('sangat baik') ||
+            text.contains('sangat setuju') ||
+            text == '4' ||
+            text == '5') {
+          bestIdx = j;
+          break;
+        }
+      }
+      selectedOptions[i] = bestIdx;
+    }
+
+    final feedbackController = TextEditingController(
+      text: 'Penyampaian materi perkuliahan sangat jelas dan modul di LMS lengkap serta mudah dipahami. Terima kasih kepada Bapak/Ibu dosen atas bimbingannya.',
+    );
+    bool autoCheckInWeb = true;
+    bool isAnalyzingAi = false;
+    bool isApplying = false;
+
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (ctx) => StatefulBuilder(
+        builder: (sheetCtx, setSheetState) {
+          return DraggableScrollableSheet(
+            initialChildSize: 0.82,
+            minChildSize: 0.45,
+            maxChildSize: 0.96,
+            expand: false,
+            builder: (scrollCtx, scrollController) {
+              return Column(
+                children: [
+                  Center(
+                    child: Container(
+                      margin: const EdgeInsets.only(top: 10, bottom: 8),
+                      width: 40,
+                      height: 4,
+                      decoration: BoxDecoration(
+                        color: Colors.grey.shade300,
+                        borderRadius: BorderRadius.circular(2),
+                      ),
+                    ),
+                  ),
+                  Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 6),
+                    child: Row(
+                      children: [
+                        Container(
+                          padding: const EdgeInsets.all(8),
+                          decoration: BoxDecoration(
+                            color: Colors.teal.shade50,
+                            borderRadius: BorderRadius.circular(10),
+                          ),
+                          child: Icon(Icons.assignment_turned_in_rounded, color: Colors.teal.shade700, size: 24),
+                        ),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                'AI Pengisi Kuesioner (${questions.length} Butir)',
+                                style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+                              ),
+                              Text(
+                                'Halaman: $_pageTitle',
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: const TextStyle(fontSize: 12, color: AppTheme.textMuted),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  const Divider(height: 1),
+
+                  // Quick Mode Toolbar
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                    color: Colors.grey.shade50,
+                    child: Row(
+                      children: [
+                        Expanded(
+                          child: OutlinedButton.icon(
+                            onPressed: () {
+                              setSheetState(() {
+                                for (int i = 0; i < questions.length; i++) {
+                                  final opts = questions[i]['options'] as List<dynamic>? ?? [];
+                                  int yaIdx = 0;
+                                  for (int j = 0; j < opts.length; j++) {
+                                    final text = (opts[j]['optionText'] ?? '').toString().toLowerCase();
+                                    if (text == 'ya' || text.startsWith('ya') || text.contains('sangat')) {
+                                      yaIdx = j;
+                                      break;
+                                    }
+                                  }
+                                  selectedOptions[i] = yaIdx;
+                                }
+                              });
+                            },
+                            style: OutlinedButton.styleFrom(
+                              foregroundColor: Colors.teal.shade800,
+                              side: BorderSide(color: Colors.teal.shade300),
+                              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                            ),
+                            icon: const Icon(Icons.flash_on_rounded, size: 16),
+                            label: const Text('Semua "Ya" / Baik', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600)),
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: ElevatedButton.icon(
+                            onPressed: isAnalyzingAi
+                                ? null
+                                : () async {
+                                    setSheetState(() => isAnalyzingAi = true);
+                                    try {
+                                      final result = await context.read<AiProvider>().analyzeQuestionnaire(
+                                        questions: questions,
+                                        courseName: _pageTitle,
+                                      );
+                                      final answers = result['answers'] as List<dynamic>? ?? [];
+                                      for (final ans in answers) {
+                                        final idx = (ans['index'] as num?)?.toInt();
+                                        final optIdx = (ans['recommendedOptionIndex'] as num?)?.toInt();
+                                        if (idx != null && optIdx != null && idx >= 0 && idx < questions.length) {
+                                          selectedOptions[idx] = optIdx;
+                                        }
+                                      }
+                                      final feedback = (result['feedbackSuggestion'] ?? '').toString();
+                                      if (feedback.isNotEmpty) {
+                                        feedbackController.text = feedback;
+                                      }
+                                    } catch (e) {
+                                      debugPrint('Gagal analisis AI kuesioner: $e');
+                                    } finally {
+                                      setSheetState(() => isAnalyzingAi = false);
+                                    }
+                                  },
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: AppTheme.primaryBlue,
+                              foregroundColor: Colors.white,
+                              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                            ),
+                            icon: isAnalyzingAi
+                                ? const SizedBox(
+                                    width: 14,
+                                    height: 14,
+                                    child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+                                  )
+                                : const Icon(Icons.auto_awesome, size: 16),
+                            label: Text(
+                              isAnalyzingAi ? 'Menelaah...' : 'Analisis AI',
+                              style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold),
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+
+                  // Toggle Switch Centang Otomatis
+                  Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 4),
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        const Expanded(
+                          child: Text(
+                            'Centang otomatis pilihan di lembar kuesioner web',
+                            style: TextStyle(fontSize: 13, fontWeight: FontWeight.w500),
+                          ),
+                        ),
+                        Switch(
+                          value: autoCheckInWeb,
+                          activeColor: Colors.teal.shade700,
+                          onChanged: (val) {
+                            setSheetState(() => autoCheckInWeb = val);
+                          },
+                        ),
+                      ],
+                    ),
+                  ),
+                  const Divider(height: 1),
+
+                  // Daftar Butir Soal Kuesioner
+                  Expanded(
+                    child: ListView.separated(
+                      controller: scrollController,
+                      padding: const EdgeInsets.all(16),
+                      itemCount: questions.length + (hasFeedbackField ? 1 : 0),
+                      separatorBuilder: (_, __) => const SizedBox(height: 12),
+                      itemBuilder: (context, idx) {
+                        // Jika baris terakhir adalah form masukan/saran dosen
+                        if (idx == questions.length) {
+                          return Container(
+                            padding: const EdgeInsets.all(14),
+                            decoration: BoxDecoration(
+                              color: Colors.amber.shade50.withOpacity(0.5),
+                              borderRadius: BorderRadius.circular(12),
+                              border: Border.all(color: Colors.amber.shade300),
+                            ),
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Row(
+                                  children: [
+                                    Icon(Icons.rate_review_rounded, size: 18, color: Colors.amber.shade900),
+                                    const SizedBox(width: 8),
+                                    Text(
+                                      'Catatan & Saran untuk Dosen',
+                                      style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold, color: Colors.amber.shade900),
+                                    ),
+                                  ],
+                                ),
+                                const SizedBox(height: 8),
+                                TextField(
+                                  controller: feedbackController,
+                                  maxLines: 3,
+                                  style: const TextStyle(fontSize: 12),
+                                  decoration: InputDecoration(
+                                    hintText: 'Tuliskan masukan atau apresiasi untuk dosen...',
+                                    filled: true,
+                                    fillColor: Colors.white,
+                                    contentPadding: const EdgeInsets.all(10),
+                                    border: OutlineInputBorder(
+                                      borderRadius: BorderRadius.circular(8),
+                                      borderSide: BorderSide(color: Colors.grey.shade300),
+                                    ),
+                                    enabledBorder: OutlineInputBorder(
+                                      borderRadius: BorderRadius.circular(8),
+                                      borderSide: BorderSide(color: Colors.grey.shade300),
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          );
+                        }
+
+                        final q = questions[idx];
+                        final qNum = (q['number'] ?? '${idx + 1}').toString();
+                        final qText = (q['questionText'] ?? '').toString();
+                        final opts = q['options'] as List<dynamic>? ?? [];
+                        final currentSelected = selectedOptions[idx] ?? 0;
+
+                        return Container(
+                          padding: const EdgeInsets.all(14),
+                          decoration: BoxDecoration(
+                            color: Colors.white,
+                            borderRadius: BorderRadius.circular(12),
+                            border: Border.all(color: Colors.grey.shade200),
+                            boxShadow: [
+                              BoxShadow(
+                                color: Colors.black.withOpacity(0.02),
+                                blurRadius: 4,
+                                offset: const Offset(0, 2),
+                              ),
+                            ],
+                          ),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                '$qNum. $qText',
+                                style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: AppTheme.textDark),
+                              ),
+                              const SizedBox(height: 10),
+                              Wrap(
+                                spacing: 8,
+                                runSpacing: 6,
+                                children: List.generate(opts.length, (optIdx) {
+                                  final opt = opts[optIdx];
+                                  final optText = (opt['optionText'] ?? 'Opsi ${optIdx + 1}').toString();
+                                  final isChosen = currentSelected == optIdx;
+
+                                  return InkWell(
+                                    onTap: () {
+                                      setSheetState(() {
+                                        selectedOptions[idx] = optIdx;
+                                      });
+                                    },
+                                    borderRadius: BorderRadius.circular(20),
+                                    child: AnimatedContainer(
+                                      duration: const Duration(milliseconds: 180),
+                                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
+                                      decoration: BoxDecoration(
+                                        color: isChosen ? Colors.teal.shade50 : Colors.grey.shade50,
+                                        borderRadius: BorderRadius.circular(20),
+                                        border: Border.all(
+                                          color: isChosen ? Colors.teal.shade600 : Colors.grey.shade300,
+                                          width: isChosen ? 1.5 : 1,
+                                        ),
+                                      ),
+                                      child: Row(
+                                        mainAxisSize: MainAxisSize.min,
+                                        children: [
+                                          Icon(
+                                            isChosen ? Icons.check_circle_rounded : Icons.radio_button_unchecked_rounded,
+                                            size: 16,
+                                            color: isChosen ? Colors.teal.shade700 : Colors.grey.shade500,
+                                          ),
+                                          const SizedBox(width: 6),
+                                          Text(
+                                            optText,
+                                            style: TextStyle(
+                                              fontSize: 12,
+                                              fontWeight: isChosen ? FontWeight.bold : FontWeight.normal,
+                                              color: isChosen ? Colors.teal.shade900 : AppTheme.textDark,
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                                    ),
+                                  );
+                                }),
+                              ),
+                            ],
+                          ),
+                        );
+                      },
+                    ),
+                  ),
+
+                  // Bottom Action Buttons
+                  Container(
+                    padding: const EdgeInsets.fromLTRB(20, 10, 20, 20),
+                    decoration: BoxDecoration(
+                      color: Colors.white,
+                      boxShadow: [
+                        BoxShadow(
+                          color: Colors.black.withOpacity(0.05),
+                          blurRadius: 6,
+                          offset: const Offset(0, -2),
+                        ),
+                      ],
+                    ),
+                    child: Row(
+                      children: [
+                        Expanded(
+                          child: OutlinedButton(
+                            onPressed: () => Navigator.pop(ctx),
+                            child: const Text('Batal'),
+                          ),
+                        ),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          flex: 2,
+                          child: ElevatedButton.icon(
+                            onPressed: isApplying
+                                ? null
+                                : () async {
+                                    setSheetState(() => isApplying = true);
+
+                                    final List<Map<String, dynamic>> answersPayload = [];
+                                    selectedOptions.forEach((qIdx, optIdx) {
+                                      answersPayload.add({
+                                        'index': qIdx,
+                                        'optionIndex': optIdx,
+                                      });
+                                    });
+
+                                    final count = await _highlightQuestionnaireInWebview(
+                                      answers: answersPayload,
+                                      feedback: hasFeedbackField ? feedbackController.text.trim() : '',
+                                      autoCheck: autoCheckInWeb,
+                                    );
+
+                                    if (ctx.mounted) Navigator.pop(ctx);
+
+                                    if (mounted) {
+                                      ScaffoldMessenger.of(context).showSnackBar(
+                                        SnackBar(
+                                          content: Text(
+                                            'Berhasil mengisi $count butir kuesioner! Periksa kembali halaman sebelum menekan tombol Simpan di Mentari.',
+                                          ),
+                                          backgroundColor: Colors.teal.shade800,
+                                          duration: const Duration(seconds: 4),
+                                        ),
+                                      );
+                                    }
+                                  },
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: Colors.teal.shade700,
+                              foregroundColor: Colors.white,
+                              padding: const EdgeInsets.symmetric(vertical: 13),
+                            ),
+                            icon: isApplying
+                                ? const SizedBox(
+                                    width: 16,
+                                    height: 16,
+                                    child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+                                  )
+                                : const Icon(Icons.done_all_rounded, size: 18),
+                            label: const Text(
+                              'Isi Kuesioner Sekarang',
+                              style: TextStyle(fontWeight: FontWeight.bold),
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              );
+            },
+          );
+        },
+      ),
+    );
+  }
+
+  Future<int> _highlightQuestionnaireInWebview({
+    required List<Map<String, dynamic>> answers,
+    required String feedback,
+    required bool autoCheck,
+  }) async {
+    try {
+      final payload = {
+        'answers': answers,
+        'feedback': feedback,
+      };
+
+      final raw = await _controller.runJavaScriptReturningResult(
+        '''
+        (function(payloadJson, autoCheck) {
+          var payload = JSON.parse(payloadJson);
+          var answers = payload.answers || [];
+          var feedback = payload.feedback || '';
+          var filled = 0;
+
+          answers.forEach(function(item) {
+            var qIdx = item.index;
+            var optIdx = item.optionIndex;
+
+            var radio = document.querySelector('input[type="radio"][data-unpam-kues-q="' + qIdx + '"][data-unpam-kues-opt="' + optIdx + '"]');
+            if (radio) {
+              if (autoCheck) {
+                radio.checked = true;
+                radio.dispatchEvent(new Event('input', { bubbles: true }));
+                radio.dispatchEvent(new Event('change', { bubbles: true }));
+                radio.dispatchEvent(new Event('click', { bubbles: true }));
+              }
+
+              var row = radio.closest('tr, .form-group, .card, div.row, fieldset, li') || radio.parentElement;
+              if (row) {
+                row.style.backgroundColor = '#E0F2F1';
+                row.style.transition = 'background-color 0.3s ease';
+
+                var oldBadge = row.querySelector('.unpam-kues-badge');
+                if (!oldBadge) {
+                  var badge = document.createElement('span');
+                  badge.className = 'unpam-kues-badge';
+                  badge.innerText = ' [✓ Terisi Otomatis]';
+                  badge.style.color = '#00796B';
+                  badge.style.fontSize = '12px';
+                  badge.style.fontWeight = 'bold';
+                  badge.style.marginLeft = '8px';
+                  var targetEl = row.querySelector('td:nth-child(2), h4, h5, p, label') || row;
+                  targetEl.appendChild(badge);
+                }
+              }
+              filled++;
+            }
+          });
+
+          if (feedback && feedback.trim().length > 0) {
+            var ta = document.querySelector('textarea[data-unpam-kues-feedback="1"]') || document.querySelector('textarea');
+            if (ta) {
+              ta.value = feedback;
+              ta.dispatchEvent(new Event('input', { bubbles: true }));
+              ta.dispatchEvent(new Event('change', { bubbles: true }));
+            }
+          }
+
+          return filled;
+        })(${jsonEncode(jsonEncode(payload))}, ${autoCheck ? 'true' : 'false'})
+        ''',
+      );
+
+      final resStr = raw.toString();
+      return int.tryParse(resStr) ?? answers.length;
+    } catch (e) {
+      debugPrint('Gagal menerapkan kuesioner di webview: $e');
       return 0;
     }
   }

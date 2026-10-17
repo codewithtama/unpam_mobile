@@ -845,6 +845,108 @@ class AiService {
     }
   }
 
+  /// Menganalisis butir kuesioner dosen / evaluasi perkuliahan Mentari
+  Future<Map<String, dynamic>> analyzeQuestionnaire({
+    required List<Map<String, dynamic>> questions,
+    String? courseName,
+    bool includeFeedbackDraft = true,
+  }) async {
+    const systemPrompt =
+        'Anda adalah asisten akademik Universitas Pamulang yang bertugas menelaah evaluasi perkuliahan dan kuesioner dosen secara objektif, santun, dan konstruktif.\n'
+        'Tugas Anda:\n'
+        '1. Telaah setiap butir kuesioner perkuliahan/dosen.\n'
+        '2. Tentukan rekomendasi indeks opsi jawaban yang paling tepat ("recommendedOptionIndex", dimulai dari 0). Untuk butir positif mengenai kelancaran perkuliahan (kehadiran tepat waktu, materi LMS tersedia, bimbingan baik), utamakan opsi "Ya" atau evaluasi positif tertinggi (misal Sangat Baik / Sangat Setuju). Jika ada butir bernada negatif/kendala, sesuaikan secara logis.\n'
+        '3. Buatkan draf catatan saran/masukan untuk dosen ("feedbackSuggestion") yang santun, apresiatif, konstruktif, dan bernalar akademis (2-3 kalimat, tanpa emoji).\n'
+        'Wajib kembalikan HANYA format JSON valid tanpa code block markdown atau teks pembuka/penutup:\n'
+        '{\n'
+        '  "answers": [\n'
+        '    {"index": 0, "recommendedOptionIndex": 0, "reason": "Evaluasi positif pelaksanaan perkuliahan."}\n'
+        '  ],\n'
+        '  "feedbackSuggestion": "Penyampaian materi dan modul pembelajaran di LMS sangat jelas dan terstruktur dengan baik. Terima kasih kepada Bapak/Ibu dosen atas dedikasi dan bimbingannya."\n'
+        '}\n'
+        'JANGAN gunakan emoji apa pun.';
+
+    final buffer = StringBuffer();
+    buffer.writeln('Mata Kuliah / Halaman: ${courseName ?? "Evaluasi Perkuliahan UNPAM"}\n');
+    buffer.writeln('Daftar Butir Kuesioner:\n');
+
+    for (final q in questions) {
+      buffer.writeln('Butir #${q['index']}: ${q['questionText']}');
+      final opts = q['options'] as List<dynamic>? ?? [];
+      for (int i = 0; i < opts.length; i++) {
+        final opt = opts[i];
+        final text = opt['optionText'] ?? '';
+        buffer.writeln('  - Opsi $i: $text');
+      }
+      buffer.writeln('');
+    }
+
+    try {
+      final raw = await askRawLlm(
+        systemPrompt: systemPrompt,
+        userPrompt: buffer.toString(),
+      );
+
+      String jsonStr = raw.trim();
+      if (jsonStr.startsWith('```json')) {
+        jsonStr = jsonStr.substring(7);
+      } else if (jsonStr.startsWith('```')) {
+        jsonStr = jsonStr.substring(3);
+      }
+      if (jsonStr.endsWith('```')) {
+        jsonStr = jsonStr.substring(0, jsonStr.length - 3);
+      }
+      jsonStr = jsonStr.trim();
+
+      final startIdx = jsonStr.indexOf('{');
+      final endIdx = jsonStr.lastIndexOf('}');
+      if (startIdx != -1 && endIdx != -1 && endIdx > startIdx) {
+        jsonStr = jsonStr.substring(startIdx, endIdx + 1);
+      }
+
+      final Map<String, dynamic> decoded = jsonDecode(jsonStr) as Map<String, dynamic>;
+      final List<dynamic> answersList = decoded['answers'] as List<dynamic>? ?? [];
+      final parsedAnswers = answersList.map((e) => Map<String, dynamic>.from(e as Map)).toList();
+      final feedback = (decoded['feedbackSuggestion'] ?? '').toString();
+
+      return {
+        'answers': parsedAnswers,
+        'feedbackSuggestion': feedback.isNotEmpty
+            ? feedback
+            : 'Penyampaian materi dan modul ajar di LMS sangat lengkap dan terstruktur. Terima kasih kepada Bapak/Ibu dosen atas bimbingannya.',
+      };
+    } catch (_) {
+      // Fallback lokal cerdas jika offline atau parsing gagal
+      final List<Map<String, dynamic>> fallbackAnswers = [];
+      for (final q in questions) {
+        final opts = q['options'] as List<dynamic>? ?? [];
+        int bestIdx = 0;
+        for (int i = 0; i < opts.length; i++) {
+          final optText = (opts[i]['optionText'] ?? '').toString().toLowerCase();
+          if (optText.contains('ya') ||
+              optText.contains('sangat baik') ||
+              optText.contains('sangat setuju') ||
+              optText == '4' ||
+              optText == '5') {
+            bestIdx = i;
+            break;
+          }
+        }
+        fallbackAnswers.add({
+          'index': q['index'],
+          'recommendedOptionIndex': bestIdx,
+          'reason': 'Rekomendasi evaluasi positif perkuliahan.',
+        });
+      }
+
+      return {
+        'answers': fallbackAnswers,
+        'feedbackSuggestion':
+            'Penyampaian materi dan modul ajar di LMS sangat lengkap dan terstruktur. Terima kasih kepada Bapak/Ibu dosen atas dedikasi dan bimbingannya.',
+      };
+    }
+  }
+
   /// Melakukan parafrase cerdas terhadap draf tugas/teks mahasiswa
   Future<ParaphraseResult> paraphraseAcademicText({
     required String text,
