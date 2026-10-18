@@ -2,7 +2,7 @@
 
 [![Flutter](https://img.shields.io/badge/Flutter-3.41.7-02569B?logo=flutter&logoColor=white)](https://flutter.dev)
 [![Dart](https://img.shields.io/badge/Dart-3.11.5-0175C2?logo=dart&logoColor=white)](https://dart.dev)
-[![Release](https://img.shields.io/badge/Release-v1.0.24-10B981?logo=github&logoColor=white)](https://github.com/codewithtama/unpam_mobile/releases/tag/v1.0.24)
+[![Release](https://img.shields.io/badge/Release-v1.0.25-10B981?logo=github&logoColor=white)](https://github.com/codewithtama/unpam_mobile/releases/tag/v1.0.25)
 [![Tests](https://img.shields.io/badge/Tests-24%20Passed-brightgreen?logo=checkmarx&logoColor=white)](test/widget_test.dart)
 [![Platform](https://img.shields.io/badge/Platform-Android%20(API%2021%2B)-3DDC84?logo=android&logoColor=white)](https://android.com)
 [![License](https://img.shields.io/badge/License-Academic-blue.svg)](#keamanan--kepatuhan-privasi)
@@ -30,6 +30,7 @@ Aplikasi ini dirancang khusus untuk kenyamanan civitas akademika dengan menghadi
 * **Dual-Isolated Web Engine (Mentari LMS & MyUnpam SIAKAD)**: Memisahkan web controller Mentari dan MyUnpam menggunakan arsitektur `IndexedStack`. Berpindah antar tab portal tidak akan memicu reload halaman, merusak sesi login, atau menghilangkan input pengerjaan kuis mahasiswa yang sedang berjalan.
 * **Jembatan Unduhan Berkas Chromium & Ekstraksi Memori Blob W3C**: Mengatasi masalah unduhan berkas PDF (KRS, KHS, Jadwal Kuliah, Kartu Ujian, Modul LMS). Mendukung ekstraksi biner client-side *skema `blob:`* langsung dari RAM peramban secara streaming tanpa memicu penolakan *W3C Fetch credential*, serta otomatis memintas proteksi Cloudflare Turnstile CAPTCHA.
 * **The PAMs AI Academic Assistant (Multi-Model Engine)**: Asisten cerdas terintegrasi yang mendukung berbagai provider LLM terdepan di dunia: Google Gemini 3.7/3.5 Flash, DeepSeek V4 (Flash & Pro), Anthropic Claude 5.5 (Sonnet & Opus), Alibaba Qwen 3.8-Max, OpenAI GPT-4o, OpenRouter, serta mode The PAMs Cloud AI Gratis tanpa kuota/API key.
+* **Split-Screen AI Overlay & In-Page Contextual Action Pill**: Panel konsultasi AI mengambang split-screen dengan drag resize dan preset rasio layar tepat di atas portal, deteksi otomatis konteks halaman aktif (forum, tugas, kuis, materi), serta injeksi jawaban diskusi langsung ke form LMS.
 * **Multimodal Vision OCR Kamera & Galeri**: Memindai tangkapan layar atau foto fisik soal kuis, modul materi, dan lembar tugas langsung dari kamera atau galeri untuk dianalisis oleh AI multimodal.
 * **AI Solusi Diskusi & Kuis Interaktif**: Menganalisis butir soal pilihan ganda maupun esai forum diskusi, menyajikan opsi rujukan jawaban ilmiah beserta argumen pembahasannya.
 * **AI Parafrase Akademik**: Mengolah redaksi teks karya tulis dan skripsi dengan 4 mode gaya bahasa (Formal, Santai, Akademis, Ringkas) serta tampilan perbandingan visual *side-by-side* guna mencegah indikasi plagiarisme/duplikasi.
@@ -263,7 +264,7 @@ Berkas APK hasil kompilasi berlokasi di:
 * `build/app/outputs/flutter-apk/app-release.apk` (Universal)
 
 ### CI/CD Otomatis via GitHub Actions
-Setiap kali tag rilis di-push ke repositori GitHub (contoh: `git tag v1.0.24 && git push origin refs/tags/v1.0.24`), workflow `.github/workflows/release-apk.yml` akan secara otomatis:
+Setiap kali tag rilis di-push ke repositori GitHub (contoh: `git tag v1.0.25 && git push origin refs/tags/v1.0.25`), workflow `.github/workflows/release-apk.yml` akan secara otomatis:
 1. Memverifikasi kode sumber dan mengunduh seluruh dependensi.
 2. Mengonfigurasi keystore rilis bertandatangan resmi.
 3. Mengompilasi seluruh varian APK (*Split-per-ABI* dan *Universal*) dengan proteksi kode `--obfuscate`.
