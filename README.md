@@ -2,7 +2,7 @@
 
 [![Flutter](https://img.shields.io/badge/Flutter-3.41.7-02569B?logo=flutter&logoColor=white)](https://flutter.dev)
 [![Dart](https://img.shields.io/badge/Dart-3.11.5-0175C2?logo=dart&logoColor=white)](https://dart.dev)
-[![Release](https://img.shields.io/badge/Release-v1.0.25-10B981?logo=github&logoColor=white)](https://github.com/codewithtama/unpam_mobile/releases/tag/v1.0.25)
+[![Release](https://img.shields.io/badge/Release-v1.0.26-10B981?logo=github&logoColor=white)](https://github.com/codewithtama/unpam_mobile/releases/tag/v1.0.26)
 [![Tests](https://img.shields.io/badge/Tests-24%20Passed-brightgreen?logo=checkmarx&logoColor=white)](test/widget_test.dart)
 [![Platform](https://img.shields.io/badge/Platform-Android%20(API%2021%2B)-3DDC84?logo=android&logoColor=white)](https://android.com)
 [![License](https://img.shields.io/badge/License-Academic-blue.svg)](#keamanan--kepatuhan-privasi)
@@ -260,7 +260,7 @@ Berkas APK hasil kompilasi berlokasi di:
 * `build/app/outputs/flutter-apk/app-x86_64-release.apk` (Emulator Android)
 
 ### CI/CD Otomatis via GitHub Actions
-Setiap kali tag rilis di-push ke repositori GitHub (contoh: `git tag v1.0.25 && git push origin refs/tags/v1.0.25`), workflow `.github/workflows/release-apk.yml` akan secara otomatis:
+Setiap kali tag rilis di-push ke repositori GitHub (contoh: `git tag v1.0.26 && git push origin refs/tags/v1.0.26`), workflow `.github/workflows/release-apk.yml` akan secara otomatis:
 1. Memverifikasi kode sumber dan mengunduh seluruh dependensi.
 2. Mengonfigurasi keystore rilis bertandatangan resmi.
 3. Mengompilasi varian APK ringan *Split-per-ABI* dengan proteksi kode `--obfuscate`.

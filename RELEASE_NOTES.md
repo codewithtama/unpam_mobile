@@ -1,6 +1,6 @@
 # Catatan Pembaruan Rilis The PAMs
 
-## Versi 1.0.25 (Terbaru)
+## Versi 1.0.26 (Terbaru)
 
 - **Split-Screen AI Overlay & Mini Assistant**:
   - Menghadirkan panel Split-Screen AI responsif tepat di atas halaman portal perkuliahan (Mentari LMS & MyUnpam SIAKAD). Mahasiswa dapat berkonsultasi, berdiskusi, dan membedah materi tanpa perlu meninggalkan halaman portal.
