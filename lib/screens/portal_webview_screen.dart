@@ -75,8 +75,8 @@ class _PortalWebViewScreenState extends State<PortalWebViewScreen> with WidgetsB
 
   bool _isAtTop = true;
   bool _wasAtTopOnDown = true;
-  double _pullDistance = 0.0;
-  bool _isPulling = false;
+  final ValueNotifier<double> _pullDistanceNotifier = ValueNotifier<double>(0.0);
+  final ValueNotifier<bool> _isPullingNotifier = ValueNotifier<bool>(false);
   bool _isRefreshing = false;
   bool _hasHapticed = false;
   double? _dragStartY;
@@ -133,6 +133,8 @@ class _PortalWebViewScreenState extends State<PortalWebViewScreen> with WidgetsB
   @override
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
+    _pullDistanceNotifier.dispose();
+    _isPullingNotifier.dispose();
     super.dispose();
   }
 
@@ -262,25 +264,7 @@ class _PortalWebViewScreenState extends State<PortalWebViewScreen> with WidgetsB
               }
             });
             _scheduleWhiteScreenCheck();
-            try {
-              await _controller.runJavaScript('''
-                (function() {
-                  function syncScroll() {
-                    try {
-                      if (window.ScrollSyncChannel) {
-                        var atTop = (window.scrollY || document.documentElement.scrollTop || 0) <= 2;
-                        window.ScrollSyncChannel.postMessage(atTop ? 'true' : 'false');
-                      }
-                    } catch(e) {}
-                  }
-                  window.removeEventListener('scroll', syncScroll);
-                  window.addEventListener('scroll', syncScroll, { passive: true });
-                  syncScroll();
-                })();
-              ''');
-            } catch (e) {
-              debugPrint('Error injecting scroll sync: \$e');
-            }
+            _inject120FpsOptimizationScript(_controller);
             _injectDownloadInterceptorScript(_controller);
             _detectAndInterceptRawPdfInWebView(_controller);
           },
@@ -526,8 +510,9 @@ class _PortalWebViewScreenState extends State<PortalWebViewScreen> with WidgetsB
               _updateHistoryState();
             }
 
-            // 1. Injeksi interceptor unduhan berkas PDF
+            // 1. Injeksi optimasi 120 FPS & interceptor unduhan berkas PDF
             if (_myUnpamController != null) {
+              _inject120FpsOptimizationScript(_myUnpamController!);
               _injectDownloadInterceptorScript(_myUnpamController!);
               _detectAndInterceptRawPdfInWebView(_myUnpamController!);
             }
@@ -1353,6 +1338,51 @@ class _PortalWebViewScreenState extends State<PortalWebViewScreen> with WidgetsB
       debugPrint('Error detecting raw PDF: $e');
     } finally {
       _isHandlingRawPdf = false;
+    }
+  }
+
+  Future<void> _inject120FpsOptimizationScript(WebViewController controller) async {
+    try {
+      await controller.runJavaScript(r'''
+        (function() {
+          try {
+            var style = document.getElementById('__unpam_smooth_120fps');
+            if (!style) {
+              style = document.createElement('style');
+              style.id = '__unpam_smooth_120fps';
+              style.textContent = `
+                html, body {
+                  -webkit-overflow-scrolling: touch !important;
+                  scroll-behavior: smooth !important;
+                  overscroll-behavior-y: contain !important;
+                }
+                * {
+                  -webkit-tap-highlight-color: transparent !important;
+                }
+              `;
+              document.head.appendChild(style);
+            }
+          } catch(e) {}
+
+          var lastAtTop = null;
+          function syncScroll() {
+            try {
+              if (window.ScrollSyncChannel) {
+                var atTop = (window.scrollY || document.documentElement.scrollTop || 0) <= 2;
+                if (atTop !== lastAtTop) {
+                  lastAtTop = atTop;
+                  window.ScrollSyncChannel.postMessage(atTop ? 'true' : 'false');
+                }
+              }
+            } catch(e) {}
+          }
+          window.removeEventListener('scroll', syncScroll);
+          window.addEventListener('scroll', syncScroll, { passive: true });
+          syncScroll();
+        })();
+      ''');
+    } catch (e) {
+      debugPrint('Error injecting 120 FPS optimization script: $e');
     }
   }
 
@@ -4041,8 +4071,8 @@ class _PortalWebViewScreenState extends State<PortalWebViewScreen> with WidgetsB
     _dragStartY = event.position.dy;
     _dragStartX = event.position.dx;
     _wasAtTopOnDown = _isAtTop;
-    _isPulling = false;
-    _pullDistance = 0.0;
+    _isPullingNotifier.value = false;
+    _pullDistanceNotifier.value = 0.0;
     _hasHapticed = false;
 
     // Asynchronous double-check scroll position from DOM
@@ -4054,13 +4084,13 @@ class _PortalWebViewScreenState extends State<PortalWebViewScreen> with WidgetsB
         final atTop = y <= 2;
         if (atTop != _isAtTop) {
           _isAtTop = atTop;
-          if (!_isPulling) {
+          if (!_isPullingNotifier.value) {
             _wasAtTopOnDown = atTop;
           }
         }
       }
     }).catchError((e) {
-      debugPrint('Scroll query error: \$e');
+      debugPrint('Scroll query error: $e');
     });
   }
 
@@ -4068,11 +4098,9 @@ class _PortalWebViewScreenState extends State<PortalWebViewScreen> with WidgetsB
     if (_isRefreshing || _dragStartY == null || _dragStartX == null) return;
 
     if (!_wasAtTopOnDown || !_isAtTop) {
-      if (_isPulling) {
-        setState(() {
-          _isPulling = false;
-          _pullDistance = 0.0;
-        });
+      if (_isPullingNotifier.value) {
+        _isPullingNotifier.value = false;
+        _pullDistanceNotifier.value = 0.0;
       }
       return;
     }
@@ -4080,7 +4108,7 @@ class _PortalWebViewScreenState extends State<PortalWebViewScreen> with WidgetsB
     final double deltaY = event.position.dy - _dragStartY!;
     final double deltaX = (event.position.dx - _dragStartX!).abs();
 
-    if (deltaX > deltaY && !_isPulling) {
+    if (deltaX > deltaY && !_isPullingNotifier.value) {
       return;
     }
 
@@ -4098,16 +4126,12 @@ class _PortalWebViewScreenState extends State<PortalWebViewScreen> with WidgetsB
         _hasHapticed = false;
       }
 
-      setState(() {
-        _isPulling = true;
-        _pullDistance = calculated;
-      });
+      _isPullingNotifier.value = true;
+      _pullDistanceNotifier.value = calculated;
     } else {
-      if (_isPulling) {
-        setState(() {
-          _isPulling = false;
-          _pullDistance = 0.0;
-        });
+      if (_isPullingNotifier.value) {
+        _isPullingNotifier.value = false;
+        _pullDistanceNotifier.value = 0.0;
       }
     }
   }
@@ -4125,24 +4149,23 @@ class _PortalWebViewScreenState extends State<PortalWebViewScreen> with WidgetsB
     _dragStartX = null;
     _hasHapticed = false;
 
-    if (_isPulling) {
-      if (_pullDistance >= _refreshTriggerDistance) {
+    if (_isPullingNotifier.value) {
+      if (_pullDistanceNotifier.value >= _refreshTriggerDistance) {
         _startRefresh();
       } else {
-        setState(() {
-          _isPulling = false;
-          _pullDistance = 0.0;
-        });
+        _isPullingNotifier.value = false;
+        _pullDistanceNotifier.value = 0.0;
       }
     }
   }
 
   Future<void> _startRefresh() async {
     if (_isRefreshing) return;
+    _isPullingNotifier.value = false;
+    _pullDistanceNotifier.value = 0.0;
+
     setState(() {
       _isRefreshing = true;
-      _isPulling = false;
-      _pullDistance = 0.0;
       if (_currentNavIndex == 1) {
         _myUnpamHasError = false;
       } else {
@@ -4167,65 +4190,72 @@ class _PortalWebViewScreenState extends State<PortalWebViewScreen> with WidgetsB
   }
 
   Widget _buildPullToRefreshIndicator() {
-    final double topPos;
-    if (_isRefreshing) {
-      topPos = 16.0;
-    } else if (_isPulling) {
-      topPos = ((_pullDistance - 38.0) * 0.72).clamp(-50.0, 44.0);
-    } else {
-      topPos = -60.0;
-    }
+    return AnimatedBuilder(
+      animation: Listenable.merge([_pullDistanceNotifier, _isPullingNotifier]),
+      builder: (context, _) {
+        final bool pulling = _isPullingNotifier.value;
+        final double distance = _pullDistanceNotifier.value;
+        final double topPos;
+        if (_isRefreshing) {
+          topPos = 16.0;
+        } else if (pulling) {
+          topPos = ((distance - 38.0) * 0.72).clamp(-50.0, 44.0);
+        } else {
+          topPos = -60.0;
+        }
 
-    return AnimatedPositioned(
-      duration: _isPulling ? Duration.zero : const Duration(milliseconds: 280),
-      curve: Curves.easeOutCubic,
-      top: topPos,
-      left: 0,
-      right: 0,
-      child: Center(
-        child: AnimatedOpacity(
-          duration: const Duration(milliseconds: 180),
-          opacity: (_isPulling || _isRefreshing) ? 1.0 : 0.0,
-          child: Container(
-            width: 42,
-            height: 42,
-            decoration: BoxDecoration(
-              color: AppTheme.surfaceWhite,
-              shape: BoxShape.circle,
-              boxShadow: [
-                BoxShadow(
-                  color: Colors.black.withOpacity(0.12),
-                  blurRadius: 10,
-                  offset: const Offset(0, 4),
+        return AnimatedPositioned(
+          duration: pulling ? Duration.zero : const Duration(milliseconds: 280),
+          curve: Curves.easeOutCubic,
+          top: topPos,
+          left: 0,
+          right: 0,
+          child: Center(
+            child: AnimatedOpacity(
+              duration: const Duration(milliseconds: 180),
+              opacity: (pulling || _isRefreshing) ? 1.0 : 0.0,
+              child: Container(
+                width: 42,
+                height: 42,
+                decoration: BoxDecoration(
+                  color: AppTheme.surfaceWhite,
+                  shape: BoxShape.circle,
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black.withOpacity(0.12),
+                      blurRadius: 10,
+                      offset: const Offset(0, 4),
+                    ),
+                  ],
+                  border: Border.all(
+                    color: AppTheme.cardBorder,
+                    width: 1.0,
+                  ),
                 ),
-              ],
-              border: Border.all(
-                color: AppTheme.cardBorder,
-                width: 1.0,
+                padding: const EdgeInsets.all(9),
+                child: _isRefreshing
+                    ? const CircularProgressIndicator(
+                        strokeWidth: 2.8,
+                        valueColor: AlwaysStoppedAnimation<Color>(AppTheme.primaryBlue),
+                      )
+                    : Transform.rotate(
+                        angle: (distance / _refreshTriggerDistance) * 3.14159 * 1.5,
+                        child: CircularProgressIndicator(
+                          value: (distance / _refreshTriggerDistance).clamp(0.08, 0.88),
+                          strokeWidth: 2.8,
+                          backgroundColor: AppTheme.primaryLight.withOpacity(0.12),
+                          valueColor: AlwaysStoppedAnimation<Color>(
+                            distance >= _refreshTriggerDistance
+                                ? AppTheme.accentGold
+                                : AppTheme.primaryBlue,
+                          ),
+                        ),
+                      ),
               ),
             ),
-            padding: const EdgeInsets.all(9),
-            child: _isRefreshing
-                ? const CircularProgressIndicator(
-                    strokeWidth: 2.8,
-                    valueColor: AlwaysStoppedAnimation<Color>(AppTheme.primaryBlue),
-                  )
-                : Transform.rotate(
-                    angle: (_pullDistance / _refreshTriggerDistance) * 3.14159 * 1.5,
-                    child: CircularProgressIndicator(
-                      value: (_pullDistance / _refreshTriggerDistance).clamp(0.08, 0.88),
-                      strokeWidth: 2.8,
-                      backgroundColor: AppTheme.primaryLight.withOpacity(0.12),
-                      valueColor: AlwaysStoppedAnimation<Color>(
-                        _pullDistance >= _refreshTriggerDistance
-                            ? AppTheme.accentGold
-                            : AppTheme.primaryBlue,
-                      ),
-                    ),
-                  ),
           ),
-        ),
-      ),
+        );
+      },
     );
   }
 
