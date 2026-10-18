@@ -19,6 +19,8 @@ import '../core/services/file_download_service.dart';
 import '../core/services/webview_download_bridge.dart';
 import '../widgets/update_dialog.dart';
 import '../widgets/release_history_dialog.dart';
+import '../widgets/mini_ai_overlay_panel.dart';
+import '../widgets/in_page_quick_action_pill.dart';
 import 'package:open_filex/open_filex.dart';
 
 class PortalWebViewScreen extends StatefulWidget {
@@ -47,6 +49,13 @@ class _PortalWebViewScreenState extends State<PortalWebViewScreen> with WidgetsB
   DateTime? _lastBackPressTime;
   Offset? _fabOffset;
   bool _isDraggingFab = false;
+  bool _isSplitAiOpen = false;
+  bool _isSplitAiMinimized = false;
+  double _splitAiRatio = 0.46;
+  WebPageDetectedContext _mentariDetectedContext = WebPageDetectedContext.empty;
+  WebPageDetectedContext _myUnpamDetectedContext = WebPageDetectedContext.empty;
+  WebPageDetectedContext get _activeDetectedContext =>
+      _currentNavIndex == 1 ? _myUnpamDetectedContext : _mentariDetectedContext;
   bool _isMentariLoginDetected = false;
   bool _isMyUnpamLoginDetected = false;
   bool get _isLoginPageDetected =>
@@ -204,6 +213,12 @@ class _PortalWebViewScreenState extends State<PortalWebViewScreen> with WidgetsB
           WebViewDownloadBridge().handlePayloadMessage(message.message);
         },
       )
+      ..addJavaScriptChannel(
+        'PageContextChannel',
+        onMessageReceived: (message) {
+          _handleDetectedPageContext(message.message, isMyUnpam: false);
+        },
+      )
       ..setNavigationDelegate(
         NavigationDelegate(
           onProgress: (progress) {
@@ -230,6 +245,7 @@ class _PortalWebViewScreenState extends State<PortalWebViewScreen> with WidgetsB
                 }
               });
               _detectLoginForm();
+              _injectContextualPageDetectorScript(_controller);
             }
           },
           onPageStarted: (url) {
@@ -241,6 +257,7 @@ class _PortalWebViewScreenState extends State<PortalWebViewScreen> with WidgetsB
                 _hasError = false;
                 _isWhiteScreenDetected = false;
                 _isAtTop = true;
+                _mentariDetectedContext = WebPageDetectedContext.empty;
                 _isLoginPageDetected = isLogin;
                 if (!isLogin) {
                   _hasAutoLoggedInCurrentSession = false;
@@ -264,10 +281,12 @@ class _PortalWebViewScreenState extends State<PortalWebViewScreen> with WidgetsB
             }
             _detectLoginForm();
             _injectLoginCaptureScript();
+            _injectContextualPageDetectorScript(_controller);
             Future.delayed(const Duration(milliseconds: 700), () {
               if (mounted) {
                 _detectLoginForm();
                 _injectLoginCaptureScript();
+                _injectContextualPageDetectorScript(_controller);
               }
             });
             _scheduleWhiteScreenCheck();
@@ -467,6 +486,12 @@ class _PortalWebViewScreenState extends State<PortalWebViewScreen> with WidgetsB
           WebViewDownloadBridge().handlePayloadMessage(message.message);
         },
       )
+      ..addJavaScriptChannel(
+        'PageContextChannel',
+        onMessageReceived: (message) {
+          _handleDetectedPageContext(message.message, isMyUnpam: true);
+        },
+      )
       ..setNavigationDelegate(
         NavigationDelegate(
           onProgress: (progress) {
@@ -488,6 +513,9 @@ class _PortalWebViewScreenState extends State<PortalWebViewScreen> with WidgetsB
               if (_currentNavIndex == 1) {
                 _detectLoginForm();
               }
+              if (_myUnpamController != null) {
+                _injectContextualPageDetectorScript(_myUnpamController!);
+              }
             }
           },
           onPageStarted: (url) {
@@ -500,6 +528,7 @@ class _PortalWebViewScreenState extends State<PortalWebViewScreen> with WidgetsB
                 _isMyUnpamLoading = true;
                 _myUnpamHasError = false;
                 _isMyUnpamAtTop = true;
+                _myUnpamDetectedContext = WebPageDetectedContext.empty;
                 if (_currentNavIndex == 1) {
                   _isLoginPageDetected = isLogin;
                 }
@@ -528,6 +557,7 @@ class _PortalWebViewScreenState extends State<PortalWebViewScreen> with WidgetsB
               _inject120FpsOptimizationScript(_myUnpamController!);
               _injectDownloadInterceptorScript(_myUnpamController!);
               _detectAndInterceptRawPdfInWebView(_myUnpamController!);
+              _injectContextualPageDetectorScript(_myUnpamController!);
             }
 
             // 2. Tangani otomatis jika baru saja logout atau di halaman konfirmasi SSO
@@ -560,6 +590,7 @@ class _PortalWebViewScreenState extends State<PortalWebViewScreen> with WidgetsB
               if (mounted) {
                 if (_myUnpamController != null) {
                   _handleSsoRedirectAutoBypass(_myUnpamController!);
+                  _injectContextualPageDetectorScript(_myUnpamController!);
                 }
                 _detectLoginForm();
                 _injectLoginCaptureScript();
@@ -670,6 +701,13 @@ class _PortalWebViewScreenState extends State<PortalWebViewScreen> with WidgetsB
     if (await _activeController.canGoBack()) {
       await _activeController.goBack();
       _updateHistoryState();
+      return;
+    }
+
+    if (_isSplitAiOpen && !_isSplitAiMinimized) {
+      if (mounted) {
+        setState(() => _isSplitAiMinimized = true);
+      }
       return;
     }
 
@@ -985,6 +1023,22 @@ class _PortalWebViewScreenState extends State<PortalWebViewScreen> with WidgetsB
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
+                        // Opsi Utama: Split-Screen / Mini AI Overlay
+                        _buildAiToolTile(
+                          icon: Icons.vertical_split_rounded,
+                          iconColor: AppTheme.accentGold,
+                          iconBgColor: AppTheme.accentGoldLight,
+                          title: _isSplitAiOpen && !_isSplitAiMinimized
+                              ? 'Tutup Split-Screen AI Overlay'
+                              : 'Split-Screen / Mini AI Overlay',
+                          subtitle:
+                              'Konsultasi AI berdampingan langsung tanpa meninggalkan halaman Mentari / MyUnpam',
+                          onTap: () {
+                            Navigator.pop(ctx);
+                            _toggleSplitAiOverlay();
+                          },
+                        ),
+
                         // Opsi 1: AI Forum Diskusi
                         _buildAiToolTile(
                           icon: Icons.forum_rounded,
@@ -1024,16 +1078,16 @@ class _PortalWebViewScreenState extends State<PortalWebViewScreen> with WidgetsB
                           },
                         ),
 
-                        // Opsi 4: Tanya AI Halaman Ini
+                        // Opsi 4: Tanya AI Halaman Ini (Split-Screen)
                         _buildAiToolTile(
                           icon: Icons.chat_bubble_outline_rounded,
                           iconColor: AppTheme.accentGold,
                           iconBgColor: Colors.amber.shade50,
-                          title: 'Tanya AI Halaman Ini',
-                          subtitle: 'Kirim teks halaman ke ruang konsultasi akademik The PAMs AI',
+                          title: 'Tanya AI Halaman Ini (Split-Screen)',
+                          subtitle: 'Ekstrak isi halaman dan bahas langsung di panel Split-Screen AI bawah',
                           onTap: () {
                             Navigator.pop(ctx);
-                            _consultWithAi();
+                            _consultWithAi(openInSplitScreen: true);
                           },
                         ),
 
@@ -2764,7 +2818,7 @@ class _PortalWebViewScreenState extends State<PortalWebViewScreen> with WidgetsB
     await Clipboard.setData(ClipboardData(text: text));
 
     try {
-      final raw = await _controller.runJavaScriptReturningResult(
+      final raw = await _activeController.runJavaScriptReturningResult(
         '''
         (function(replyText) {
           var injected = false;
@@ -4039,13 +4093,63 @@ class _PortalWebViewScreenState extends State<PortalWebViewScreen> with WidgetsB
     }
   }
 
-  Future<void> _consultWithAi() async {
+  void _toggleSplitAiOverlay() {
+    HapticFeedback.lightImpact();
+    final activeTitle = _currentNavIndex == 1 ? _myUnpamPageTitle : _pageTitle;
+    context.read<AiProvider>().setSelectedCourse(activeTitle);
+    setState(() {
+      if (_isSplitAiOpen && !_isSplitAiMinimized) {
+        _isSplitAiOpen = false;
+      } else {
+        _isSplitAiOpen = true;
+        _isSplitAiMinimized = false;
+      }
+    });
+  }
+
+  void _cycleSplitAiHeightPreset() {
+    setState(() {
+      if (_splitAiRatio < 0.42) {
+        _splitAiRatio = 0.48;
+      } else if (_splitAiRatio < 0.60) {
+        _splitAiRatio = 0.68;
+      } else {
+        _splitAiRatio = 0.36;
+      }
+    });
+  }
+
+  Future<String> _extractSelectedTextFromActiveWebView() async {
+    try {
+      final res = await _activeController.runJavaScriptReturningResult(
+        r'''
+        (function() {
+          var sel = window.getSelection ? window.getSelection().toString() : '';
+          return sel ? sel.trim() : '';
+        })()
+        ''',
+      );
+      if (res is String && res.trim().isNotEmpty) {
+        String cleaned = res.trim();
+        if (cleaned.startsWith('"') && cleaned.endsWith('"') && cleaned.length >= 2) {
+          cleaned = cleaned.substring(1, cleaned.length - 1);
+          cleaned = cleaned.replaceAll(r'\"', '"').replaceAll(r'\n', '\n');
+        }
+        return cleaned.trim();
+      }
+    } catch (e) {
+      debugPrint('Selection extraction error: $e');
+    }
+    return '';
+  }
+
+  Future<String> _buildCurrentPagePrompt() async {
     String extracted = '';
     try {
       final raw = await _activeController.runJavaScriptReturningResult(
         r'''
         (function() {
-          var selectors = ['.soal', '.question', '.quiz-content', '.card-body', 'form', 'article', 'main'];
+          var selectors = ['.soal', '.question', '.quiz-content', '.forumpost', '.card-body', 'form', 'article', 'main'];
           for (var i = 0; i < selectors.length; i++) {
             var el = document.querySelector(selectors[i]);
             if (el && el.innerText && el.innerText.trim().length > 15) {
@@ -4058,7 +4162,7 @@ class _PortalWebViewScreenState extends State<PortalWebViewScreen> with WidgetsB
       );
       extracted = raw.toString();
       if (extracted.startsWith('"') && extracted.endsWith('"')) {
-        extracted = jsonDecode(extracted);
+        extracted = jsonDecode(extracted) as String;
       }
     } catch (_) {}
 
@@ -4074,14 +4178,637 @@ class _PortalWebViewScreenState extends State<PortalWebViewScreen> with WidgetsB
       buffer.writeln('Saya sedang membuka $portalName "$activeTitle".');
       buffer.writeln('Tolong berikan ringkasan penting dan panduan akademik yang relevan.');
     }
+    return buffer.toString();
+  }
 
-    if (!mounted) return;
-    context.read<AiProvider>().setSelectedCourse(activeTitle);
-    Navigator.push(
+  Future<void> _openFullScreenAiAssistant({String? initialPrompt}) async {
+    final result = await Navigator.push<String>(
       context,
       MaterialPageRoute(
-        builder: (_) => AiAssistantScreen(initialPrompt: buffer.toString()),
+        builder: (_) => AiAssistantScreen(initialPrompt: initialPrompt),
       ),
+    );
+    if (!mounted) return;
+    if (result == 'open_split_screen') {
+      setState(() {
+        _isSplitAiOpen = true;
+        _isSplitAiMinimized = false;
+      });
+    }
+  }
+
+  Future<void> _consultWithAi({bool openInSplitScreen = true}) async {
+    final prompt = await _buildCurrentPagePrompt();
+    if (!mounted) return;
+
+    final activeTitle = _currentNavIndex == 1 ? _myUnpamPageTitle : _pageTitle;
+    final aiProv = context.read<AiProvider>();
+    aiProv.setSelectedCourse(activeTitle);
+
+    if (openInSplitScreen) {
+      setState(() {
+        _isSplitAiOpen = true;
+        _isSplitAiMinimized = false;
+      });
+      await aiProv.sendMessage(
+        prompt,
+        availableCourses: [activeTitle],
+      );
+      return;
+    }
+
+    await _openFullScreenAiAssistant(initialPrompt: prompt);
+  }
+
+  void _handleDetectedPageContext(String rawPayload, {required bool isMyUnpam}) {
+    if (!mounted) return;
+    final parsed = WebPageDetectedContext.fromRawJson(rawPayload);
+    if (isMyUnpam) {
+      if (_myUnpamDetectedContext != parsed) {
+        setState(() {
+          _myUnpamDetectedContext = parsed;
+        });
+      }
+    } else {
+      if (_mentariDetectedContext != parsed) {
+        setState(() {
+          _mentariDetectedContext = parsed;
+        });
+      }
+    }
+  }
+
+  Future<void> _injectContextualPageDetectorScript(
+    WebViewController controller,
+  ) async {
+    try {
+      await controller.runJavaScript(r'''
+        (function() {
+          if (!window.PageContextChannel) return;
+
+          function toAbsoluteUrl(u) {
+            try {
+              return new URL(u, window.location.href).href;
+            } catch(e) {
+              return u || '';
+            }
+          }
+
+          function scanPageContext() {
+            try {
+              var href = window.location.href || '';
+              var lowHref = href.toLowerCase();
+
+              // 0. Guard: Jangan tampilkan konteks di halaman login
+              var passInput = document.querySelector('input[type="password"]');
+              var hasProfile = !!document.querySelector('.usermenu .userbutton, .userpicture, [data-testid="AccountCircleIcon"], [aria-label*="akun" i], [aria-label*="profile" i], .avatar, a[href*="logout" i], a[href*="keluar" i], .user-panel, #user-profile, .brand-text, .navbar-user');
+              if (passInput && passInput.offsetParent !== null && !hasProfile) {
+                return {
+                  type: 'none',
+                  itemCount: 0,
+                  label: '',
+                  selectedText: '',
+                  documentUrl: '',
+                  pageUrl: href
+                };
+              }
+
+              // 1. Prioritas 1: Teks sedang diblok / disorot oleh pengguna
+              var sel = window.getSelection ? window.getSelection().toString().trim() : '';
+              if (sel && sel.length >= 8) {
+                return {
+                  type: 'selection',
+                  itemCount: 0,
+                  label: 'Teks Diblok',
+                  selectedText: sel.substring(0, 1200),
+                  documentUrl: '',
+                  pageUrl: href
+                };
+              }
+
+              var headingNodes = document.querySelectorAll('h1, h2, h3, h4, .card-title, .page-header-headings, .breadcrumb');
+              var headingText = (document.title || '') + ' ';
+              for (var h = 0; h < headingNodes.length && h < 12; h++) {
+                headingText += (headingNodes[h].innerText || '') + ' ';
+              }
+              var lowHeading = headingText.toLowerCase();
+
+              // 2. Prioritas 2: Deteksi Kuesioner Dosen vs Kuis Pilihan Ganda
+              var allRadios = document.querySelectorAll('input[type="radio"]');
+              if (allRadios.length >= 2) {
+                var radioGroups = {};
+                var likertSignal = 0;
+                for (var r = 0; r < allRadios.length; r++) {
+                  var rad = allRadios[r];
+                  var gName = rad.getAttribute('name') || ('grp_' + r);
+                  if (!radioGroups[gName]) radioGroups[gName] = [];
+                  radioGroups[gName].push(rad);
+
+                  var lbl = document.querySelector('label[for="' + rad.id + '"]') || rad.closest('label') || rad.parentElement;
+                  var lblTxt = lbl ? (lbl.innerText || '').toLowerCase().trim() : '';
+                  if (lblTxt === 'ya' || lblTxt === 'tidak' ||
+                      lblTxt.indexOf('sangat baik') !== -1 ||
+                      lblTxt.indexOf('sangat setuju') !== -1 ||
+                      lblTxt.indexOf('setuju') !== -1 ||
+                      lblTxt.indexOf('kurang baik') !== -1) {
+                    likertSignal++;
+                  }
+                }
+
+                var groupCount = Object.keys(radioGroups).length;
+                var isQuestionnaireKeyword =
+                  lowHref.indexOf('kuesioner') !== -1 ||
+                  lowHref.indexOf('kuisioner') !== -1 ||
+                  lowHref.indexOf('edom') !== -1 ||
+                  lowHeading.indexOf('kuesioner') !== -1 ||
+                  lowHeading.indexOf('kuisioner') !== -1 ||
+                  lowHeading.indexOf('evaluasi dosen') !== -1 ||
+                  lowHeading.indexOf('angket') !== -1;
+
+                if (groupCount >= 2 && (isQuestionnaireKeyword || likertSignal >= 2)) {
+                  return {
+                    type: 'questionnaire',
+                    itemCount: groupCount,
+                    label: 'Kuesioner Dosen',
+                    selectedText: '',
+                    documentUrl: '',
+                    pageUrl: href
+                  };
+                }
+
+                var hasQuizDom = !!document.querySelector('.que, .qtext, .quiz-content, .question-container');
+                var isQuizKeyword =
+                  lowHref.indexOf('quiz') !== -1 ||
+                  lowHref.indexOf('kuis') !== -1 ||
+                  lowHref.indexOf('latihan') !== -1 ||
+                  lowHref.indexOf('pretest') !== -1 ||
+                  lowHref.indexOf('posttest') !== -1 ||
+                  lowHeading.indexOf('kuis') !== -1 ||
+                  lowHeading.indexOf('quiz') !== -1 ||
+                  lowHeading.indexOf('latihan soal') !== -1 ||
+                  lowHeading.indexOf('pretest') !== -1 ||
+                  lowHeading.indexOf('posttest') !== -1;
+
+                if (hasQuizDom || (groupCount >= 1 && isQuizKeyword) || groupCount >= 3) {
+                  var qDomCount = document.querySelectorAll('.que').length;
+                  var finalQuizCount = qDomCount > 0 ? qDomCount : groupCount;
+                  return {
+                    type: 'quiz',
+                    itemCount: finalQuizCount,
+                    label: 'Kuis Pilihan Ganda',
+                    selectedText: '',
+                    documentUrl: '',
+                    pageUrl: href
+                  };
+                }
+              } else if (document.querySelectorAll('.que, .qtext, .quiz-content').length > 0) {
+                var qCount = document.querySelectorAll('.que, .qtext').length || 1;
+                return {
+                  type: 'quiz',
+                  itemCount: qCount,
+                  label: 'Kuis Pilihan Ganda',
+                  selectedText: '',
+                  documentUrl: '',
+                  pageUrl: href
+                };
+              }
+
+              // 3. Prioritas 3: Deteksi Forum Diskusi Perkuliahan
+              var hasForumPost = !!document.querySelector('.forumpost, .discussion-content, .post-content, .forum-thread');
+              var isForumKeyword =
+                lowHref.indexOf('forum') !== -1 ||
+                lowHref.indexOf('diskusi') !== -1 ||
+                lowHeading.indexOf('forum') !== -1 ||
+                lowHeading.indexOf('diskusi') !== -1 ||
+                lowHeading.indexOf('topik diskusi') !== -1;
+              var hasReplyEditor = !!document.querySelector('textarea, .tox-edit-area, [contenteditable="true"], .editor_atto_content');
+
+              if (hasForumPost || (isForumKeyword && (hasReplyEditor || document.querySelectorAll('.card-body, article').length > 0))) {
+                return {
+                  type: 'forum',
+                  itemCount: 1,
+                  label: 'Forum Diskusi',
+                  selectedText: '',
+                  documentUrl: '',
+                  pageUrl: href
+                };
+              }
+
+              // 4. Prioritas 4: Deteksi Dokumen / Modul PDF / Tombol Cetak Akademik
+              var pdfEmbed = document.querySelector('iframe[src*=".pdf" i], embed[type="application/pdf" i], object[data*=".pdf" i]');
+              if (pdfEmbed) {
+                var embedSrc = pdfEmbed.getAttribute('src') || pdfEmbed.getAttribute('data') || '';
+                return {
+                  type: 'document',
+                  itemCount: 1,
+                  label: 'Unduh Modul PDF',
+                  selectedText: '',
+                  documentUrl: embedSrc ? toAbsoluteUrl(embedSrc) : '',
+                  pageUrl: href
+                };
+              }
+
+              var prevMarked = document.querySelectorAll('[data-unpam-quick-doc-btn="1"]');
+              for (var pm = 0; pm < prevMarked.length; pm++) {
+                prevMarked[pm].removeAttribute('data-unpam-quick-doc-btn');
+              }
+
+              var clickables = document.querySelectorAll('a[href], button, [role="button"], input[type="button"]');
+              for (var c = 0; c < clickables.length; c++) {
+                var el = clickables[c];
+                if (el.offsetParent === null) continue;
+                var rawHref = el.getAttribute('href') || el.getAttribute('data-url') || el.getAttribute('data-href') || '';
+                var lowUrl = rawHref.toLowerCase().trim();
+                var btnTxt = (el.innerText || el.value || el.getAttribute('title') || '').trim();
+                var lowTxt = btnTxt.toLowerCase();
+
+                var isDirectDocUrl =
+                  lowUrl.indexOf('.pdf') !== -1 ||
+                  lowUrl.indexOf('.docx') !== -1 ||
+                  lowUrl.indexOf('.pptx') !== -1 ||
+                  lowUrl.indexOf('pluginfile.php') !== -1 ||
+                  lowUrl.indexOf('mod_resource') !== -1 ||
+                  lowUrl.startsWith('blob:');
+
+                var isPrintOrDocBtn =
+                  (lowTxt.indexOf('cetak') !== -1 || lowTxt.indexOf('unduh') !== -1 || lowTxt.indexOf('download') !== -1) &&
+                  (lowTxt.indexOf('krs') !== -1 ||
+                   lowTxt.indexOf('khs') !== -1 ||
+                   lowTxt.indexOf('jadwal') !== -1 ||
+                   lowTxt.indexOf('kartu') !== -1 ||
+                   lowTxt.indexOf('ujian') !== -1 ||
+                   lowTxt.indexOf('uts') !== -1 ||
+                   lowTxt.indexOf('uas') !== -1 ||
+                   lowTxt.indexOf('modul') !== -1 ||
+                   lowTxt.indexOf('materi') !== -1 ||
+                   lowTxt.indexOf('transkrip') !== -1 ||
+                   lowTxt.indexOf('pdf') !== -1);
+
+                if (isDirectDocUrl || isPrintOrDocBtn) {
+                  var resolvedDocUrl = '';
+                  if (rawHref && !lowUrl.startsWith('#') && !lowUrl.startsWith('javascript:')) {
+                    resolvedDocUrl = toAbsoluteUrl(rawHref);
+                  } else {
+                    el.setAttribute('data-unpam-quick-doc-btn', '1');
+                    resolvedDocUrl = '__DOM_CLICK_DOC_BTN__';
+                  }
+
+                  var cleanLabel = 'Unduh Dokumen PDF';
+                  if (lowTxt.indexOf('krs') !== -1) cleanLabel = 'Cetak KRS';
+                  else if (lowTxt.indexOf('khs') !== -1) cleanLabel = 'Cetak KHS';
+                  else if (lowTxt.indexOf('jadwal') !== -1) cleanLabel = 'Cetak Jadwal';
+                  else if (lowTxt.indexOf('kartu') !== -1 || lowTxt.indexOf('ujian') !== -1) cleanLabel = 'Cetak Kartu Ujian';
+                  else if (lowTxt.indexOf('transkrip') !== -1) cleanLabel = 'Cetak Transkrip';
+                  else if (lowTxt.indexOf('modul') !== -1 || lowTxt.indexOf('materi') !== -1) cleanLabel = 'Unduh Modul';
+                  else if (btnTxt.length >= 4 && btnTxt.length <= 24) cleanLabel = btnTxt;
+
+                  return {
+                    type: 'document',
+                    itemCount: 1,
+                    label: cleanLabel,
+                    selectedText: '',
+                    documentUrl: resolvedDocUrl,
+                    pageUrl: href
+                  };
+                }
+              }
+
+              // 5. Prioritas 5: Deteksi Halaman Tabel Akademik (Jadwal, KHS, Presensi, Keuangan)
+              var tableRows = document.querySelectorAll('table tbody tr, table tr').length;
+              if (tableRows >= 2) {
+                if (lowHref.indexOf('jadwal') !== -1 || lowHeading.indexOf('jadwal') !== -1) {
+                  return {
+                    type: 'academic',
+                    itemCount: tableRows,
+                    label: 'Jadwal Kuliah',
+                    selectedText: '',
+                    documentUrl: '',
+                    pageUrl: href
+                  };
+                }
+                if (lowHref.indexOf('khs') !== -1 || lowHeading.indexOf('khs') !== -1 || lowHeading.indexOf('hasil studi') !== -1) {
+                  return {
+                    type: 'academic',
+                    itemCount: tableRows,
+                    label: 'KHS & Nilai',
+                    selectedText: '',
+                    documentUrl: '',
+                    pageUrl: href
+                  };
+                }
+                if (lowHref.indexOf('transkrip') !== -1 || lowHeading.indexOf('transkrip') !== -1) {
+                  return {
+                    type: 'academic',
+                    itemCount: tableRows,
+                    label: 'Transkrip Nilai',
+                    selectedText: '',
+                    documentUrl: '',
+                    pageUrl: href
+                  };
+                }
+                if (lowHref.indexOf('presensi') !== -1 || lowHref.indexOf('absensi') !== -1 || lowHeading.indexOf('presensi') !== -1 || lowHeading.indexOf('kehadiran') !== -1) {
+                  return {
+                    type: 'academic',
+                    itemCount: tableRows,
+                    label: 'Presensi Kuliah',
+                    selectedText: '',
+                    documentUrl: '',
+                    pageUrl: href
+                  };
+                }
+              }
+
+              return {
+                type: 'none',
+                itemCount: 0,
+                label: '',
+                selectedText: '',
+                documentUrl: '',
+                pageUrl: href
+              };
+            } catch(e) {
+              return {
+                type: 'none',
+                itemCount: 0,
+                label: '',
+                selectedText: '',
+                documentUrl: '',
+                pageUrl: window.location.href || ''
+              };
+            }
+          }
+
+          function emitIfChanged(force) {
+            var ctx = scanPageContext();
+            var sig = JSON.stringify(ctx);
+            if (force || window.__unpamLastContextSig !== sig) {
+              window.__unpamLastContextSig = sig;
+              window.PageContextChannel.postMessage(sig);
+            }
+          }
+
+          emitIfChanged(true);
+
+          if (!window.__unpamContextDetectorAttached) {
+            window.__unpamContextDetectorAttached = true;
+            var debounceTimer = null;
+            function scheduleCheck(delayMs) {
+              if (debounceTimer) clearTimeout(debounceTimer);
+              debounceTimer = setTimeout(function() {
+                emitIfChanged(false);
+              }, delayMs || 320);
+            }
+
+            document.addEventListener('selectionchange', function() {
+              scheduleCheck(180);
+            }, { passive: true });
+
+            window.addEventListener('popstate', function() {
+              scheduleCheck(250);
+            }, { passive: true });
+
+            window.addEventListener('hashchange', function() {
+              scheduleCheck(250);
+            }, { passive: true });
+
+            try {
+              var obs = new MutationObserver(function() {
+                scheduleCheck(380);
+              });
+              obs.observe(document.documentElement || document.body, {
+                childList: true,
+                subtree: true
+              });
+            } catch(e) {}
+          }
+        })();
+      ''');
+    } catch (e) {
+      debugPrint('Contextual page detector script error: $e');
+    }
+  }
+
+  Future<void> _executeContextualPrimaryAction(
+    WebPageDetectedContext ctx,
+  ) async {
+    switch (ctx.type) {
+      case WebPageContextType.textSelection:
+        if (ctx.selectedText.isEmpty) {
+          _toggleSplitAiOverlay();
+          return;
+        }
+        final activeTitle =
+            _currentNavIndex == 1 ? _myUnpamPageTitle : _pageTitle;
+        final portalName =
+            _currentNavIndex == 1 ? 'MyUnpam (SIAKAD)' : 'Mentari (LMS)';
+        final aiProv = context.read<AiProvider>();
+        aiProv.setSelectedCourse(activeTitle);
+        setState(() {
+          _isSplitAiOpen = true;
+          _isSplitAiMinimized = false;
+        });
+        await aiProv.sendMessage(
+          'Saya sedang membaca halaman $portalName "$activeTitle" dan menyoroti teks berikut:\n"""\n${ctx.selectedText}\n"""\nTolong jelaskan maksud teks/soal ini secara ringkas dan akurat.',
+          availableCourses: [activeTitle],
+        );
+        break;
+      case WebPageContextType.quiz:
+        await _handleLiveQuizSolver();
+        break;
+      case WebPageContextType.questionnaire:
+        await _handleQuestionnaireAutoFill();
+        break;
+      case WebPageContextType.forum:
+        await _handleForumAutoDraft();
+        break;
+      case WebPageContextType.document:
+        if (ctx.documentUrl == '__DOM_CLICK_DOC_BTN__') {
+          try {
+            await _activeController.runJavaScript(r'''
+              (function() {
+                var btn = document.querySelector('[data-unpam-quick-doc-btn="1"]');
+                if (btn) {
+                  btn.click();
+                }
+              })();
+            ''');
+          } catch (e) {
+            debugPrint('Error clicking DOM doc button: $e');
+          }
+        } else if (ctx.documentUrl.isNotEmpty) {
+          await _handleAcademicFileDownload(
+            ctx.documentUrl,
+            customName: ctx.label.isNotEmpty ? ctx.label : null,
+          );
+        } else {
+          await _consultWithAi(openInSplitScreen: true);
+        }
+        break;
+      case WebPageContextType.academicScheduleOrGrades:
+        await _consultWithAi(openInSplitScreen: true);
+        break;
+      case WebPageContextType.none:
+        _showAiPowerToolsMenu();
+        break;
+    }
+  }
+
+  VoidCallback? _getContextualSecondaryAction(WebPageDetectedContext ctx) {
+    switch (ctx.type) {
+      case WebPageContextType.textSelection:
+        return () {
+          final activeTitle =
+              _currentNavIndex == 1 ? _myUnpamPageTitle : _pageTitle;
+          Navigator.push(
+            context,
+            MaterialPageRoute(
+              builder: (_) => AiParaphraseScreen(
+                initialText: ctx.selectedText,
+                courseName: activeTitle,
+              ),
+            ),
+          );
+        };
+      case WebPageContextType.document:
+        return () => _consultWithAi(openInSplitScreen: true);
+      case WebPageContextType.quiz:
+      case WebPageContextType.forum:
+        return _toggleSplitAiOverlay;
+      case WebPageContextType.questionnaire:
+      case WebPageContextType.academicScheduleOrGrades:
+      case WebPageContextType.none:
+        return null;
+    }
+  }
+
+  String? _getContextualSecondaryLabel(WebPageDetectedContext ctx) {
+    switch (ctx.type) {
+      case WebPageContextType.textSelection:
+        return 'Parafrase';
+      case WebPageContextType.document:
+        return 'Rangkum AI';
+      case WebPageContextType.quiz:
+      case WebPageContextType.forum:
+        return _isSplitAiOpen && !_isSplitAiMinimized ? 'Tutup Split' : 'Split AI';
+      case WebPageContextType.questionnaire:
+      case WebPageContextType.academicScheduleOrGrades:
+      case WebPageContextType.none:
+        return null;
+    }
+  }
+
+  IconData? _getContextualSecondaryIcon(WebPageDetectedContext ctx) {
+    switch (ctx.type) {
+      case WebPageContextType.textSelection:
+        return Icons.auto_fix_high_rounded;
+      case WebPageContextType.document:
+        return Icons.summarize_rounded;
+      case WebPageContextType.quiz:
+      case WebPageContextType.forum:
+        return Icons.vertical_split_rounded;
+      case WebPageContextType.questionnaire:
+      case WebPageContextType.academicScheduleOrGrades:
+      case WebPageContextType.none:
+        return null;
+    }
+  }
+
+  Widget _buildMinimizedSplitAiPill() {
+    return Consumer<AiProvider>(
+      builder: (context, aiProv, _) {
+        return Positioned(
+          left: 12,
+          right: 12,
+          bottom: 10,
+          child: Material(
+            elevation: 8,
+            borderRadius: BorderRadius.circular(24),
+            color: AppTheme.primaryBlue,
+            shadowColor: AppTheme.primaryBlue.withOpacity(0.45),
+            child: InkWell(
+              borderRadius: BorderRadius.circular(24),
+              onTap: () {
+                HapticFeedback.selectionClick();
+                setState(() => _isSplitAiMinimized = false);
+              },
+              child: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 9),
+                decoration: BoxDecoration(
+                  borderRadius: BorderRadius.circular(24),
+                  border: Border.all(
+                    color: AppTheme.accentGold.withOpacity(0.75),
+                    width: 1.2,
+                  ),
+                ),
+                child: Row(
+                  children: [
+                    if (aiProv.isLoading)
+                      const SizedBox(
+                        width: 16,
+                        height: 16,
+                        child: CircularProgressIndicator(
+                          strokeWidth: 2,
+                          color: AppTheme.accentGold,
+                        ),
+                      )
+                    else
+                      const Icon(
+                        Icons.vertical_split_rounded,
+                        color: AppTheme.accentGold,
+                        size: 18,
+                      ),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: Text(
+                        aiProv.isLoading
+                            ? 'The PAMs AI sedang menyusun jawaban... (Ketuk untuk buka)'
+                            : 'Split-Screen AI Disembunyikan • Ketuk untuk buka kembali',
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontSize: 12,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                    ),
+                    IconButton(
+                      visualDensity: VisualDensity.compact,
+                      padding: const EdgeInsets.all(4),
+                      constraints: const BoxConstraints(),
+                      tooltip: 'Menu AI Power Tools',
+                      icon: const Icon(
+                        Icons.bolt_rounded,
+                        color: AppTheme.accentGold,
+                        size: 18,
+                      ),
+                      onPressed: _showAiPowerToolsMenu,
+                    ),
+                    const SizedBox(width: 4),
+                    IconButton(
+                      visualDensity: VisualDensity.compact,
+                      padding: const EdgeInsets.all(4),
+                      constraints: const BoxConstraints(),
+                      tooltip: 'Tutup Split-Screen AI',
+                      icon: const Icon(
+                        Icons.close_rounded,
+                        color: Colors.white70,
+                        size: 17,
+                      ),
+                      onPressed: () {
+                        setState(() {
+                          _isSplitAiOpen = false;
+                          _isSplitAiMinimized = false;
+                        });
+                      },
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+        );
+      },
     );
   }
 
@@ -4287,7 +5014,8 @@ class _PortalWebViewScreenState extends State<PortalWebViewScreen> with WidgetsB
         backgroundColor: Colors.white,
         appBar: _buildTopAppBar(),
         body: Column(
-          children: [            // Progress Bar saat loading halaman
+          children: [
+            // Progress Bar saat loading halaman
             if ((_currentNavIndex == 0 && _isLoading) || (_currentNavIndex == 1 && _isMyUnpamLoading))
               TweenAnimationBuilder<double>(
                 duration: const Duration(milliseconds: 180),
@@ -4306,227 +5034,266 @@ class _PortalWebViewScreenState extends State<PortalWebViewScreen> with WidgetsB
                 ),
               ),
 
-
-
-            // Konten Utama: WebView atau Error Fallback & Draggable AI Button
+            // Konten Utama: WebView + Split-Screen / Floating Mini AI Overlay
             Expanded(
               child: LayoutBuilder(
                 builder: (context, constraints) {
-                  const double buttonWidth = 195.0;
-                  const double buttonHeight = 44.0;
+                  final activeContext = _activeDetectedContext;
+                  final double estimatedWidth =
+                      activeContext.hasActiveContext ? 292.0 : 228.0;
+                  const double buttonHeight = 50.0;
                   final double maxW = constraints.maxWidth;
                   final double maxH = constraints.maxHeight;
 
                   _fabOffset ??= Offset(
-                    (maxW - buttonWidth - 16.0).clamp(8.0, maxW),
+                    (maxW - estimatedWidth - 14.0).clamp(8.0, maxW),
                     (maxH - buttonHeight - 16.0).clamp(8.0, maxH),
                   );
 
-                  final safeX = _fabOffset!.dx.clamp(8.0, (maxW - buttonWidth - 8.0).clamp(8.0, maxW));
-                  final safeY = _fabOffset!.dy.clamp(8.0, (maxH - buttonHeight - 8.0).clamp(8.0, maxH));
+                  final safeX = _fabOffset!.dx.clamp(
+                    8.0,
+                    (maxW - estimatedWidth - 8.0).clamp(8.0, maxW),
+                  );
+                  final safeY = _fabOffset!.dy.clamp(
+                    8.0,
+                    (maxH - buttonHeight - 8.0).clamp(8.0, maxH),
+                  );
+
+                  final bool showDockedSplitAi = _isSplitAiOpen && !_isSplitAiMinimized;
+                  final double minTopWebViewHeight = maxH < 340 ? maxH * 0.25 : 115.0;
+                  final double maxAllowedPanelHeight =
+                      (maxH - minTopWebViewHeight).clamp(150.0, maxH);
+                  final double minAllowedPanelHeight =
+                      maxAllowedPanelHeight < 210.0 ? maxAllowedPanelHeight : 210.0;
+                  final double effectiveSplitHeight =
+                      (maxH * _splitAiRatio).clamp(minAllowedPanelHeight, maxAllowedPanelHeight);
 
                   return Stack(
                     children: [
-                      // Konten Utama: IndexedStack 2 Portal (Mentari & MyUnpam)
-                      IndexedStack(
-                        index: _currentNavIndex == 1 ? 1 : 0,
+                      Column(
                         children: [
-                          // Tab 0: Mentari
-                          Listener(
-                            behavior: HitTestBehavior.translucent,
-                            onPointerDown: _onPointerDown,
-                            onPointerMove: _onPointerMove,
-                            onPointerUp: _onPointerUp,
-                            onPointerCancel: _onPointerCancel,
-                            child: WebViewWidget(controller: _controller),
-                          ),
-                          // Tab 1: MyUnpam
-                          _myUnpamController != null
-                              ? Listener(
-                                  behavior: HitTestBehavior.translucent,
-                                  onPointerDown: _onPointerDown,
-                                  onPointerMove: _onPointerMove,
-                                  onPointerUp: _onPointerUp,
-                                  onPointerCancel: _onPointerCancel,
-                                  child: WebViewWidget(controller: _myUnpamController!),
-                                )
-                              : const Center(
-                                  child: CircularProgressIndicator(color: AppTheme.primaryBlue),
-                                ),
-                        ],
-                      ),
-
-                      // Floating Pull-to-Refresh Indicator
-                      _buildPullToRefreshIndicator(),
-
-                      // Tampilan Offline / Gagal Muat (Dapat juga di-pull untuk refresh)
-                      if ((_currentNavIndex == 0 && _hasError) || (_currentNavIndex == 1 && _myUnpamHasError))
-                        Container(
-                          color: Colors.white,
-                          width: double.infinity,
-                          height: double.infinity,
-                          child: RefreshIndicator(
-                            onRefresh: _startRefresh,
-                            color: AppTheme.primaryBlue,
-                            child: ListView(
-                              physics: const AlwaysScrollableScrollPhysics(),
-                              padding: const EdgeInsets.all(28),
+                          // Bagian Atas: Portal WebView (Mentari & MyUnpam)
+                          Expanded(
+                            child: Stack(
                               children: [
-                                SizedBox(height: maxH * 0.15),
-                                Container(
-                                  padding: const EdgeInsets.all(20),
-                                  decoration: BoxDecoration(
-                                    color: Colors.red.shade50,
-                                    shape: BoxShape.circle,
-                                  ),
-                                  child: Icon(Icons.wifi_off_rounded, size: 52, color: Colors.red.shade400),
-                                ),
-                                const SizedBox(height: 18),
-                                Text(
-                                  _currentNavIndex == 1 ? 'Gagal Memuat MyUnpam' : 'Gagal Memuat Mentari',
-                                  textAlign: TextAlign.center,
-                                  style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: AppTheme.textDark),
-                                ),
-                                const SizedBox(height: 8),
-                                Text(
-                                  (_currentNavIndex == 1 ? _myUnpamErrorMessage : _errorMessage).isNotEmpty
-                                      ? (_currentNavIndex == 1 ? _myUnpamErrorMessage : _errorMessage)
-                                      : 'Periksa koneksi internet Anda atau coba muat ulang.',
-                                  textAlign: TextAlign.center,
-                                  style: const TextStyle(fontSize: 13, color: AppTheme.textMuted),
-                                ),
-                                const SizedBox(height: 24),
-                                Wrap(
-                                  spacing: 12,
-                                  runSpacing: 10,
-                                  alignment: WrapAlignment.center,
+                                IndexedStack(
+                                  index: _currentNavIndex == 1 ? 1 : 0,
                                   children: [
-                                    ElevatedButton.icon(
-                                      onPressed: () {
-                                        setState(() {
-                                          if (_currentNavIndex == 1) {
-                                            _myUnpamHasError = false;
-                                          } else {
-                                            _hasError = false;
-                                          }
-                                        });
-                                        _startRefresh();
-                                      },
-                                      icon: const Icon(Icons.refresh_rounded, size: 18),
-                                      label: const Text('Muat Ulang'),
-                                      style: ElevatedButton.styleFrom(
-                                        backgroundColor: AppTheme.primaryBlue,
-                                        foregroundColor: Colors.white,
-                                        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
-                                      ),
+                                    // Tab 0: Mentari
+                                    Listener(
+                                      behavior: HitTestBehavior.translucent,
+                                      onPointerDown: _onPointerDown,
+                                      onPointerMove: _onPointerMove,
+                                      onPointerUp: _onPointerUp,
+                                      onPointerCancel: _onPointerCancel,
+                                      child: WebViewWidget(controller: _controller),
                                     ),
-                                    OutlinedButton.icon(
-                                      onPressed: () => _resetMentariSession(),
-                                      icon: const Icon(Icons.cleaning_services_rounded, size: 18),
-                                      label: const Text('Reset Sesi & Cache'),
-                                    ),
-                                    OutlinedButton.icon(
-                                      onPressed: () {
-                                        if (_currentNavIndex == 1) {
-                                          _myUnpamController?.loadRequest(Uri.parse(myUnpamUrl));
-                                        } else {
-                                          _navigateToUrl(mentariUrl);
-                                        }
-                                      },
-                                      icon: const Icon(Icons.home_rounded, size: 18),
-                                      label: Text(_currentNavIndex == 1 ? 'Ke Beranda MyUnpam' : 'Ke Beranda Mentari'),
-                                    ),
+                                    // Tab 1: MyUnpam
+                                    _myUnpamController != null
+                                        ? Listener(
+                                            behavior: HitTestBehavior.translucent,
+                                            onPointerDown: _onPointerDown,
+                                            onPointerMove: _onPointerMove,
+                                            onPointerUp: _onPointerUp,
+                                            onPointerCancel: _onPointerCancel,
+                                            child: WebViewWidget(controller: _myUnpamController!),
+                                          )
+                                        : const Center(
+                                            child: CircularProgressIndicator(color: AppTheme.primaryBlue),
+                                          ),
                                   ],
                                 ),
+
+                                // Floating Pull-to-Refresh Indicator
+                                _buildPullToRefreshIndicator(),
+
+                                // Tampilan Offline / Gagal Muat
+                                if ((_currentNavIndex == 0 && _hasError) || (_currentNavIndex == 1 && _myUnpamHasError))
+                                  Container(
+                                    color: Colors.white,
+                                    width: double.infinity,
+                                    height: double.infinity,
+                                    child: RefreshIndicator(
+                                      onRefresh: _startRefresh,
+                                      color: AppTheme.primaryBlue,
+                                      child: ListView(
+                                        physics: const AlwaysScrollableScrollPhysics(),
+                                        padding: const EdgeInsets.all(28),
+                                        children: [
+                                          SizedBox(height: maxH * 0.08),
+                                          Container(
+                                            padding: const EdgeInsets.all(20),
+                                            decoration: BoxDecoration(
+                                              color: Colors.red.shade50,
+                                              shape: BoxShape.circle,
+                                            ),
+                                            child: Icon(Icons.wifi_off_rounded, size: 52, color: Colors.red.shade400),
+                                          ),
+                                          const SizedBox(height: 18),
+                                          Text(
+                                            _currentNavIndex == 1 ? 'Gagal Memuat MyUnpam' : 'Gagal Memuat Mentari',
+                                            textAlign: TextAlign.center,
+                                            style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: AppTheme.textDark),
+                                          ),
+                                          const SizedBox(height: 8),
+                                          Text(
+                                            (_currentNavIndex == 1 ? _myUnpamErrorMessage : _errorMessage).isNotEmpty
+                                                ? (_currentNavIndex == 1 ? _myUnpamErrorMessage : _errorMessage)
+                                                : 'Periksa koneksi internet Anda atau coba muat ulang.',
+                                            textAlign: TextAlign.center,
+                                            style: const TextStyle(fontSize: 13, color: AppTheme.textMuted),
+                                          ),
+                                          const SizedBox(height: 24),
+                                          Wrap(
+                                            spacing: 12,
+                                            runSpacing: 10,
+                                            alignment: WrapAlignment.center,
+                                            children: [
+                                              ElevatedButton.icon(
+                                                onPressed: () {
+                                                  setState(() {
+                                                    if (_currentNavIndex == 1) {
+                                                      _myUnpamHasError = false;
+                                                    } else {
+                                                      _hasError = false;
+                                                    }
+                                                  });
+                                                  _startRefresh();
+                                                },
+                                                icon: const Icon(Icons.refresh_rounded, size: 18),
+                                                label: const Text('Muat Ulang'),
+                                                style: ElevatedButton.styleFrom(
+                                                  backgroundColor: AppTheme.primaryBlue,
+                                                  foregroundColor: Colors.white,
+                                                  padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+                                                ),
+                                              ),
+                                              OutlinedButton.icon(
+                                                onPressed: () => _resetMentariSession(),
+                                                icon: const Icon(Icons.cleaning_services_rounded, size: 18),
+                                                label: const Text('Reset Sesi & Cache'),
+                                              ),
+                                              OutlinedButton.icon(
+                                                onPressed: () {
+                                                  if (_currentNavIndex == 1) {
+                                                    _myUnpamController?.loadRequest(Uri.parse(myUnpamUrl));
+                                                  } else {
+                                                    _navigateToUrl(mentariUrl);
+                                                  }
+                                                },
+                                                icon: const Icon(Icons.home_rounded, size: 18),
+                                                label: Text(_currentNavIndex == 1 ? 'Ke Beranda MyUnpam' : 'Ke Beranda Mentari'),
+                                              ),
+                                            ],
+                                          ),
+                                        ],
+                                      ),
+                                    ),
+                                  ),
+
+                                // Banner Pemulihan jika terdeteksi Layar Putih / SPA Blank
+                                if (_currentNavIndex == 0 && _isWhiteScreenDetected && !_hasError && !_isLoading)
+                                  _buildWhiteScreenRecoveryBanner(),
                               ],
                             ),
                           ),
-                        ),
 
-                      // Banner Pemulihan jika terdeteksi Layar Putih / SPA Blank
-                      if (_currentNavIndex == 0 && _isWhiteScreenDetected && !_hasError && !_isLoading)
-                        _buildWhiteScreenRecoveryBanner(),
-
-
-                      // Tombol Mengambang AI Tools (Dapat Digeser Bebas ke Mana Saja)
-                      Positioned(
-                        left: safeX,
-                        top: safeY,
-                        child: GestureDetector(
-                          onPanStart: (_) {
-                            setState(() => _isDraggingFab = true);
-                          },
-                          onPanUpdate: (details) {
-                            setState(() {
-                              final nextX = (_fabOffset!.dx + details.delta.dx)
-                                  .clamp(8.0, (maxW - buttonWidth - 8.0).clamp(8.0, maxW));
-                              final nextY = (_fabOffset!.dy + details.delta.dy)
-                                  .clamp(8.0, (maxH - buttonHeight - 8.0).clamp(8.0, maxH));
-                              _fabOffset = Offset(nextX, nextY);
-                            });
-                          },
-                          onPanEnd: (_) {
-                            setState(() => _isDraggingFab = false);
-                          },
-                          onPanCancel: () {
-                            setState(() => _isDraggingFab = false);
-                          },
-                          onTap: _showAiPowerToolsMenu,
-                          child: AnimatedScale(
-                            scale: _isDraggingFab ? 1.05 : 1.0,
-                            duration: const Duration(milliseconds: 150),
-                            child: Material(
-                              elevation: _isDraggingFab ? 10 : 4,
-                              borderRadius: BorderRadius.circular(24),
-                              shadowColor: AppTheme.primaryBlue.withOpacity(0.5),
-                              color: AppTheme.primaryBlue,
-                              child: Container(
-                                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 11),
-                                decoration: BoxDecoration(
-                                  borderRadius: BorderRadius.circular(24),
-                                  border: Border.all(
-                                    color: _isDraggingFab
-                                        ? AppTheme.accentGold
-                                        : AppTheme.accentGold.withOpacity(0.5),
-                                    width: _isDraggingFab ? 1.5 : 1.0,
-                                  ),
-                                ),
-                                child: Row(
-                                  mainAxisSize: MainAxisSize.min,
-                                  children: [
-                                    Icon(
-                                      Icons.drag_indicator_rounded,
-                                      size: 16,
-                                      color: Colors.white.withOpacity(0.7),
-                                    ),
-                                    const SizedBox(width: 4),
-                                    const Icon(
-                                      Icons.auto_awesome,
-                                      color: AppTheme.accentGold,
-                                      size: 18,
-                                    ),
-                                    const SizedBox(width: 8),
-                                    const Text(
-                                      'The PAMs AI Tools',
-                                      style: TextStyle(
-                                        color: Colors.white,
-                                        fontWeight: FontWeight.bold,
-                                        fontSize: 13,
-                                      ),
-                                    ),
-                                    const SizedBox(width: 4),
-                                    Icon(
-                                      Icons.keyboard_arrow_up_rounded,
-                                      color: Colors.white.withOpacity(0.8),
-                                      size: 18,
-                                    ),
-                                  ],
-                                ),
+                          // Bagian Bawah: Split-Screen / Mini AI Overlay Panel
+                          if (showDockedSplitAi)
+                            SizedBox(
+                              height: effectiveSplitHeight,
+                              width: double.infinity,
+                              child: MiniAiOverlayPanel(
+                                activePortalName:
+                                    _currentNavIndex == 1 ? 'MyUnpam' : 'Mentari',
+                                activePageTitle:
+                                    _currentNavIndex == 1 ? _myUnpamPageTitle : _pageTitle,
+                                detectedContext: activeContext,
+                                onContextualPrimaryAction: () =>
+                                    _executeContextualPrimaryAction(activeContext),
+                                onContextualSecondaryAction:
+                                    _getContextualSecondaryAction(activeContext),
+                                contextualSecondaryLabel:
+                                    _getContextualSecondaryLabel(activeContext),
+                                onClose: () {
+                                  setState(() {
+                                    _isSplitAiOpen = false;
+                                    _isSplitAiMinimized = false;
+                                  });
+                                },
+                                onMinimize: () {
+                                  setState(() => _isSplitAiMinimized = true);
+                                },
+                                onExpandFullScreen: () {
+                                  _openFullScreenAiAssistant();
+                                },
+                                onOpenPowerTools: _showAiPowerToolsMenu,
+                                onExtractCurrentPage: () =>
+                                    _consultWithAi(openInSplitScreen: true),
+                                onExtractSelectedText:
+                                    _extractSelectedTextFromActiveWebView,
+                                onInjectToWebView: _injectForumReply,
+                                onDragResizeDelta: (deltaY) {
+                                  if (maxH <= 0) return;
+                                  setState(() {
+                                    final nextRatio =
+                                        _splitAiRatio - (deltaY / maxH);
+                                    _splitAiRatio = nextRatio.clamp(0.28, 0.78);
+                                  });
+                                },
+                                onCycleHeightPreset: _cycleSplitAiHeightPreset,
                               ),
+                            ),
+                        ],
+                      ),
+
+                      // Pill Mengambang saat Split-Screen AI diperkecil (Minimized)
+                      if (_isSplitAiOpen && _isSplitAiMinimized)
+                        _buildMinimizedSplitAiPill(),
+
+                      // In-Page Quick Action Floating Pill (Deteksi Kontekstual Otomatis Halaman WebView)
+                      if (!_isSplitAiOpen)
+                        Positioned(
+                          left: safeX,
+                          top: safeY,
+                          child: ConstrainedBox(
+                            constraints: BoxConstraints(
+                              maxWidth: (maxW - 16.0).clamp(180.0, maxW),
+                            ),
+                            child: InPageQuickActionPill(
+                              detectedContext: activeContext,
+                              isDragging: _isDraggingFab,
+                              onPanStart: (_) {
+                                setState(() => _isDraggingFab = true);
+                              },
+                              onPanUpdate: (details) {
+                                setState(() {
+                                  final nextX = (_fabOffset!.dx + details.delta.dx)
+                                      .clamp(8.0, (maxW - estimatedWidth - 8.0).clamp(8.0, maxW));
+                                  final nextY = (_fabOffset!.dy + details.delta.dy)
+                                      .clamp(8.0, (maxH - buttonHeight - 8.0).clamp(8.0, maxH));
+                                  _fabOffset = Offset(nextX, nextY);
+                                });
+                              },
+                              onPanEnd: (_) {
+                                setState(() => _isDraggingFab = false);
+                              },
+                              onPanCancel: () {
+                                setState(() => _isDraggingFab = false);
+                              },
+                              onPrimaryAction: () =>
+                                  _executeContextualPrimaryAction(activeContext),
+                              onSecondaryAction:
+                                  _getContextualSecondaryAction(activeContext),
+                              secondaryActionLabel:
+                                  _getContextualSecondaryLabel(activeContext),
+                              secondaryActionIcon:
+                                  _getContextualSecondaryIcon(activeContext),
+                              onOpenAllTools: _showAiPowerToolsMenu,
+                              onOpenSplitScreen: _toggleSplitAiOverlay,
                             ),
                           ),
                         ),
-                      ),
                     ],
                   );
                 },
@@ -4605,6 +5372,19 @@ class _PortalWebViewScreenState extends State<PortalWebViewScreen> with WidgetsB
       ),
       actions: [
         IconButton(
+          tooltip: _isSplitAiOpen && !_isSplitAiMinimized
+              ? 'Tutup Split-Screen AI'
+              : 'Split-Screen AI (Konsultasi Tanpa Keluar Halaman)',
+          icon: Icon(
+            Icons.vertical_split_rounded,
+            color: (_isSplitAiOpen && !_isSplitAiMinimized)
+                ? AppTheme.accentGold
+                : Colors.white,
+            size: 21,
+          ),
+          onPressed: _toggleSplitAiOverlay,
+        ),
+        IconButton(
           tooltip: 'Muat Ulang Halaman',
           icon: _isRefreshing
               ? const SizedBox(
@@ -4631,7 +5411,9 @@ class _PortalWebViewScreenState extends State<PortalWebViewScreen> with WidgetsB
         PopupMenuButton<String>(
           icon: const Icon(Icons.more_vert_rounded, color: Colors.white, size: 20),
           onSelected: (val) {
-            if (val == 'refresh') {
+            if (val == 'split_ai') {
+              _toggleSplitAiOverlay();
+            } else if (val == 'refresh') {
               _startRefresh();
             } else if (val == 'mentari') {
               setState(() => _currentNavIndex = 0);
@@ -4649,6 +5431,17 @@ class _PortalWebViewScreenState extends State<PortalWebViewScreen> with WidgetsB
             }
           },
           itemBuilder: (ctx) => [
+            PopupMenuItem(
+              value: 'split_ai',
+              child: Row(
+                children: [
+                  const Icon(Icons.vertical_split_rounded, size: 18, color: AppTheme.accentGold),
+                  const SizedBox(width: 10),
+                  Text(_isSplitAiOpen && !_isSplitAiMinimized ? 'Tutup Split-Screen AI' : 'Buka Split-Screen AI'),
+                ],
+              ),
+            ),
+            const PopupMenuDivider(),
             const PopupMenuItem(
               value: 'refresh',
               child: Row(
@@ -4729,17 +5522,18 @@ class _PortalWebViewScreenState extends State<PortalWebViewScreen> with WidgetsB
           setState(() => _currentNavIndex = 0);
           _updateHistoryState();
           _detectLoginForm();
+          _injectContextualPageDetectorScript(_controller);
         } else if (idx == 1) {
           _ensureMyUnpamControllerInitialized();
           setState(() => _currentNavIndex = 1);
           _updateHistoryState();
           _detectLoginForm();
+          if (_myUnpamController != null) {
+            _injectContextualPageDetectorScript(_myUnpamController!);
+          }
         } else if (idx == 2) {
           final previousTab = _currentNavIndex;
-          await Navigator.push(
-            context,
-            MaterialPageRoute(builder: (_) => const AiAssistantScreen()),
-          );
+          await _openFullScreenAiAssistant();
           if (mounted) {
             setState(() => _currentNavIndex = previousTab);
             _updateHistoryState();

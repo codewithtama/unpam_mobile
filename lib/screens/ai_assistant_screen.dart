@@ -232,6 +232,17 @@ class _AiAssistantScreenState extends State<AiAssistantScreen> {
         ),
         actions: [
           IconButton(
+            tooltip: 'Mode Split-Screen (Konsultasi Sambil Lihat Portal)',
+            icon: const Icon(
+              Icons.vertical_split_rounded,
+              color: AppTheme.accentGold,
+              size: 21,
+            ),
+            onPressed: () {
+              Navigator.pop(context, 'open_split_screen');
+            },
+          ),
+          IconButton(
             tooltip: 'Ganti Model AI & Kunci API',
             icon: const Icon(
               Icons.tune_rounded,
