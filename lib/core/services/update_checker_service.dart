@@ -110,7 +110,7 @@ class UpdateCheckerService {
               final titleMatch = RegExp(r'<entry>[\s\S]*?<title>(.*?)</title>').firstMatch(content);
               final releaseTitle = titleMatch?.group(1)?.trim() ?? 'Pembaruan The PAMs $tagName';
               final hasUpdate = AppUpdateInfo.isNewerVersion(tagName, currentVersion);
-              final apkUrl = 'https://github.com/$_repoOwner/$_repoName/releases/download/$tagName/app-release.apk';
+              final apkUrl = 'https://github.com/$_repoOwner/$_repoName/releases/download/$tagName/app-arm64-v8a-release.apk';
 
               return AppUpdateInfo(
                 currentVersion: currentVersion,

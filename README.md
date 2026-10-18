@@ -250,24 +250,20 @@ Aplikasi menggunakan skema penandatanganan ganda (**APK Signature Scheme v1 JAR 
 ### Kompilasi Lokal
 
 ```bash
-# 1. Kompilasi APK Split-per-ABI (~16MB - 20MB per arsitektur CPU)
+# Kompilasi APK Split-per-ABI (~16MB - 20MB per arsitektur CPU)
 flutter build apk --release --split-per-abi --obfuscate --split-debug-info=build/app/outputs/symbols
-
-# 2. Kompilasi APK Universal Fat (~55MB)
-flutter build apk --release --obfuscate --split-debug-info=build/app/outputs/symbols
 ```
 
 Berkas APK hasil kompilasi berlokasi di:
-* `build/app/outputs/flutter-apk/app-arm64-v8a-release.apk`
-* `build/app/outputs/flutter-apk/app-armeabi-v7a-release.apk`
-* `build/app/outputs/flutter-apk/app-x86_64-release.apk`
-* `build/app/outputs/flutter-apk/app-release.apk` (Universal)
+* `build/app/outputs/flutter-apk/app-arm64-v8a-release.apk` (HP Android Modern 64-bit)
+* `build/app/outputs/flutter-apk/app-armeabi-v7a-release.apk` (HP Android 32-bit)
+* `build/app/outputs/flutter-apk/app-x86_64-release.apk` (Emulator Android)
 
 ### CI/CD Otomatis via GitHub Actions
 Setiap kali tag rilis di-push ke repositori GitHub (contoh: `git tag v1.0.25 && git push origin refs/tags/v1.0.25`), workflow `.github/workflows/release-apk.yml` akan secara otomatis:
 1. Memverifikasi kode sumber dan mengunduh seluruh dependensi.
 2. Mengonfigurasi keystore rilis bertandatangan resmi.
-3. Mengompilasi seluruh varian APK (*Split-per-ABI* dan *Universal*) dengan proteksi kode `--obfuscate`.
+3. Mengompilasi varian APK ringan *Split-per-ABI* dengan proteksi kode `--obfuscate`.
 4. Menerbitkan rilis baru di GitHub Releases dengan menyertakan changelog dari `RELEASE_NOTES.md` beserta seluruh berkas APK yang siap diunduh oleh pengguna.
 
 ---

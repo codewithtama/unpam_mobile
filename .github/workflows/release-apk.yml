@@ -54,15 +54,12 @@ jobs:
           echo "keyAlias=unpam_release_key" >> android/key.properties
           echo "storeFile=upload-keystore.jks" >> android/key.properties
 
-      - name: Kompilasi Release APK (Split Per ABI + Universal)
+      - name: Kompilasi Release APK (Split Per ABI)
         run: |
           mkdir -p build/dist-apks
-          # 1. Kompilasi APK Split-per-ABI (~16MB - 20MB per arsitektur)
+          # Kompilasi APK Split-per-ABI (~16MB - 20MB per arsitektur CPU)
           flutter build apk --release --split-per-abi --obfuscate --split-debug-info=build/app/outputs/symbols
           cp build/app/outputs/flutter-apk/*.apk build/dist-apks/
-          # 2. Kompilasi Universal Fat APK cadangan (~55MB)
-          flutter build apk --release --obfuscate --split-debug-info=build/app/outputs/symbols
-          cp build/app/outputs/flutter-apk/app-release.apk build/dist-apks/
 
       - name: Buat GitHub Release & Unggah APK
         uses: softprops/action-gh-release@v2
