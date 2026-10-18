@@ -12,6 +12,8 @@
   - Floating pill kontekstual yang dapat digeser bebas (*draggable*) dengan aksi cepat terpersonalisasi (misal: "Bahas Diskusi", "Bedah Soal Kuis", "Analisis Tugas", "Rangkum Materi").
 - **Injeksi Jawaban & Draf Diskusi ke LMS**:
   - Tombol otomatisasi untuk menginjeksi atau menyalin draf argumen diskusi hasil analisis AI langsung ke dalam kolom formulir balasan forum di Mentari LMS.
+- **Pengunduhan Pembaruan Resumable & Toleran Layar Mati (Screen-Off)**:
+  - Mengatasi kegagalan unduhan pembaruan saat layar ponsel mati/tidur (sleep) menggunakan mekanisme HTTP Range Request (HTTP 206 Partial Content), auto-reconnect backoff bergradasi (hingga 10 kali percobaan tanpa mengulang dari 0%), notifikasi progress unduhan di status bar Android, serta izin sistem WAKE_LOCK.
 - **Pengujian & Kualitas**:
   - Seluruh 24 pengujian otomatis unit & widget tests lulus 100%.
   - Bebas dari error atau peringatan analisis (*0 issues*).

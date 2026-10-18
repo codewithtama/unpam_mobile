@@ -42,6 +42,7 @@ class _UpdateDialogState extends State<UpdateDialog> {
   int _receivedBytes = 0;
   int _totalBytes = 0;
   String? _errorMessage;
+  String? _statusMessage;
   bool _downloadFinished = false;
   CancelToken? _cancelToken;
 
@@ -55,6 +56,7 @@ class _UpdateDialogState extends State<UpdateDialog> {
     setState(() {
       _isDownloading = true;
       _errorMessage = null;
+      _statusMessage = null;
       _progress = 0.0;
       _cancelToken = CancelToken();
     });
@@ -69,6 +71,14 @@ class _UpdateDialogState extends State<UpdateDialog> {
               _receivedBytes = received;
               _totalBytes = total;
               _progress = (received / total).clamp(0.0, 1.0);
+              _statusMessage = null;
+            });
+          }
+        },
+        onStatusChanged: (status) {
+          if (mounted) {
+            setState(() {
+              _statusMessage = status;
             });
           }
         },
@@ -275,6 +285,29 @@ class _UpdateDialogState extends State<UpdateDialog> {
                     ),
                 ],
               ),
+              if (_statusMessage != null) ...[
+                const SizedBox(height: 6),
+                Row(
+                  children: [
+                    const SizedBox(
+                      width: 12,
+                      height: 12,
+                      child: CircularProgressIndicator(strokeWidth: 2, color: AppTheme.accentGold),
+                    ),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Text(
+                        _statusMessage!,
+                        style: const TextStyle(
+                          fontSize: 11,
+                          color: AppTheme.accentGold,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ],
             ],
 
             if (_errorMessage != null) ...[

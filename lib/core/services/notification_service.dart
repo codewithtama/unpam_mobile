@@ -19,6 +19,14 @@ class NotificationService {
   static const String _channelName = 'Pembaruan Aplikasi The PAMs';
   static const String _channelDesc = 'Pemberitahuan ketika versi baru aplikasi The PAMs tersedia.';
 
+  static const String _downloadChannelId = 'the_pams_download_progress_channel';
+  static const String _downloadChannelName = 'Status Pengunduhan Pembaruan';
+  static const String _downloadChannelDesc = 'Menampilkan kemajuan pengunduhan pembaruan APK The PAMs';
+  static const int _downloadNotificationId = 1002;
+
+  DateTime _lastNotifUpdateTime = DateTime.fromMillisecondsSinceEpoch(0);
+  int _lastReportedProgress = -1;
+
   Future<void> initialize({void Function(AppUpdateInfo info)? onUpdateTap}) async {
     if (onUpdateTap != null) {
       onUpdateNotificationTap = onUpdateTap;
@@ -74,6 +82,17 @@ class NotificationService {
         showBadge: true,
       );
       await androidPlugin?.createNotificationChannel(channel);
+
+      const downloadChannel = AndroidNotificationChannel(
+        _downloadChannelId,
+        _downloadChannelName,
+        description: _downloadChannelDesc,
+        importance: Importance.low,
+        playSound: false,
+        enableVibration: false,
+        showBadge: false,
+      );
+      await androidPlugin?.createNotificationChannel(downloadChannel);
     }
 
     // Periksa apakah aplikasi dibuka langsung dari ketukan notifikasi saat status terminated
@@ -165,5 +184,70 @@ class NotificationService {
     } catch (e) {
       debugPrint('Failed to show update notification: $e');
     }
+  }
+
+  /// Menampilkan / memperbarui progress notifikasi download APK di status bar Android
+  Future<void> updateDownloadProgress({
+    required int receivedBytes,
+    required int totalBytes,
+    String? title,
+  }) async {
+    try {
+      if (kIsWeb || !Platform.isAndroid) return;
+      if (!_isInitialized) await initialize();
+
+      final now = DateTime.now();
+      final progressPercent = totalBytes > 0
+          ? ((receivedBytes / totalBytes) * 100).toInt().clamp(0, 100)
+          : 0;
+
+      // Throttle notification updates: minimal 400ms sekali atau jika persentase berubah
+      if (now.difference(_lastNotifUpdateTime).inMilliseconds < 400 &&
+          progressPercent == _lastReportedProgress &&
+          progressPercent < 100) {
+        return;
+      }
+
+      _lastNotifUpdateTime = now;
+      _lastReportedProgress = progressPercent;
+
+      final receivedMb = (receivedBytes / (1024 * 1024)).toStringAsFixed(1);
+      final totalMb = totalBytes > 0
+          ? '${(totalBytes / (1024 * 1024)).toStringAsFixed(1)} MB'
+          : '...';
+
+      final androidDetails = AndroidNotificationDetails(
+        _downloadChannelId,
+        _downloadChannelName,
+        channelDescription: _downloadChannelDesc,
+        importance: Importance.low,
+        priority: Priority.low,
+        showWhen: false,
+        ongoing: true,
+        autoCancel: false,
+        onlyAlertOnce: true,
+        showProgress: totalBytes > 0,
+        maxProgress: 100,
+        progress: progressPercent,
+        icon: '@mipmap/ic_launcher',
+      );
+
+      final notificationDetails = NotificationDetails(android: androidDetails);
+
+      await _plugin.show(
+        id: _downloadNotificationId,
+        title: title ?? 'Mengunduh Pembaruan The PAMs ($progressPercent%)',
+        body: '$receivedMb MB / $totalMb',
+        notificationDetails: notificationDetails,
+      );
+    } catch (_) {}
+  }
+
+  /// Menghapus notifikasi progress pengunduhan setelah selesai / dibatalkan
+  Future<void> cancelDownloadNotification() async {
+    try {
+      _lastReportedProgress = -1;
+      await _plugin.cancel(id: _downloadNotificationId);
+    } catch (_) {}
   }
 }

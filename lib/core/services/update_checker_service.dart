@@ -8,6 +8,7 @@ import 'package:path_provider/path_provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../../models/app_update_info.dart';
 import '../../models/github_release.dart';
+import 'notification_service.dart';
 
 class UpdateCheckerService {
   final Dio _dio = Dio();
@@ -133,10 +134,12 @@ class UpdateCheckerService {
     return null;
   }
 
-  /// Mengunduh APK pembaruan dan meluncurkan installer Android
+  /// Mengunduh APK pembaruan dengan fitur resumable (Range request),
+  /// toleransi screen-off (auto-retry & reconnect), dan background notification.
   Future<OpenResult> downloadAndInstallApk({
     required String downloadUrl,
     required void Function(int received, int total) onProgress,
+    void Function(String statusMessage)? onStatusChanged,
     CancelToken? cancelToken,
   }) async {
     Directory? targetDir;
@@ -151,25 +154,197 @@ class UpdateCheckerService {
     targetDir ??= await getApplicationSupportDirectory();
 
     final savePath = '${targetDir.path}/unpam_update.apk';
+    final tempPath = '$savePath.part';
 
-    final file = File(savePath);
-    if (await file.exists()) {
-      await file.delete();
+    final finalFile = File(savePath);
+    final tempFile = File(tempPath);
+
+    // Hapus file final lama jika ada agar tidak konflik
+    if (await finalFile.exists()) {
+      try {
+        await finalFile.delete();
+      } catch (_) {}
     }
 
-    // Mengunduh APK dengan streaming progress & header biner netral
-    await _dio.download(
-      downloadUrl,
-      savePath,
-      cancelToken: cancelToken,
-      onReceiveProgress: onProgress,
-      options: Options(
-        headers: {'Accept': '*/*'},
+    final notifService = NotificationService();
+    const int maxRetries = 10;
+    int retryCount = 0;
+    bool isCompleted = false;
+    int totalBytes = 0;
+
+    // Timeout khusus pengunduhan berkas biner agar tahan saat layar ponsel mati / sleep
+    final downloadDio = Dio(
+      BaseOptions(
+        connectTimeout: const Duration(seconds: 45),
         receiveTimeout: const Duration(minutes: 5),
+        sendTimeout: const Duration(seconds: 45),
+        headers: {
+          'Accept': '*/*',
+          'User-Agent': 'UNPAM-Mobile-App',
+        },
       ),
     );
 
-    if (!await file.exists() || await file.length() == 0) {
+    while (!isCompleted && retryCount < maxRetries) {
+      if (cancelToken?.isCancelled ?? false) {
+        await notifService.cancelDownloadNotification();
+        throw DioException(
+          requestOptions: RequestOptions(path: downloadUrl),
+          type: DioExceptionType.cancel,
+          error: 'Pengunduhan dibatalkan oleh pengguna.',
+        );
+      }
+
+      int existingBytes = 0;
+      if (await tempFile.exists()) {
+        existingBytes = await tempFile.length();
+      }
+
+      // Jika kita sudah mengetahui totalBytes dan existingBytes sudah genap sesuai ukuran, selesai
+      if (totalBytes > 0 && existingBytes >= totalBytes) {
+        isCompleted = true;
+        break;
+      }
+
+      IOSink? sink;
+      try {
+        final Map<String, dynamic> headers = {'Accept': '*/*'};
+        if (existingBytes > 0) {
+          headers['Range'] = 'bytes=$existingBytes-';
+        }
+
+        final response = await downloadDio.get<ResponseBody>(
+          downloadUrl,
+          options: Options(
+            responseType: ResponseType.stream,
+            headers: headers,
+          ),
+          cancelToken: cancelToken,
+        );
+
+        final statusCode = response.statusCode ?? 200;
+        final responseBody = response.data;
+        if (responseBody == null) {
+          throw const SocketException('Stream respon server kosong');
+        }
+
+        // Baca Content-Range atau Content-Length untuk mengetahui ukuran berkas total
+        final contentRange = response.headers.value('content-range');
+        if (contentRange != null && contentRange.contains('/')) {
+          final totalStr = contentRange.split('/').last.trim();
+          final parsed = int.tryParse(totalStr);
+          if (parsed != null && parsed > 0) {
+            totalBytes = parsed;
+          }
+        }
+        if (totalBytes <= 0) {
+          final lenStr = response.headers.value('content-length');
+          if (lenStr != null) {
+            final len = int.tryParse(lenStr) ?? 0;
+            totalBytes = (statusCode == 206) ? (existingBytes + len) : len;
+          }
+        }
+
+        int currentReceived = existingBytes;
+        final activeSink = (statusCode == 206 && existingBytes > 0)
+            ? tempFile.openWrite(mode: FileMode.append)
+            : tempFile.openWrite(mode: FileMode.write);
+        sink = activeSink;
+
+        if (statusCode != 206 || existingBytes <= 0) {
+          existingBytes = 0;
+          currentReceived = 0;
+        }
+
+        onProgress(currentReceived, totalBytes > 0 ? totalBytes : currentReceived);
+        if (totalBytes > 0) {
+          notifService.updateDownloadProgress(
+            receivedBytes: currentReceived,
+            totalBytes: totalBytes,
+          );
+        }
+
+        await for (final chunk in responseBody.stream) {
+          if (cancelToken?.isCancelled ?? false) {
+            await activeSink.flush();
+            await activeSink.close();
+            sink = null;
+            await notifService.cancelDownloadNotification();
+            throw DioException(
+              requestOptions: RequestOptions(path: downloadUrl),
+              type: DioExceptionType.cancel,
+              error: 'Pengunduhan dibatalkan oleh pengguna.',
+            );
+          }
+
+          activeSink.add(chunk);
+          currentReceived += chunk.length;
+
+          onProgress(currentReceived, totalBytes > 0 ? totalBytes : currentReceived);
+          if (totalBytes > 0) {
+            notifService.updateDownloadProgress(
+              receivedBytes: currentReceived,
+              totalBytes: totalBytes,
+            );
+          }
+        }
+
+        await activeSink.flush();
+        await activeSink.close();
+        sink = null;
+
+        // Verifikasi integritas ukuran berkas setelah stream selesai
+        final downloadedSize = await tempFile.length();
+        if (totalBytes > 0 && downloadedSize < totalBytes) {
+          throw SocketException('Unduhan belum lengkap ($downloadedSize dari $totalBytes bytes)');
+        }
+
+        isCompleted = true;
+      } catch (e) {
+        if (sink != null) {
+          try {
+            await sink.flush();
+            await sink.close();
+          } catch (_) {}
+          sink = null;
+        }
+
+        if (cancelToken?.isCancelled ?? false) {
+          await notifService.cancelDownloadNotification();
+          rethrow;
+        }
+
+        retryCount++;
+        if (retryCount >= maxRetries) {
+          await notifService.cancelDownloadNotification();
+          rethrow;
+        }
+
+        // Informasikan ke dialog bahwa koneksi sedang dipulihkan secara otomatis
+        final percent = totalBytes > 0 && await tempFile.exists()
+            ? ' (${((await tempFile.length() / totalBytes) * 100).toInt()}%)'
+            : '';
+        onStatusChanged?.call('Menyambung kembali unduhan$percent...');
+
+        // Backoff bergradasi (1s, 2s, 3s...) sebelum mencoba menyambung kembali
+        await Future.delayed(Duration(milliseconds: 1000 * retryCount.clamp(1, 4)));
+      }
+    }
+
+    await notifService.cancelDownloadNotification();
+
+    if (!isCompleted || !await tempFile.exists() || await tempFile.length() == 0) {
+      return OpenResult(
+        type: ResultType.fileNotFound,
+        message: 'Gagal menyelesaikan pengunduhan berkas APK.',
+      );
+    }
+
+    // Pindahkan dari file sementara (.part) ke file target (.apk)
+    await tempFile.rename(savePath);
+
+    final finalDownloadedFile = File(savePath);
+    if (!await finalDownloadedFile.exists() || await finalDownloadedFile.length() == 0) {
       return OpenResult(
         type: ResultType.fileNotFound,
         message: 'File APK tidak ditemukan atau kosong setelah diunduh',
