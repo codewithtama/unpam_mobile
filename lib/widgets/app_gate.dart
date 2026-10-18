@@ -75,9 +75,11 @@ class _AppGateState extends State<AppGate> with WidgetsBindingObserver {
 
   @override
   Widget build(BuildContext context) {
+    final Widget activeChild;
     switch (_destination) {
       case GateDestination.checking:
-        return const Scaffold(
+        activeChild = const Scaffold(
+          key: ValueKey('gate_checking'),
           backgroundColor: AppTheme.bgGrey,
           body: Center(
             child: Column(
@@ -109,20 +111,35 @@ class _AppGateState extends State<AppGate> with WidgetsBindingObserver {
             ),
           ),
         );
+        break;
 
       case GateDestination.agreement:
-        return UserAgreementScreen(
+        activeChild = UserAgreementScreen(
+          key: const ValueKey('gate_agreement'),
           storageService: widget.storageService,
           onAccepted: _evaluateGateDestination,
         );
+        break;
 
       case GateDestination.permissionGate:
-        return PermissionGateScreen(
+        activeChild = PermissionGateScreen(
+          key: const ValueKey('gate_permission'),
           storageService: widget.storageService,
         );
+        break;
 
       case GateDestination.portal:
-        return const PortalWebViewScreen();
+        activeChild = const PortalWebViewScreen(
+          key: ValueKey('gate_portal'),
+        );
+        break;
     }
+
+    return AnimatedSwitcher(
+      duration: const Duration(milliseconds: 280),
+      switchInCurve: Curves.easeOutCubic,
+      switchOutCurve: Curves.easeInCubic,
+      child: activeChild,
+    );
   }
 }

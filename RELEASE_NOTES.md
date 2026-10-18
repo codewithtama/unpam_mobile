@@ -1,17 +1,15 @@
 # Catatan Pembaruan Rilis The PAMs
 
-## Versi 1.0.26 (Terbaru)
+## Versi 1.0.27 (Terbaru)
 
-- **Split-Screen AI Overlay & Mini Assistant**:
-  - Menghadirkan panel Split-Screen AI responsif tepat di atas halaman portal perkuliahan (Mentari LMS & MyUnpam SIAKAD). Mahasiswa dapat berkonsultasi, berdiskusi, dan membedah materi tanpa perlu meninggalkan halaman portal.
-  - Mendukung penyesuaian tinggi panel secara fleksibel via *drag resize* atau tombol rotasi preset rasio layar (35%, 50%, 65%).
-  - Dilengkapi fitur *minimize* menjadi floating pill interaktif serta tombol ekspansi instan ke layar penuh (*Full-Screen AI Assistant*).
-  - Terintegrasi langsung dengan ekstraksi teks halaman aktif, ekstraksi seleksi teks di WebView, dan seluruh kapabilitas The PAMs AI Tools.
-- **In-Page Contextual Quick Action Floating Pill**:
-  - Sistem deteksi cerdas berbasis skrip injeksi peramban yang mengenali konteks halaman aktif secara *real-time*: Forum Diskusi, Tugas / Assignment, Kuis / Ujian Online, Materi Perkuliahan di Mentari LMS, serta KRS, KHS, dan Jadwal Kuliah di MyUnpam.
-  - Floating pill kontekstual yang dapat digeser bebas (*draggable*) dengan aksi cepat terpersonalisasi (misal: "Bahas Diskusi", "Bedah Soal Kuis", "Analisis Tugas", "Rangkum Materi").
-- **Injeksi Jawaban & Draf Diskusi ke LMS**:
-  - Tombol otomatisasi untuk menginjeksi atau menyalin draf argumen diskusi hasil analisis AI langsung ke dalam kolom formulir balasan forum di Mentari LMS.
+- **Banner Pemantau Stabilitas Jaringan & Latensi Real-Time**:
+  - Menghadirkan `TopNetworkStabilityBanner` yang memantau kualitas koneksi internet secara berkala langsung di bagian atas portal.
+  - Mendeteksi kondisi jaringan tidak stabil (*high latency*) maupun *offline*, dilengkapi tombol coba lagi instan (*Retry*) dan pemulihan otomatis halaman ketika koneksi kembali normal.
+- **Optimasi Performa UI & Reaktif ValueNotifier**:
+  - Merefaktor interaksi geser floating pill, resize split-screen AI, pull-to-refresh, dan progress bar webview menggunakan arsitektur `ValueNotifier` dan `ValueListenableBuilder`.
+  - Mengeliminasi render ulang (*re-render*) yang tidak perlu pada widget tree utama portal, menjaga animasi tetap mulus pada 60/120 FPS.
+- **Peningkatan Split-Screen AI Overlay & Contextual Assistant**:
+  - Transisi panel AI yang lebih halus, penyesuaian tinggi fleksibel, dan integrasi ekstraksi materi kuliah yang lebih cepat.
 - **Pengunduhan Pembaruan Resumable & Toleran Layar Mati (Screen-Off)**:
   - Mengatasi kegagalan unduhan pembaruan saat layar ponsel mati/tidur (sleep) menggunakan mekanisme HTTP Range Request (HTTP 206 Partial Content), auto-reconnect backoff bergradasi (hingga 10 kali percobaan tanpa mengulang dari 0%), notifikasi progress unduhan di status bar Android, serta izin sistem WAKE_LOCK.
 - **Pengujian & Kualitas**:

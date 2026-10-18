@@ -2,7 +2,7 @@
 
 [![Flutter](https://img.shields.io/badge/Flutter-3.41.7-02569B?logo=flutter&logoColor=white)](https://flutter.dev)
 [![Dart](https://img.shields.io/badge/Dart-3.11.5-0175C2?logo=dart&logoColor=white)](https://dart.dev)
-[![Release](https://img.shields.io/badge/Release-v1.0.26-10B981?logo=github&logoColor=white)](https://github.com/codewithtama/unpam_mobile/releases/tag/v1.0.26)
+[![Release](https://img.shields.io/badge/Release-v1.0.27-10B981?logo=github&logoColor=white)](https://github.com/codewithtama/unpam_mobile/releases/tag/v1.0.27)
 [![Tests](https://img.shields.io/badge/Tests-24%20Passed-brightgreen?logo=checkmarx&logoColor=white)](test/widget_test.dart)
 [![Platform](https://img.shields.io/badge/Platform-Android%20(API%2021%2B)-3DDC84?logo=android&logoColor=white)](https://android.com)
 [![License](https://img.shields.io/badge/License-Academic-blue.svg)](#keamanan--kepatuhan-privasi)
@@ -31,6 +31,8 @@ Aplikasi ini dirancang khusus untuk kenyamanan civitas akademika dengan menghadi
 * **Jembatan Unduhan Berkas Chromium & Ekstraksi Memori Blob W3C**: Mengatasi masalah unduhan berkas PDF (KRS, KHS, Jadwal Kuliah, Kartu Ujian, Modul LMS). Mendukung ekstraksi biner client-side *skema `blob:`* langsung dari RAM peramban secara streaming tanpa memicu penolakan *W3C Fetch credential*, serta otomatis memintas proteksi Cloudflare Turnstile CAPTCHA.
 * **The PAMs AI Academic Assistant (Multi-Model Engine)**: Asisten cerdas terintegrasi yang mendukung berbagai provider LLM terdepan di dunia: Google Gemini 3.7/3.5 Flash, DeepSeek V4 (Flash & Pro), Anthropic Claude 5.5 (Sonnet & Opus), Alibaba Qwen 3.8-Max, OpenAI GPT-4o, OpenRouter, serta mode The PAMs Cloud AI Gratis tanpa kuota/API key.
 * **Split-Screen AI Overlay & In-Page Contextual Action Pill**: Panel konsultasi AI mengambang split-screen dengan drag resize dan preset rasio layar tepat di atas portal, deteksi otomatis konteks halaman aktif (forum, tugas, kuis, materi), serta injeksi jawaban diskusi langsung ke form LMS.
+* **Banner Pemantau Stabilitas Jaringan & Latensi Real-Time**: Deteksi otomatis koneksi tidak stabil dan offline secara real-time di bagian atas peramban dengan pemulihan otomatis dan tombol muat ulang cepat.
+* **Optimasi Performa UI & Reaktif ValueNotifier**: Menggunakan arsitektur `ValueNotifier` untuk rendering terisolasi pada FAB floating pill, resize split-screen, dan pull-to-refresh guna mempertahankan fluiditas 60/120 FPS tanpa re-render berlebih.
 * **Multimodal Vision OCR Kamera & Galeri**: Memindai tangkapan layar atau foto fisik soal kuis, modul materi, dan lembar tugas langsung dari kamera atau galeri untuk dianalisis oleh AI multimodal.
 * **AI Solusi Diskusi & Kuis Interaktif**: Menganalisis butir soal pilihan ganda maupun esai forum diskusi, menyajikan opsi rujukan jawaban ilmiah beserta argumen pembahasannya.
 * **AI Parafrase Akademik**: Mengolah redaksi teks karya tulis dan skripsi dengan 4 mode gaya bahasa (Formal, Santai, Akademis, Ringkas) serta tampilan perbandingan visual *side-by-side* guna mencegah indikasi plagiarisme/duplikasi.
@@ -260,7 +262,7 @@ Berkas APK hasil kompilasi berlokasi di:
 * `build/app/outputs/flutter-apk/app-x86_64-release.apk` (Emulator Android)
 
 ### CI/CD Otomatis via GitHub Actions
-Setiap kali tag rilis di-push ke repositori GitHub (contoh: `git tag v1.0.26 && git push origin refs/tags/v1.0.26`), workflow `.github/workflows/release-apk.yml` akan secara otomatis:
+Setiap kali tag rilis di-push ke repositori GitHub (contoh: `git tag v1.0.27 && git push origin refs/tags/v1.0.27`), workflow `.github/workflows/release-apk.yml` akan secara otomatis:
 1. Memverifikasi kode sumber dan mengunduh seluruh dependensi.
 2. Mengonfigurasi keystore rilis bertandatangan resmi.
 3. Mengompilasi varian APK ringan *Split-per-ABI* dengan proteksi kode `--obfuscate`.

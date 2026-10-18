@@ -1,4 +1,6 @@
+import 'dart:async';
 import 'dart:convert';
+import 'dart:io';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -21,6 +23,7 @@ import '../widgets/update_dialog.dart';
 import '../widgets/release_history_dialog.dart';
 import '../widgets/mini_ai_overlay_panel.dart';
 import '../widgets/in_page_quick_action_pill.dart';
+import '../widgets/top_network_stability_banner.dart';
 import 'package:open_filex/open_filex.dart';
 
 class PortalWebViewScreen extends StatefulWidget {
@@ -39,6 +42,7 @@ class _PortalWebViewScreenState extends State<PortalWebViewScreen> with WidgetsB
   late final WebViewController _controller;
   int _currentNavIndex = 0;
   int _progress = 0;
+  final ValueNotifier<int> _progressNotifier = ValueNotifier<int>(0);
   bool _isLoading = true;
   bool _hasError = false;
   bool _isWhiteScreenDetected = false;
@@ -47,15 +51,22 @@ class _PortalWebViewScreenState extends State<PortalWebViewScreen> with WidgetsB
   String _currentUrl = '';
   bool _canGoBack = false;
   DateTime? _lastBackPressTime;
-  Offset? _fabOffset;
-  bool _isDraggingFab = false;
+  final ValueNotifier<Offset?> _fabOffsetNotifier = ValueNotifier<Offset?>(null);
+  final ValueNotifier<bool> _isDraggingFabNotifier = ValueNotifier<bool>(false);
   bool _isSplitAiOpen = false;
   bool _isSplitAiMinimized = false;
-  double _splitAiRatio = 0.46;
+  final ValueNotifier<double> _splitAiRatioNotifier = ValueNotifier<double>(0.46);
   WebPageDetectedContext _mentariDetectedContext = WebPageDetectedContext.empty;
   WebPageDetectedContext _myUnpamDetectedContext = WebPageDetectedContext.empty;
   WebPageDetectedContext get _activeDetectedContext =>
       _currentNavIndex == 1 ? _myUnpamDetectedContext : _mentariDetectedContext;
+  final ValueNotifier<NetworkStabilitySnapshot> _networkSnapshotNotifier =
+      ValueNotifier<NetworkStabilitySnapshot>(NetworkStabilitySnapshot.healthy);
+  final ValueNotifier<bool> _isNetworkBannerDismissedNotifier =
+      ValueNotifier<bool>(false);
+  Timer? _networkMonitorTimer;
+  Timer? _pageLoadStallTimer;
+  bool _isProbingNetwork = false;
   bool _isMentariLoginDetected = false;
   bool _isMyUnpamLoginDetected = false;
   bool get _isLoginPageDetected =>
@@ -98,6 +109,7 @@ class _PortalWebViewScreenState extends State<PortalWebViewScreen> with WidgetsB
 
   WebViewController? _myUnpamController;
   int _myUnpamProgress = 0;
+  final ValueNotifier<int> _myUnpamProgressNotifier = ValueNotifier<int>(0);
   bool _isMyUnpamLoading = false;
   bool _myUnpamHasError = false;
   String _myUnpamErrorMessage = '';
@@ -117,6 +129,7 @@ class _PortalWebViewScreenState extends State<PortalWebViewScreen> with WidgetsB
     WidgetsBinding.instance.addObserver(this);
     _currentUrl = widget.initialUrl;
     _initController();
+    _startNetworkStabilityMonitor();
     NotificationService().initialize(
       onUpdateTap: (info) {
         if (mounted && !_isUpdateDialogShowing) {
@@ -143,6 +156,15 @@ class _PortalWebViewScreenState extends State<PortalWebViewScreen> with WidgetsB
   @override
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
+    _networkMonitorTimer?.cancel();
+    _pageLoadStallTimer?.cancel();
+    _progressNotifier.dispose();
+    _myUnpamProgressNotifier.dispose();
+    _fabOffsetNotifier.dispose();
+    _isDraggingFabNotifier.dispose();
+    _splitAiRatioNotifier.dispose();
+    _networkSnapshotNotifier.dispose();
+    _isNetworkBannerDismissedNotifier.dispose();
     _pullDistanceNotifier.dispose();
     _isPullingNotifier.dispose();
     super.dispose();
@@ -152,8 +174,13 @@ class _PortalWebViewScreenState extends State<PortalWebViewScreen> with WidgetsB
   void didChangeAppLifecycleState(AppLifecycleState state) {
     super.didChangeAppLifecycleState(state);
     if (state == AppLifecycleState.resumed) {
+      _startNetworkStabilityMonitor();
       _checkAndRestoreSurfaceOnResume();
       _checkAppUpdateSilently();
+    } else if (state == AppLifecycleState.paused ||
+        state == AppLifecycleState.inactive) {
+      _networkMonitorTimer?.cancel();
+      _pageLoadStallTimer?.cancel();
     }
   }
 
@@ -177,22 +204,12 @@ class _PortalWebViewScreenState extends State<PortalWebViewScreen> with WidgetsB
       ..setUserAgent(_customUserAgent)
       ..setBackgroundColor(Colors.white)
       ..setOnScrollPositionChange((change) {
-        final atTop = change.y <= 1;
-        if (atTop != _isAtTop && mounted) {
-          setState(() {
-            _isAtTop = atTop;
-          });
-        }
+        _isAtTop = change.y <= 1;
       })
       ..addJavaScriptChannel(
         'ScrollSyncChannel',
         onMessageReceived: (message) {
-          final atTop = message.message == 'true';
-          if (atTop != _isAtTop && mounted) {
-            setState(() {
-              _isAtTop = atTop;
-            });
-          }
+          _isAtTop = message.message == 'true';
         },
       )
       ..addJavaScriptChannel(
@@ -219,17 +236,22 @@ class _PortalWebViewScreenState extends State<PortalWebViewScreen> with WidgetsB
           _handleDetectedPageContext(message.message, isMyUnpam: false);
         },
       )
+      ..addJavaScriptChannel(
+        'NetworkStatusChannel',
+        onMessageReceived: (message) {
+          _handleJsNetworkStatusMessage(message.message);
+        },
+      )
       ..setNavigationDelegate(
         NavigationDelegate(
           onProgress: (progress) {
-            if (mounted) {
-              final nextProgress = progress.clamp(0, 100);
-              final nextLoading = nextProgress < 100;
-              if ((nextProgress - _progress).abs() < 2 && nextLoading == _isLoading) {
-                return;
-              }
+            if (!mounted) return;
+            final nextProgress = progress.clamp(0, 100);
+            final nextLoading = nextProgress < 100;
+            _progress = nextProgress;
+            _progressNotifier.value = nextProgress;
+            if (nextLoading != _isLoading) {
               setState(() {
-                _progress = nextProgress;
                 _isLoading = nextLoading;
               });
             }
@@ -251,34 +273,43 @@ class _PortalWebViewScreenState extends State<PortalWebViewScreen> with WidgetsB
           onPageStarted: (url) {
             if (mounted) {
               final isLogin = url.toLowerCase().contains('login');
+              _progress = 0;
+              _progressNotifier.value = 0;
+              _isAtTop = true;
               setState(() {
                 _currentUrl = url;
                 _isLoading = true;
                 _hasError = false;
                 _isWhiteScreenDetected = false;
-                _isAtTop = true;
                 _mentariDetectedContext = WebPageDetectedContext.empty;
                 _isLoginPageDetected = isLogin;
                 if (!isLogin) {
                   _hasAutoLoggedInCurrentSession = false;
                 }
               });
+              _startPageLoadStallWatchdog();
               _updateHistoryState();
             }
           },
           onPageFinished: (url) async {
+            _pageLoadStallTimer?.cancel();
+            _progress = 100;
+            _progressNotifier.value = 100;
             if (mounted) {
               final title = await _controller.getTitle();
-              setState(() {
-                _currentUrl = url;
-                _isLoading = false;
-                _isRefreshing = false;
-                if (title != null && title.trim().isNotEmpty) {
-                  _pageTitle = title.trim();
-                }
-              });
-              _updateHistoryState();
+              if (mounted) {
+                setState(() {
+                  _currentUrl = url;
+                  _isLoading = false;
+                  _isRefreshing = false;
+                  if (title != null && title.trim().isNotEmpty) {
+                    _pageTitle = title.trim();
+                  }
+                });
+                _updateHistoryState();
+              }
             }
+            _probeNetworkStability();
             _detectLoginForm();
             _injectLoginCaptureScript();
             _injectContextualPageDetectorScript(_controller);
@@ -302,6 +333,7 @@ class _PortalWebViewScreenState extends State<PortalWebViewScreen> with WidgetsB
             if (error.errorCode == -999 || error.description.contains('ERR_ABORTED')) {
               return;
             }
+            _probeNetworkStability(forceShowIfUnstable: true);
             if (mounted && (error.isForMainFrame == true || _progress < 30)) {
               setState(() {
                 _hasError = true;
@@ -450,22 +482,12 @@ class _PortalWebViewScreenState extends State<PortalWebViewScreen> with WidgetsB
       ..setUserAgent(_customUserAgent)
       ..setBackgroundColor(Colors.white)
       ..setOnScrollPositionChange((change) {
-        final atTop = change.y <= 1;
-        if (atTop != _isMyUnpamAtTop && mounted) {
-          setState(() {
-            _isMyUnpamAtTop = atTop;
-          });
-        }
+        _isMyUnpamAtTop = change.y <= 1;
       })
       ..addJavaScriptChannel(
         'ScrollSyncChannel',
         onMessageReceived: (message) {
-          final atTop = message.message == 'true';
-          if (atTop != _isMyUnpamAtTop && mounted) {
-            setState(() {
-              _isMyUnpamAtTop = atTop;
-            });
-          }
+          _isMyUnpamAtTop = message.message == 'true';
         },
       )
       ..addJavaScriptChannel(
@@ -492,14 +514,22 @@ class _PortalWebViewScreenState extends State<PortalWebViewScreen> with WidgetsB
           _handleDetectedPageContext(message.message, isMyUnpam: true);
         },
       )
+      ..addJavaScriptChannel(
+        'NetworkStatusChannel',
+        onMessageReceived: (message) {
+          _handleJsNetworkStatusMessage(message.message);
+        },
+      )
       ..setNavigationDelegate(
         NavigationDelegate(
           onProgress: (progress) {
-            if (mounted) {
-              final nextProgress = progress.clamp(0, 100);
-              final nextLoading = nextProgress < 100;
+            if (!mounted) return;
+            final nextProgress = progress.clamp(0, 100);
+            final nextLoading = nextProgress < 100;
+            _myUnpamProgress = nextProgress;
+            _myUnpamProgressNotifier.value = nextProgress;
+            if (nextLoading != _isMyUnpamLoading) {
               setState(() {
-                _myUnpamProgress = nextProgress;
                 _isMyUnpamLoading = nextLoading;
               });
             }
@@ -523,34 +553,43 @@ class _PortalWebViewScreenState extends State<PortalWebViewScreen> with WidgetsB
               final isLogin = url.toLowerCase().contains('login') ||
                   url.toLowerCase().contains('sso') ||
                   url.toLowerCase().contains('auth');
+              _myUnpamProgress = 0;
+              _myUnpamProgressNotifier.value = 0;
+              _isMyUnpamAtTop = true;
               setState(() {
                 _myUnpamCurrentUrl = url;
                 _isMyUnpamLoading = true;
                 _myUnpamHasError = false;
-                _isMyUnpamAtTop = true;
                 _myUnpamDetectedContext = WebPageDetectedContext.empty;
                 if (_currentNavIndex == 1) {
                   _isLoginPageDetected = isLogin;
                 }
               });
+              _startPageLoadStallWatchdog();
               _updateHistoryState();
             }
           },
           onPageFinished: (url) async {
+            _pageLoadStallTimer?.cancel();
+            _myUnpamProgress = 100;
+            _myUnpamProgressNotifier.value = 100;
             final lowerUrl = url.toLowerCase();
 
             if (mounted) {
               final title = await _myUnpamController?.getTitle();
-              setState(() {
-                _myUnpamCurrentUrl = url;
-                _isMyUnpamLoading = false;
-                _isRefreshing = false;
-                if (title != null && title.trim().isNotEmpty) {
-                  _myUnpamPageTitle = title.trim();
-                }
-              });
-              _updateHistoryState();
+              if (mounted) {
+                setState(() {
+                  _myUnpamCurrentUrl = url;
+                  _isMyUnpamLoading = false;
+                  _isRefreshing = false;
+                  if (title != null && title.trim().isNotEmpty) {
+                    _myUnpamPageTitle = title.trim();
+                  }
+                });
+                _updateHistoryState();
+              }
             }
+            _probeNetworkStability();
 
             // 1. Injeksi optimasi 120 FPS & interceptor unduhan berkas PDF
             if (_myUnpamController != null) {
@@ -604,6 +643,7 @@ class _PortalWebViewScreenState extends State<PortalWebViewScreen> with WidgetsB
             if (error.errorCode == -999 || error.description.contains('ERR_ABORTED')) {
               return;
             }
+            _probeNetworkStability(forceShowIfUnstable: true);
             if (mounted && (error.isForMainFrame == true || _myUnpamProgress < 30)) {
               setState(() {
                 _myUnpamHasError = true;
@@ -1407,6 +1447,197 @@ class _PortalWebViewScreenState extends State<PortalWebViewScreen> with WidgetsB
     }
   }
 
+  void _startNetworkStabilityMonitor() {
+    _networkMonitorTimer?.cancel();
+    Future.delayed(const Duration(milliseconds: 1200), () {
+      if (mounted) {
+        _probeNetworkStability();
+      }
+    });
+    _networkMonitorTimer = Timer.periodic(
+      const Duration(seconds: 18),
+      (_) => _probeNetworkStability(),
+    );
+  }
+
+  void _startPageLoadStallWatchdog() {
+    _pageLoadStallTimer?.cancel();
+    _pageLoadStallTimer = Timer(const Duration(seconds: 8), () {
+      if (!mounted) return;
+      final bool isCurrentLoading =
+          _currentNavIndex == 1 ? _isMyUnpamLoading : _isLoading;
+      final int currentProgress =
+          _currentNavIndex == 1 ? _myUnpamProgress : _progress;
+      if (isCurrentLoading && currentProgress < 80) {
+        _updateNetworkSnapshot(
+          const NetworkStabilitySnapshot(
+            state: NetworkHealthState.unstable,
+            message:
+                'Pemuatan halaman portal agak lambat. Pastikan koneksi internet Anda stabil.',
+          ),
+          resetDismissOnNewWarning: true,
+        );
+        _probeNetworkStability(forceShowIfUnstable: true);
+      }
+    });
+  }
+
+  void _updateNetworkSnapshot(
+    NetworkStabilitySnapshot next, {
+    bool resetDismissOnNewWarning = false,
+  }) {
+    if (!mounted) return;
+    final prev = _networkSnapshotNotifier.value;
+    if (next.state == NetworkHealthState.good) {
+      if (prev.state != NetworkHealthState.good) {
+        _networkSnapshotNotifier.value = NetworkStabilitySnapshot.healthy;
+        _isNetworkBannerDismissedNotifier.value = false;
+      }
+      return;
+    }
+
+    final bool escalatedToWarning = prev.state == NetworkHealthState.good &&
+        next.state != NetworkHealthState.good;
+    final bool escalatedToOffline = prev.state == NetworkHealthState.unstable &&
+        next.state == NetworkHealthState.offline;
+
+    if (escalatedToWarning || escalatedToOffline || resetDismissOnNewWarning) {
+      _isNetworkBannerDismissedNotifier.value = false;
+    }
+
+    if (prev != next) {
+      _networkSnapshotNotifier.value = next;
+    }
+  }
+
+  void _handleJsNetworkStatusMessage(String rawPayload) {
+    if (!mounted) return;
+    try {
+      final dynamic decoded = jsonDecode(rawPayload);
+      if (decoded is! Map<String, dynamic>) return;
+      final status = (decoded['status'] ?? '').toString().toLowerCase().trim();
+      final int? rtt = (decoded['rtt'] as num?)?.toInt();
+
+      if (status == 'offline') {
+        _updateNetworkSnapshot(
+          const NetworkStabilitySnapshot(
+            state: NetworkHealthState.offline,
+            message:
+                'Koneksi internet terputus. Periksa jaringan Wi-Fi atau data seluler Anda.',
+          ),
+          resetDismissOnNewWarning: true,
+        );
+      } else if (status == 'unstable') {
+        _updateNetworkSnapshot(
+          NetworkStabilitySnapshot(
+            state: NetworkHealthState.unstable,
+            latencyMs: rtt,
+            message: rtt != null && rtt > 0
+                ? 'Sinyal jaringan kurang stabil (latensi ~${rtt}ms). Halaman mungkin memuat lebih lambat.'
+                : 'Sinyal jaringan terdeteksi lemah atau kurang stabil.',
+          ),
+        );
+      } else if (status == 'online') {
+        _probeNetworkStability();
+      }
+    } catch (e) {
+      debugPrint('NetworkStatusChannel parse error: $e');
+    }
+  }
+
+  Future<void> _probeNetworkStability({
+    bool forceShowIfUnstable = false,
+  }) async {
+    if (_isProbingNetwork || !mounted) return;
+    _isProbingNetwork = true;
+    final sw = Stopwatch()..start();
+
+    try {
+      final result = await InternetAddress.lookup('mentari.unpam.ac.id')
+          .timeout(const Duration(milliseconds: 3500));
+      sw.stop();
+
+      if (!mounted) return;
+
+      if (result.isNotEmpty && result.first.rawAddress.isNotEmpty) {
+        final int elapsedMs = sw.elapsedMilliseconds;
+        if (elapsedMs > 1350) {
+          _updateNetworkSnapshot(
+            NetworkStabilitySnapshot(
+              state: NetworkHealthState.unstable,
+              latencyMs: elapsedMs,
+              message:
+                  'Respon jaringan ke server kampus melambat ($elapsedMs ms). Halaman mungkin memuat lebih lama.',
+            ),
+            resetDismissOnNewWarning: forceShowIfUnstable,
+          );
+        } else {
+          final bool activeStalled = (_currentNavIndex == 1
+                  ? (_isMyUnpamLoading && _myUnpamProgress < 45)
+                  : (_isLoading && _progress < 45)) &&
+              forceShowIfUnstable;
+          if (!activeStalled) {
+            _updateNetworkSnapshot(NetworkStabilitySnapshot.healthy);
+          }
+        }
+      }
+    } on TimeoutException {
+      sw.stop();
+      if (!mounted) return;
+      _updateNetworkSnapshot(
+        NetworkStabilitySnapshot(
+          state: NetworkHealthState.unstable,
+          latencyMs: sw.elapsedMilliseconds,
+          message:
+              'Koneksi menuju server kampus sangat lambat (melebihi batas waktu respon).',
+        ),
+        resetDismissOnNewWarning: true,
+      );
+    } on SocketException {
+      sw.stop();
+      if (!mounted) return;
+      // Cek cadangan ke DNS publik untuk membedakan offline total vs gangguan rute kampus
+      try {
+        final fallback = await InternetAddress.lookup('google.com')
+            .timeout(const Duration(milliseconds: 2200));
+        if (!mounted) return;
+        if (fallback.isNotEmpty && fallback.first.rawAddress.isNotEmpty) {
+          _updateNetworkSnapshot(
+            const NetworkStabilitySnapshot(
+              state: NetworkHealthState.unstable,
+              message:
+                  'Jaringan menuju server UNPAM sedang tidak stabil atau mengalami gangguan rute.',
+            ),
+            resetDismissOnNewWarning: true,
+          );
+        } else {
+          _updateNetworkSnapshot(
+            const NetworkStabilitySnapshot(
+              state: NetworkHealthState.offline,
+              message:
+                  'Tidak ada koneksi internet. Periksa Wi-Fi atau paket data seluler Anda.',
+            ),
+            resetDismissOnNewWarning: true,
+          );
+        }
+      } catch (_) {
+        if (!mounted) return;
+        _updateNetworkSnapshot(
+          const NetworkStabilitySnapshot(
+            state: NetworkHealthState.offline,
+            message:
+                'Tidak ada koneksi internet. Periksa Wi-Fi atau paket data seluler Anda.',
+          ),
+          resetDismissOnNewWarning: true,
+        );
+      }
+    } catch (_) {
+      sw.stop();
+    } finally {
+      _isProbingNetwork = false;
+    }
+  }
+
   Future<void> _inject120FpsOptimizationScript(WebViewController controller) async {
     try {
       await controller.runJavaScript(r'''
@@ -1419,8 +1650,12 @@ class _PortalWebViewScreenState extends State<PortalWebViewScreen> with WidgetsB
               style.textContent = `
                 html, body {
                   -webkit-overflow-scrolling: touch !important;
-                  scroll-behavior: smooth !important;
                   overscroll-behavior-y: contain !important;
+                  -webkit-font-smoothing: antialiased !important;
+                  text-rendering: optimizeSpeed !important;
+                }
+                a, button, input, select, textarea, label, [role="button"] {
+                  touch-action: manipulation !important;
                 }
                 * {
                   -webkit-tap-highlight-color: transparent !important;
@@ -1431,7 +1666,9 @@ class _PortalWebViewScreenState extends State<PortalWebViewScreen> with WidgetsB
           } catch(e) {}
 
           var lastAtTop = null;
+          var scrollTicking = false;
           function syncScroll() {
+            scrollTicking = false;
             try {
               if (window.ScrollSyncChannel) {
                 var atTop = (window.scrollY || document.documentElement.scrollTop || 0) <= 2;
@@ -1442,9 +1679,65 @@ class _PortalWebViewScreenState extends State<PortalWebViewScreen> with WidgetsB
               }
             } catch(e) {}
           }
-          window.removeEventListener('scroll', syncScroll);
-          window.addEventListener('scroll', syncScroll, { passive: true });
+
+          function onPassiveScroll() {
+            if (!scrollTicking) {
+              scrollTicking = true;
+              if (window.requestAnimationFrame) {
+                window.requestAnimationFrame(syncScroll);
+              } else {
+                syncScroll();
+              }
+            }
+          }
+
+          window.removeEventListener('scroll', onPassiveScroll);
+          window.addEventListener('scroll', onPassiveScroll, { passive: true });
           syncScroll();
+
+          if (!window.__unpamNetworkHookInstalled && window.NetworkStatusChannel) {
+            window.__unpamNetworkHookInstalled = true;
+            function reportConnStatus() {
+              try {
+                if (navigator.onLine === false) {
+                  window.NetworkStatusChannel.postMessage(JSON.stringify({ status: 'offline' }));
+                  return;
+                }
+                var conn = navigator.connection || navigator.mozConnection || navigator.webkitConnection;
+                if (conn) {
+                  var eff = (conn.effectiveType || '').toLowerCase();
+                  var rtt = typeof conn.rtt === 'number' ? conn.rtt : 0;
+                  if (eff === 'slow-2g' || eff === '2g' || rtt > 1500) {
+                    window.NetworkStatusChannel.postMessage(JSON.stringify({
+                      status: 'unstable',
+                      rtt: rtt
+                    }));
+                    return;
+                  }
+                }
+              } catch(e) {}
+            }
+
+            window.addEventListener('offline', function() {
+              if (window.NetworkStatusChannel) {
+                window.NetworkStatusChannel.postMessage(JSON.stringify({ status: 'offline' }));
+              }
+            }, { passive: true });
+
+            window.addEventListener('online', function() {
+              if (window.NetworkStatusChannel) {
+                window.NetworkStatusChannel.postMessage(JSON.stringify({ status: 'online' }));
+              }
+            }, { passive: true });
+
+            try {
+              var c = navigator.connection || navigator.mozConnection || navigator.webkitConnection;
+              if (c && c.addEventListener) {
+                c.addEventListener('change', reportConnStatus, { passive: true });
+              }
+            } catch(e) {}
+            reportConnStatus();
+          }
         })();
       ''');
     } catch (e) {
@@ -4108,15 +4401,14 @@ class _PortalWebViewScreenState extends State<PortalWebViewScreen> with WidgetsB
   }
 
   void _cycleSplitAiHeightPreset() {
-    setState(() {
-      if (_splitAiRatio < 0.42) {
-        _splitAiRatio = 0.48;
-      } else if (_splitAiRatio < 0.60) {
-        _splitAiRatio = 0.68;
-      } else {
-        _splitAiRatio = 0.36;
-      }
-    });
+    final current = _splitAiRatioNotifier.value;
+    if (current < 0.42) {
+      _splitAiRatioNotifier.value = 0.48;
+    } else if (current < 0.60) {
+      _splitAiRatioNotifier.value = 0.68;
+    } else {
+      _splitAiRatioNotifier.value = 0.36;
+    }
   }
 
   Future<String> _extractSelectedTextFromActiveWebView() async {
@@ -4816,7 +5108,8 @@ class _PortalWebViewScreenState extends State<PortalWebViewScreen> with WidgetsB
     if (_isRefreshing) return;
     _dragStartY = event.position.dy;
     _dragStartX = event.position.dx;
-    _wasAtTopOnDown = _isAtTop;
+    final bool activeAtTop = _currentNavIndex == 1 ? _isMyUnpamAtTop : _isAtTop;
+    _wasAtTopOnDown = activeAtTop;
     _isPullingNotifier.value = false;
     _pullDistanceNotifier.value = 0.0;
     _hasHapticed = false;
@@ -4828,11 +5121,13 @@ class _PortalWebViewScreenState extends State<PortalWebViewScreen> with WidgetsB
       final num? y = num.tryParse(res.toString());
       if (y != null && mounted) {
         final atTop = y <= 2;
-        if (atTop != _isAtTop) {
+        if (_currentNavIndex == 1) {
+          _isMyUnpamAtTop = atTop;
+        } else {
           _isAtTop = atTop;
-          if (!_isPullingNotifier.value) {
-            _wasAtTopOnDown = atTop;
-          }
+        }
+        if (!_isPullingNotifier.value) {
+          _wasAtTopOnDown = atTop;
         }
       }
     }).catchError((e) {
@@ -4843,7 +5138,8 @@ class _PortalWebViewScreenState extends State<PortalWebViewScreen> with WidgetsB
   void _onPointerMove(PointerMoveEvent event) {
     if (_isRefreshing || _dragStartY == null || _dragStartX == null) return;
 
-    if (!_wasAtTopOnDown || !_isAtTop) {
+    final bool activeAtTop = _currentNavIndex == 1 ? _isMyUnpamAtTop : _isAtTop;
+    if (!_wasAtTopOnDown || !activeAtTop) {
       if (_isPullingNotifier.value) {
         _isPullingNotifier.value = false;
         _pullDistanceNotifier.value = 0.0;
@@ -4919,6 +5215,8 @@ class _PortalWebViewScreenState extends State<PortalWebViewScreen> with WidgetsB
       }
     });
 
+    unawaited(_probeNetworkStability());
+
     try {
       if (_activeUrl.isNotEmpty) {
         await _activeController.reload();
@@ -4936,77 +5234,82 @@ class _PortalWebViewScreenState extends State<PortalWebViewScreen> with WidgetsB
   }
 
   Widget _buildPullToRefreshIndicator() {
-    return AnimatedBuilder(
-      animation: Listenable.merge([_pullDistanceNotifier, _isPullingNotifier]),
-      builder: (context, _) {
-        final bool pulling = _isPullingNotifier.value;
-        final double distance = _pullDistanceNotifier.value;
-        final double topPos;
-        if (_isRefreshing) {
-          topPos = 16.0;
-        } else if (pulling) {
-          topPos = ((distance - 38.0) * 0.72).clamp(-50.0, 44.0);
-        } else {
-          topPos = -60.0;
-        }
+    return RepaintBoundary(
+      child: AnimatedBuilder(
+        animation: Listenable.merge([_pullDistanceNotifier, _isPullingNotifier]),
+        builder: (context, _) {
+          final bool pulling = _isPullingNotifier.value;
+          final double distance = _pullDistanceNotifier.value;
+          final double topPos;
+          if (_isRefreshing) {
+            topPos = 16.0;
+          } else if (pulling) {
+            topPos = ((distance - 38.0) * 0.72).clamp(-50.0, 44.0);
+          } else {
+            topPos = -60.0;
+          }
 
-        return AnimatedPositioned(
-          duration: pulling ? Duration.zero : const Duration(milliseconds: 280),
-          curve: Curves.easeOutCubic,
-          top: topPos,
-          left: 0,
-          right: 0,
-          child: Center(
-            child: AnimatedOpacity(
-              duration: const Duration(milliseconds: 180),
-              opacity: (pulling || _isRefreshing) ? 1.0 : 0.0,
-              child: Container(
-                width: 42,
-                height: 42,
-                decoration: BoxDecoration(
-                  color: AppTheme.surfaceWhite,
-                  shape: BoxShape.circle,
-                  boxShadow: [
-                    BoxShadow(
-                      color: Colors.black.withOpacity(0.12),
-                      blurRadius: 10,
-                      offset: const Offset(0, 4),
+          return AnimatedPositioned(
+            duration: pulling ? Duration.zero : const Duration(milliseconds: 280),
+            curve: Curves.easeOutCubic,
+            top: topPos,
+            left: 0,
+            right: 0,
+            child: Center(
+              child: AnimatedOpacity(
+                duration: const Duration(milliseconds: 180),
+                opacity: (pulling || _isRefreshing) ? 1.0 : 0.0,
+                child: Container(
+                  width: 42,
+                  height: 42,
+                  decoration: BoxDecoration(
+                    color: AppTheme.surfaceWhite,
+                    shape: BoxShape.circle,
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.black.withOpacity(0.12),
+                        blurRadius: 10,
+                        offset: const Offset(0, 4),
+                      ),
+                    ],
+                    border: Border.all(
+                      color: AppTheme.cardBorder,
+                      width: 1.0,
                     ),
-                  ],
-                  border: Border.all(
-                    color: AppTheme.cardBorder,
-                    width: 1.0,
                   ),
-                ),
-                padding: const EdgeInsets.all(9),
-                child: _isRefreshing
-                    ? const CircularProgressIndicator(
-                        strokeWidth: 2.8,
-                        valueColor: AlwaysStoppedAnimation<Color>(AppTheme.primaryBlue),
-                      )
-                    : Transform.rotate(
-                        angle: (distance / _refreshTriggerDistance) * 3.14159 * 1.5,
-                        child: CircularProgressIndicator(
-                          value: (distance / _refreshTriggerDistance).clamp(0.08, 0.88),
+                  padding: const EdgeInsets.all(9),
+                  child: _isRefreshing
+                      ? const CircularProgressIndicator(
                           strokeWidth: 2.8,
-                          backgroundColor: AppTheme.primaryLight.withOpacity(0.12),
-                          valueColor: AlwaysStoppedAnimation<Color>(
-                            distance >= _refreshTriggerDistance
-                                ? AppTheme.accentGold
-                                : AppTheme.primaryBlue,
+                          valueColor: AlwaysStoppedAnimation<Color>(AppTheme.primaryBlue),
+                        )
+                      : Transform.rotate(
+                          angle: (distance / _refreshTriggerDistance) * 3.14159 * 1.5,
+                          child: CircularProgressIndicator(
+                            value: (distance / _refreshTriggerDistance).clamp(0.08, 0.88),
+                            strokeWidth: 2.8,
+                            backgroundColor: AppTheme.primaryLight.withOpacity(0.12),
+                            valueColor: AlwaysStoppedAnimation<Color>(
+                              distance >= _refreshTriggerDistance
+                                  ? AppTheme.accentGold
+                                  : AppTheme.primaryBlue,
+                            ),
                           ),
                         ),
-                      ),
+                ),
               ),
             ),
-          ),
-        );
-      },
+          );
+        },
+      ),
     );
   }
 
   @override
   Widget build(BuildContext context) {
+    final activeProgressNotifier =
+        _currentNavIndex == 1 ? _myUnpamProgressNotifier : _progressNotifier;
+
     return PopScope(
       canPop: false,
       onPopInvokedWithResult: _handleBackNavigation,
@@ -5015,22 +5318,56 @@ class _PortalWebViewScreenState extends State<PortalWebViewScreen> with WidgetsB
         appBar: _buildTopAppBar(),
         body: Column(
           children: [
-            // Progress Bar saat loading halaman
+            // Banner Koneksi Internet Tidak Stabil / Terputus (Muncul di ATAS, bisa di-close)
+            ValueListenableBuilder<NetworkStabilitySnapshot>(
+              valueListenable: _networkSnapshotNotifier,
+              builder: (context, snapshot, _) {
+                return ValueListenableBuilder<bool>(
+                  valueListenable: _isNetworkBannerDismissedNotifier,
+                  builder: (context, isDismissed, __) {
+                    return TopNetworkStabilityBanner(
+                      snapshot: snapshot,
+                      isDismissed: isDismissed,
+                      onDismiss: () {
+                        HapticFeedback.lightImpact();
+                        _isNetworkBannerDismissedNotifier.value = true;
+                      },
+                      onRetry: () {
+                        HapticFeedback.selectionClick();
+                        _isNetworkBannerDismissedNotifier.value = false;
+                        unawaited(_probeNetworkStability());
+                        if ((_currentNavIndex == 0 && (_hasError || _isLoading)) ||
+                            (_currentNavIndex == 1 && (_myUnpamHasError || _isMyUnpamLoading))) {
+                          _startRefresh();
+                        }
+                      },
+                    );
+                  },
+                );
+              },
+            ),
+
+            // Progress Bar saat loading halaman (Diisolasi dengan RepaintBoundary + ValueListenableBuilder)
             if ((_currentNavIndex == 0 && _isLoading) || (_currentNavIndex == 1 && _isMyUnpamLoading))
-              TweenAnimationBuilder<double>(
-                duration: const Duration(milliseconds: 180),
-                curve: Curves.easeOutCubic,
-                tween: Tween<double>(
-                  begin: 0,
-                  end: (_currentNavIndex == 0 ? _progress : _myUnpamProgress) > 0
-                      ? (_currentNavIndex == 0 ? _progress : _myUnpamProgress) / 100.0
-                      : 0,
-                ),
-                builder: (_, value, __) => LinearProgressIndicator(
-                  value: value <= 0 ? null : value,
-                  minHeight: 3,
-                  backgroundColor: Colors.transparent,
-                  valueColor: const AlwaysStoppedAnimation<Color>(AppTheme.accentGold),
+              RepaintBoundary(
+                child: ValueListenableBuilder<int>(
+                  valueListenable: activeProgressNotifier,
+                  builder: (context, progressVal, _) {
+                    return TweenAnimationBuilder<double>(
+                      duration: const Duration(milliseconds: 160),
+                      curve: Curves.easeOutCubic,
+                      tween: Tween<double>(
+                        begin: 0,
+                        end: progressVal > 0 ? progressVal / 100.0 : 0,
+                      ),
+                      builder: (_, value, __) => LinearProgressIndicator(
+                        value: value <= 0 ? null : value,
+                        minHeight: 3,
+                        backgroundColor: Colors.transparent,
+                        valueColor: const AlwaysStoppedAnimation<Color>(AppTheme.accentGold),
+                      ),
+                    );
+                  },
                 ),
               ),
 
@@ -5045,18 +5382,9 @@ class _PortalWebViewScreenState extends State<PortalWebViewScreen> with WidgetsB
                   final double maxW = constraints.maxWidth;
                   final double maxH = constraints.maxHeight;
 
-                  _fabOffset ??= Offset(
+                  _fabOffsetNotifier.value ??= Offset(
                     (maxW - estimatedWidth - 14.0).clamp(8.0, maxW),
                     (maxH - buttonHeight - 16.0).clamp(8.0, maxH),
-                  );
-
-                  final safeX = _fabOffset!.dx.clamp(
-                    8.0,
-                    (maxW - estimatedWidth - 8.0).clamp(8.0, maxW),
-                  );
-                  final safeY = _fabOffset!.dy.clamp(
-                    8.0,
-                    (maxH - buttonHeight - 8.0).clamp(8.0, maxH),
                   );
 
                   final bool showDockedSplitAi = _isSplitAiOpen && !_isSplitAiMinimized;
@@ -5065,8 +5393,6 @@ class _PortalWebViewScreenState extends State<PortalWebViewScreen> with WidgetsB
                       (maxH - minTopWebViewHeight).clamp(150.0, maxH);
                   final double minAllowedPanelHeight =
                       maxAllowedPanelHeight < 210.0 ? maxAllowedPanelHeight : 210.0;
-                  final double effectiveSplitHeight =
-                      (maxH * _splitAiRatio).clamp(minAllowedPanelHeight, maxAllowedPanelHeight);
 
                   return Stack(
                     children: [
@@ -5076,32 +5402,34 @@ class _PortalWebViewScreenState extends State<PortalWebViewScreen> with WidgetsB
                           Expanded(
                             child: Stack(
                               children: [
-                                IndexedStack(
-                                  index: _currentNavIndex == 1 ? 1 : 0,
-                                  children: [
-                                    // Tab 0: Mentari
-                                    Listener(
-                                      behavior: HitTestBehavior.translucent,
-                                      onPointerDown: _onPointerDown,
-                                      onPointerMove: _onPointerMove,
-                                      onPointerUp: _onPointerUp,
-                                      onPointerCancel: _onPointerCancel,
-                                      child: WebViewWidget(controller: _controller),
-                                    ),
-                                    // Tab 1: MyUnpam
-                                    _myUnpamController != null
-                                        ? Listener(
-                                            behavior: HitTestBehavior.translucent,
-                                            onPointerDown: _onPointerDown,
-                                            onPointerMove: _onPointerMove,
-                                            onPointerUp: _onPointerUp,
-                                            onPointerCancel: _onPointerCancel,
-                                            child: WebViewWidget(controller: _myUnpamController!),
-                                          )
-                                        : const Center(
-                                            child: CircularProgressIndicator(color: AppTheme.primaryBlue),
-                                          ),
-                                  ],
+                                RepaintBoundary(
+                                  child: IndexedStack(
+                                    index: _currentNavIndex == 1 ? 1 : 0,
+                                    children: [
+                                      // Tab 0: Mentari
+                                      Listener(
+                                        behavior: HitTestBehavior.translucent,
+                                        onPointerDown: _onPointerDown,
+                                        onPointerMove: _onPointerMove,
+                                        onPointerUp: _onPointerUp,
+                                        onPointerCancel: _onPointerCancel,
+                                        child: WebViewWidget(controller: _controller),
+                                      ),
+                                      // Tab 1: MyUnpam
+                                      _myUnpamController != null
+                                          ? Listener(
+                                              behavior: HitTestBehavior.translucent,
+                                              onPointerDown: _onPointerDown,
+                                              onPointerMove: _onPointerMove,
+                                              onPointerUp: _onPointerUp,
+                                              onPointerCancel: _onPointerCancel,
+                                              child: WebViewWidget(controller: _myUnpamController!),
+                                            )
+                                          : const Center(
+                                              child: CircularProgressIndicator(color: AppTheme.primaryBlue),
+                                            ),
+                                    ],
+                                  ),
                                 ),
 
                                 // Floating Pull-to-Refresh Indicator
@@ -5198,51 +5526,57 @@ class _PortalWebViewScreenState extends State<PortalWebViewScreen> with WidgetsB
                             ),
                           ),
 
-                          // Bagian Bawah: Split-Screen / Mini AI Overlay Panel
+                          // Bagian Bawah: Split-Screen / Mini AI Overlay Panel (Diisolasi dengan ValueListenableBuilder)
                           if (showDockedSplitAi)
-                            SizedBox(
-                              height: effectiveSplitHeight,
-                              width: double.infinity,
-                              child: MiniAiOverlayPanel(
-                                activePortalName:
-                                    _currentNavIndex == 1 ? 'MyUnpam' : 'Mentari',
-                                activePageTitle:
-                                    _currentNavIndex == 1 ? _myUnpamPageTitle : _pageTitle,
-                                detectedContext: activeContext,
-                                onContextualPrimaryAction: () =>
-                                    _executeContextualPrimaryAction(activeContext),
-                                onContextualSecondaryAction:
-                                    _getContextualSecondaryAction(activeContext),
-                                contextualSecondaryLabel:
-                                    _getContextualSecondaryLabel(activeContext),
-                                onClose: () {
-                                  setState(() {
-                                    _isSplitAiOpen = false;
-                                    _isSplitAiMinimized = false;
-                                  });
-                                },
-                                onMinimize: () {
-                                  setState(() => _isSplitAiMinimized = true);
-                                },
-                                onExpandFullScreen: () {
-                                  _openFullScreenAiAssistant();
-                                },
-                                onOpenPowerTools: _showAiPowerToolsMenu,
-                                onExtractCurrentPage: () =>
-                                    _consultWithAi(openInSplitScreen: true),
-                                onExtractSelectedText:
-                                    _extractSelectedTextFromActiveWebView,
-                                onInjectToWebView: _injectForumReply,
-                                onDragResizeDelta: (deltaY) {
-                                  if (maxH <= 0) return;
-                                  setState(() {
-                                    final nextRatio =
-                                        _splitAiRatio - (deltaY / maxH);
-                                    _splitAiRatio = nextRatio.clamp(0.28, 0.78);
-                                  });
-                                },
-                                onCycleHeightPreset: _cycleSplitAiHeightPreset,
-                              ),
+                            ValueListenableBuilder<double>(
+                              valueListenable: _splitAiRatioNotifier,
+                              builder: (context, splitRatio, _) {
+                                final double effectiveSplitHeight =
+                                    (maxH * splitRatio).clamp(minAllowedPanelHeight, maxAllowedPanelHeight);
+                                return SizedBox(
+                                  height: effectiveSplitHeight,
+                                  width: double.infinity,
+                                  child: MiniAiOverlayPanel(
+                                    activePortalName:
+                                        _currentNavIndex == 1 ? 'MyUnpam' : 'Mentari',
+                                    activePageTitle:
+                                        _currentNavIndex == 1 ? _myUnpamPageTitle : _pageTitle,
+                                    detectedContext: activeContext,
+                                    onContextualPrimaryAction: () =>
+                                        _executeContextualPrimaryAction(activeContext),
+                                    onContextualSecondaryAction:
+                                        _getContextualSecondaryAction(activeContext),
+                                    contextualSecondaryLabel:
+                                        _getContextualSecondaryLabel(activeContext),
+                                    onClose: () {
+                                      setState(() {
+                                        _isSplitAiOpen = false;
+                                        _isSplitAiMinimized = false;
+                                      });
+                                    },
+                                    onMinimize: () {
+                                      setState(() => _isSplitAiMinimized = true);
+                                    },
+                                    onExpandFullScreen: () {
+                                      _openFullScreenAiAssistant();
+                                    },
+                                    onOpenPowerTools: _showAiPowerToolsMenu,
+                                    onExtractCurrentPage: () =>
+                                        _consultWithAi(openInSplitScreen: true),
+                                    onExtractSelectedText:
+                                        _extractSelectedTextFromActiveWebView,
+                                    onInjectToWebView: _injectForumReply,
+                                    onDragResizeDelta: (deltaY) {
+                                      if (maxH <= 0) return;
+                                      final nextRatio =
+                                          _splitAiRatioNotifier.value - (deltaY / maxH);
+                                      _splitAiRatioNotifier.value =
+                                          nextRatio.clamp(0.28, 0.78);
+                                    },
+                                    onCycleHeightPreset: _cycleSplitAiHeightPreset,
+                                  ),
+                                );
+                              },
                             ),
                         ],
                       ),
@@ -5251,48 +5585,73 @@ class _PortalWebViewScreenState extends State<PortalWebViewScreen> with WidgetsB
                       if (_isSplitAiOpen && _isSplitAiMinimized)
                         _buildMinimizedSplitAiPill(),
 
-                      // In-Page Quick Action Floating Pill (Deteksi Kontekstual Otomatis Halaman WebView)
+                      // In-Page Quick Action Floating Pill (Diisolasi dengan ValueListenableBuilder agar drag 120Hz tidak me-rebuild WebView)
                       if (!_isSplitAiOpen)
-                        Positioned(
-                          left: safeX,
-                          top: safeY,
-                          child: ConstrainedBox(
-                            constraints: BoxConstraints(
-                              maxWidth: (maxW - 16.0).clamp(180.0, maxW),
-                            ),
-                            child: InPageQuickActionPill(
-                              detectedContext: activeContext,
-                              isDragging: _isDraggingFab,
-                              onPanStart: (_) {
-                                setState(() => _isDraggingFab = true);
-                              },
-                              onPanUpdate: (details) {
-                                setState(() {
-                                  final nextX = (_fabOffset!.dx + details.delta.dx)
-                                      .clamp(8.0, (maxW - estimatedWidth - 8.0).clamp(8.0, maxW));
-                                  final nextY = (_fabOffset!.dy + details.delta.dy)
-                                      .clamp(8.0, (maxH - buttonHeight - 8.0).clamp(8.0, maxH));
-                                  _fabOffset = Offset(nextX, nextY);
-                                });
-                              },
-                              onPanEnd: (_) {
-                                setState(() => _isDraggingFab = false);
-                              },
-                              onPanCancel: () {
-                                setState(() => _isDraggingFab = false);
-                              },
-                              onPrimaryAction: () =>
-                                  _executeContextualPrimaryAction(activeContext),
-                              onSecondaryAction:
-                                  _getContextualSecondaryAction(activeContext),
-                              secondaryActionLabel:
-                                  _getContextualSecondaryLabel(activeContext),
-                              secondaryActionIcon:
-                                  _getContextualSecondaryIcon(activeContext),
-                              onOpenAllTools: _showAiPowerToolsMenu,
-                              onOpenSplitScreen: _toggleSplitAiOverlay,
-                            ),
-                          ),
+                        ValueListenableBuilder<Offset?>(
+                          valueListenable: _fabOffsetNotifier,
+                          builder: (context, fabOffset, _) {
+                            final currentOffset = fabOffset ??
+                                Offset(
+                                  (maxW - estimatedWidth - 14.0).clamp(8.0, maxW),
+                                  (maxH - buttonHeight - 16.0).clamp(8.0, maxH),
+                                );
+                            final safeX = currentOffset.dx.clamp(
+                              8.0,
+                              (maxW - estimatedWidth - 8.0).clamp(8.0, maxW),
+                            );
+                            final safeY = currentOffset.dy.clamp(
+                              8.0,
+                              (maxH - buttonHeight - 8.0).clamp(8.0, maxH),
+                            );
+
+                            return Positioned(
+                              left: safeX,
+                              top: safeY,
+                              child: RepaintBoundary(
+                                child: ConstrainedBox(
+                                  constraints: BoxConstraints(
+                                    maxWidth: (maxW - 16.0).clamp(180.0, maxW),
+                                  ),
+                                  child: ValueListenableBuilder<bool>(
+                                    valueListenable: _isDraggingFabNotifier,
+                                    builder: (context, isDragging, __) {
+                                      return InPageQuickActionPill(
+                                        detectedContext: activeContext,
+                                        isDragging: isDragging,
+                                        onPanStart: (_) {
+                                          _isDraggingFabNotifier.value = true;
+                                        },
+                                        onPanUpdate: (details) {
+                                          final prev = _fabOffsetNotifier.value ?? currentOffset;
+                                          final nextX = (prev.dx + details.delta.dx)
+                                              .clamp(8.0, (maxW - estimatedWidth - 8.0).clamp(8.0, maxW));
+                                          final nextY = (prev.dy + details.delta.dy)
+                                              .clamp(8.0, (maxH - buttonHeight - 8.0).clamp(8.0, maxH));
+                                          _fabOffsetNotifier.value = Offset(nextX, nextY);
+                                        },
+                                        onPanEnd: (_) {
+                                          _isDraggingFabNotifier.value = false;
+                                        },
+                                        onPanCancel: () {
+                                          _isDraggingFabNotifier.value = false;
+                                        },
+                                        onPrimaryAction: () =>
+                                            _executeContextualPrimaryAction(activeContext),
+                                        onSecondaryAction:
+                                            _getContextualSecondaryAction(activeContext),
+                                        secondaryActionLabel:
+                                            _getContextualSecondaryLabel(activeContext),
+                                        secondaryActionIcon:
+                                            _getContextualSecondaryIcon(activeContext),
+                                        onOpenAllTools: _showAiPowerToolsMenu,
+                                        onOpenSplitScreen: _toggleSplitAiOverlay,
+                                      );
+                                    },
+                                  ),
+                                ),
+                              ),
+                            );
+                          },
                         ),
                     ],
                   );

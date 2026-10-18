@@ -307,52 +307,59 @@ class _MiniAiOverlayPanelState extends State<MiniAiOverlayPanel> {
       _scrollToBottom();
     }
 
-    return Material(
-      elevation: 12,
-      color: AppTheme.surfaceWhite,
-      child: DecoratedBox(
-        decoration: const BoxDecoration(
-          color: AppTheme.surfaceWhite,
-          border: Border(
-            top: BorderSide(color: AppTheme.primaryBlue, width: 2.0),
+    return RepaintBoundary(
+      child: Material(
+        elevation: 12,
+        color: AppTheme.surfaceWhite,
+        child: DecoratedBox(
+          decoration: const BoxDecoration(
+            color: AppTheme.surfaceWhite,
+            border: Border(
+              top: BorderSide(color: AppTheme.primaryBlue, width: 2.0),
+            ),
           ),
-        ),
-        child: Column(
-          children: [
-            // 1. Draggable Split Divider & Compact Header Bar
-            _buildSplitHeader(context, aiProv),
+          child: Column(
+            children: [
+              // 1. Draggable Split Divider & Compact Header Bar
+              _buildSplitHeader(context, aiProv),
 
-            // 1b. In-Page Quick Action Banner jika ada konteks aktif di WebView atas
-            if (widget.detectedContext.hasActiveContext &&
-                widget.onContextualPrimaryAction != null)
-              ContextualQuickActionBanner(
-                detectedContext: widget.detectedContext,
-                onPrimaryAction: widget.onContextualPrimaryAction!,
-                onSecondaryAction: widget.onContextualSecondaryAction,
-                secondaryActionLabel: widget.contextualSecondaryLabel,
-              ),
+              // 1b. In-Page Quick Action Banner jika ada konteks aktif di WebView atas
+              if (widget.detectedContext.hasActiveContext &&
+                  widget.onContextualPrimaryAction != null)
+                ContextualQuickActionBanner(
+                  detectedContext: widget.detectedContext,
+                  onPrimaryAction: widget.onContextualPrimaryAction!,
+                  onSecondaryAction: widget.onContextualSecondaryAction,
+                  secondaryActionLabel: widget.contextualSecondaryLabel,
+                ),
 
-            // 2. Contextual Live WebView Action Strip
-            _buildWebContextStrip(aiProv),
+              // 2. Contextual Live WebView Action Strip
+              _buildWebContextStrip(aiProv),
 
-            // 3. Chat Messages List
-            Expanded(
-              child: Container(
-                color: AppTheme.bgGrey,
-                child: ListView.builder(
-                  controller: _scrollController,
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 12,
-                    vertical: 8,
+              // 3. Chat Messages List
+              Expanded(
+                child: Container(
+                  color: AppTheme.bgGrey,
+                  child: ListView.builder(
+                    controller: _scrollController,
+                    physics: const BouncingScrollPhysics(
+                      parent: AlwaysScrollableScrollPhysics(),
+                    ),
+                    cacheExtent: 600,
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 12,
+                      vertical: 8,
+                    ),
+                    itemCount: aiProv.messages.length,
+                    itemBuilder: (ctx, index) {
+                      final msg = aiProv.messages[index];
+                      return RepaintBoundary(
+                        child: _buildCompactMessageItem(ctx, msg, aiProv),
+                      );
+                    },
                   ),
-                  itemCount: aiProv.messages.length,
-                  itemBuilder: (ctx, index) {
-                    final msg = aiProv.messages[index];
-                    return _buildCompactMessageItem(ctx, msg, aiProv);
-                  },
                 ),
               ),
-            ),
 
             // 4. Thinking Indicator
             if (aiProv.isLoading)
@@ -442,6 +449,7 @@ class _MiniAiOverlayPanelState extends State<MiniAiOverlayPanel> {
             _buildCompactInputBar(aiProv),
           ],
         ),
+      ),
       ),
     );
   }
