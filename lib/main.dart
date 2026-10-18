@@ -30,15 +30,15 @@ void main() async {
         ChangeNotifierProvider(create: (_) => AiProvider(aiService, storage)),
         ChangeNotifierProvider(create: (_) => BiometricProvider(biometricService)),
       ],
-      child: UnpamMobileApp(storageService: storage),
+      child: ThePamsApp(storageService: storage),
     ),
   );
 }
 
-class UnpamMobileApp extends StatelessWidget {
+class ThePamsApp extends StatelessWidget {
   final StorageService storageService;
 
-  const UnpamMobileApp({
+  const ThePamsApp({
     super.key,
     required this.storageService,
   });
@@ -46,10 +46,13 @@ class UnpamMobileApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      title: 'UNPAM LMS Mobile',
+      title: 'The PAMs',
       debugShowCheckedModeBanner: false,
       theme: AppTheme.lightTheme,
       home: AppGate(storageService: storageService),
     );
   }
 }
+
+/// Backward compatibility alias
+typedef UnpamMobileApp = ThePamsApp;

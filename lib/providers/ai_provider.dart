@@ -42,7 +42,7 @@ class AiProvider extends ChangeNotifier {
       AiMessage(
         id: 'welcome_msg',
         content:
-            'Halo! Saya **UNPAM AI**, asisten akademik cerdas Universitas Pamulang.\n\n'
+            'Halo! Saya **The PAMs AI**, asisten cerdas portal perkuliahan & akademik.\n\n'
             'Kini Anda dapat memilih berbagai model AI terdepan (Google Gemini, DeepSeek R1/V3, Claude 3.5 Sonnet, Qwen 2.5, OpenAI, atau Cloud AI Gratis) melalui menu pilihan model di bagian atas.',
         isUser: false,
         timestamp: DateTime.now(),

@@ -99,7 +99,7 @@ class _AppGateState extends State<AppGate> with WidgetsBindingObserver {
                 ),
                 SizedBox(height: 12),
                 Text(
-                  'Menyiapkan UNPAM LMS Mobile...',
+                  'Menyiapkan The PAMs...',
                   style: TextStyle(
                     fontSize: 13,
                     color: AppTheme.textMuted,

@@ -40,7 +40,7 @@ class _PortalWebViewScreenState extends State<PortalWebViewScreen> with WidgetsB
   bool _hasError = false;
   bool _isWhiteScreenDetected = false;
   String _errorMessage = '';
-  String _pageTitle = 'Mentari UNPAM';
+  String _pageTitle = 'Mentari Portal';
   String _currentUrl = '';
   bool _canGoBack = false;
   DateTime? _lastBackPressTime;
@@ -939,7 +939,7 @@ class _PortalWebViewScreenState extends State<PortalWebViewScreen> with WidgetsB
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
                             const Text(
-                              'UNPAM AI Tools & Fitur Cerdas',
+                              'The PAMs AI Tools & Fitur Cerdas',
                               style: TextStyle(
                                 fontSize: 16,
                                 fontWeight: FontWeight.bold,
@@ -1017,7 +1017,7 @@ class _PortalWebViewScreenState extends State<PortalWebViewScreen> with WidgetsB
                           iconColor: AppTheme.accentGold,
                           iconBgColor: Colors.amber.shade50,
                           title: 'Tanya AI Halaman Ini',
-                          subtitle: 'Kirim teks halaman ke ruang konsultasi akademik UNPAM AI',
+                          subtitle: 'Kirim teks halaman ke ruang konsultasi akademik The PAMs AI',
                           onTap: () {
                             Navigator.pop(ctx);
                             _consultWithAi();
@@ -1056,7 +1056,7 @@ class _PortalWebViewScreenState extends State<PortalWebViewScreen> with WidgetsB
                           iconColor: AppTheme.accentGold,
                           iconBgColor: Colors.amber.shade50,
                           title: 'Biometric Auto-Login Vault',
-                          subtitle: 'Kelola akun UNPAM terenkripsi & masuk otomatis dengan sidik jari',
+                          subtitle: 'Kelola akun terenkripsi & masuk otomatis dengan sidik jari',
                           onTap: () {
                             Navigator.pop(ctx);
                             BiometricVaultSheet.show(context);
@@ -1331,7 +1331,7 @@ class _PortalWebViewScreenState extends State<PortalWebViewScreen> with WidgetsB
       if (mounted) {
         final pdfToOpen = (dataUri != null && dataUri.isNotEmpty) ? dataUri : currentUrl;
         if (pdfToOpen.isNotEmpty) {
-          await _handleAcademicFileDownload(pdfToOpen, customName: 'Kartu_Ujian_UNPAM.pdf');
+          await _handleAcademicFileDownload(pdfToOpen, customName: 'Kartu_Ujian.pdf');
         }
       }
     } catch (e) {
@@ -2325,7 +2325,7 @@ class _PortalWebViewScreenState extends State<PortalWebViewScreen> with WidgetsB
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           const Text(
-                            'UNPAM Auto-Login',
+                            'Biometric Auto-Login',
                             style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: AppTheme.textDark),
                           ),
                           Text(
@@ -3270,7 +3270,7 @@ class _PortalWebViewScreenState extends State<PortalWebViewScreen> with WidgetsB
                 if (!oldBadge) {
                   var badge = document.createElement('span');
                   badge.className = 'unpam-ai-badge';
-                  badge.innerText = ' [Rekomendasi UNPAM AI]';
+                  badge.innerText = ' [Rekomendasi The PAMs AI]';
                   badge.style.color = '#2E7D32';
                   badge.style.fontWeight = 'bold';
                   badge.style.fontSize = '12px';
@@ -4488,7 +4488,7 @@ class _PortalWebViewScreenState extends State<PortalWebViewScreen> with WidgetsB
                                     ),
                                     const SizedBox(width: 8),
                                     const Text(
-                                      'UNPAM AI Tools',
+                                      'The PAMs AI Tools',
                                       style: TextStyle(
                                         color: Colors.white,
                                         fontWeight: FontWeight.bold,
@@ -4741,7 +4741,7 @@ class _PortalWebViewScreenState extends State<PortalWebViewScreen> with WidgetsB
         NavigationDestination(
           icon: Icon(Icons.auto_awesome_outlined),
           selectedIcon: Icon(Icons.auto_awesome, color: AppTheme.accentGold),
-          label: 'UNPAM AI',
+          label: 'The PAMs AI',
         ),
       ],
     );

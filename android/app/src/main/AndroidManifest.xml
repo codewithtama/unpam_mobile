@@ -33,7 +33,7 @@
     </queries>
 
     <application
-        android:label="UNPAM LMS"
+        android:label="The PAMs"
         android:name="${applicationName}"
         android:icon="@mipmap/ic_launcher"
         android:hardwareAccelerated="true"

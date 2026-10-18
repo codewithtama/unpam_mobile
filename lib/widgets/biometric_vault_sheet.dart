@@ -61,7 +61,7 @@ class _BiometricVaultSheetState extends State<BiometricVaultSheet> {
       });
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
-          content: Text('Kredensial UNPAM berhasil disimpan dengan aman via Biometrik!'),
+          content: Text('Kredensial berhasil disimpan dengan aman via Biometrik!'),
           backgroundColor: AppTheme.primaryBlue,
         ),
       );
@@ -81,7 +81,7 @@ class _BiometricVaultSheetState extends State<BiometricVaultSheet> {
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
         title: const Text('Hapus Kredensial?'),
         content: const Text(
-          'Akun UNPAM yang tersimpan di perangkat ini akan dihapus secara permanen dari Secure Storage.',
+          'Akun yang tersimpan di perangkat ini akan dihapus secara permanen dari Secure Storage.',
         ),
         actions: [
           TextButton(
@@ -163,7 +163,7 @@ class _BiometricVaultSheetState extends State<BiometricVaultSheet> {
                         ),
                         SizedBox(height: 2),
                         Text(
-                          'Login cepat Mentari UNPAM dengan Sidik Jari',
+                          'Login cepat portal Mentari dengan Sidik Jari',
                           style: TextStyle(fontSize: 12, color: AppTheme.textMuted),
                         ),
                       ],
@@ -321,7 +321,7 @@ class _BiometricVaultSheetState extends State<BiometricVaultSheet> {
                   controller: _passwordController,
                   obscureText: _obscurePassword,
                   decoration: InputDecoration(
-                    labelText: 'Password Mentari UNPAM',
+                    labelText: 'Password Akun Mentari',
                     prefixIcon: const Icon(Icons.lock_outline_rounded, size: 20),
                     suffixIcon: IconButton(
                       icon: Icon(

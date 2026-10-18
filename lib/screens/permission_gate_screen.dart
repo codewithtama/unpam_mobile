@@ -171,7 +171,7 @@ class _PermissionGateScreenState extends State<PermissionGateScreen>
           ],
         ),
         content: const Text(
-          'Aplikasi UNPAM Mobile memerlukan persetujuan seluruh izin (Notifikasi, Kamera, dan Penyimpanan Media) untuk dapat beroperasi. Jika izin tidak disetujui, aplikasi tidak dapat digunakan.',
+          'Aplikasi The PAMs memerlukan persetujuan seluruh izin (Notifikasi, Kamera, dan Penyimpanan Media) untuk dapat beroperasi. Jika izin tidak disetujui, aplikasi tidak dapat digunakan.',
           style: TextStyle(fontSize: 14, color: AppTheme.textDark, height: 1.45),
         ),
         actions: [
@@ -269,7 +269,7 @@ class _PermissionGateScreenState extends State<PermissionGateScreen>
                       ),
                       const SizedBox(height: 8),
                       const Text(
-                        'Sebelum menggunakan UNPAM Mobile, Anda wajib menyetujui seluruh izin di bawah ini agar portal perkuliahan, notifikasi, dan kecerdasan buatan dapat bekerja optimal.',
+                        'Sebelum menggunakan The PAMs, Anda wajib menyetujui seluruh izin di bawah ini agar portal perkuliahan, notifikasi, dan kecerdasan buatan dapat bekerja optimal.',
                         textAlign: TextAlign.center,
                         style: TextStyle(
                           fontSize: 13.5,
@@ -354,7 +354,7 @@ class _PermissionGateScreenState extends State<PermissionGateScreen>
                       _buildPermissionCard(
                         type: AppPermissionType.camera,
                         icon: Icons.camera_alt_rounded,
-                        title: 'Kamera (UNPAM AI Vision OCR)',
+                        title: 'Kamera (The PAMs AI Vision OCR)',
                         description:
                             'Memindai langsung foto soal kuis/tugas perkuliahan, teks modul kuliah, dan tangkapan visual untuk dianalisis oleh AI cerdas.',
                         status: _cameraStatus,

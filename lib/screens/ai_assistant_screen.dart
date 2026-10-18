@@ -71,7 +71,7 @@ class _AiThinkingIndicatorState extends State<_AiThinkingIndicator> with SingleT
               const SizedBox(width: 10),
               const Expanded(
                 child: Text(
-                  'UNPAM AI sedang merangkai jawaban terbaik...',
+                  'The PAMs AI sedang merangkai jawaban terbaik...',
                   style: TextStyle(fontSize: 12, color: AppTheme.textMuted, fontWeight: FontWeight.w500),
                 ),
               ),
@@ -227,7 +227,7 @@ class _AiAssistantScreenState extends State<AiAssistantScreen> {
           children: [
             Icon(Icons.auto_awesome, color: AppTheme.accentGold, size: 22),
             SizedBox(width: 8),
-            Text('UNPAM AI'),
+            Text('The PAMs AI'),
           ],
         ),
         actions: [
@@ -394,7 +394,7 @@ class _AiAssistantScreenState extends State<AiAssistantScreen> {
                   _handleSend('Bantu susun pandangan atau opini akademis untuk diskusi $mk');
                 }),
                 _buildQuickChip('💡 Tips Belajar Kuis & Ujian', () {
-                  _handleSend('Berikan tips strategi belajar efektif menghadapi Pretest dan Post-test di UNPAM');
+                  _handleSend('Berikan tips strategi belajar efektif menghadapi Pretest dan Post-test perkuliahan');
                 }),
               ],
             ),
@@ -638,7 +638,7 @@ class _AiAssistantScreenState extends State<AiAssistantScreen> {
                       ),
                       const SizedBox(width: 6),
                       const Text(
-                        'UNPAM AI',
+                        'The PAMs AI',
                         style: TextStyle(
                           fontSize: 12,
                           fontWeight: FontWeight.bold,

@@ -1,12 +1,12 @@
-# UNPAM Mobile — Portal LMS & SIAKAD Terpadu Mahasiswa
+# The PAMs — Portal Perkuliahan & Akademik Terpadu
 
 [![Flutter](https://img.shields.io/badge/Flutter-3.41.7-02569B?logo=flutter&logoColor=white)](https://flutter.dev)
 [![Dart](https://img.shields.io/badge/Dart-3.11.5-0175C2?logo=dart&logoColor=white)](https://dart.dev)
-[![Release](https://img.shields.io/badge/Release-v1.0.17-10B981?logo=github&logoColor=white)](https://github.com/codewithtama/unpam_mobile/releases/tag/v1.0.17)
+[![Release](https://img.shields.io/badge/Release-v1.0.22-10B981?logo=github&logoColor=white)](https://github.com/codewithtama/unpam_mobile/releases/tag/v1.0.22)
 [![Platform](https://img.shields.io/badge/Platform-Android%20(API%2021%2B)-3DDC84?logo=android&logoColor=white)](https://android.com)
 [![License](https://img.shields.io/badge/License-Academic-blue.svg)](#keamanan--kepatuhan-privasi)
 
-**UNPAM Mobile** adalah aplikasi portal terpadu untuk civitas akademika Universitas Pamulang yang menyatukan sistem pembelajaran digital (**Mentari LMS**) dan sistem informasi akademik (**MyUnpam SIAKAD**) ke dalam satu aplikasi native modern berkinerja tinggi. Aplikasi ini dilengkapi dengan asisten cerdas **UNPAM AI Multi-Engine**, autentikasi biometrik terenkripsi, gerbang persetujuan izin wajib, penanganan berkas perkuliahan otomatis, serta sinkronisasi riwayat pembaruan langsung dari GitHub API tanpa hardcode.
+**The PAMs** adalah aplikasi portal perkuliahan terpadu independen yang menyatukan sistem pembelajaran digital (**Mentari LMS**) dan sistem informasi akademik (**MyUnpam SIAKAD**) ke dalam satu aplikasi native modern berkinerja tinggi. Aplikasi ini dilengkapi dengan asisten cerdas **The PAMs AI Multi-Engine**, autentikasi biometrik terenkripsi, gerbang persetujuan izin wajib, penanganan berkas perkuliahan otomatis, serta sinkronisasi riwayat pembaruan langsung dari GitHub API tanpa hardcode.
 
 ---
 
@@ -25,7 +25,7 @@
 ## Fitur Utama
 
 * **Dual-Isolated Web Engine (Mentari LMS & MyUnpam SIAKAD)**: Memisahkan web controller Mentari dan MyUnpam menggunakan arsitektur `IndexedStack` sehingga berpindah menu tidak me-reload sesi atau menghilangkan jawaban kuis mahasiswa yang sedang berlangsung.
-* **UNPAM AI Academic Assistant (Multi-Model AI)**: Asisten cerdas yang mendukung beragam provider LLM kelas dunia (Google Gemini 3.7/3.5, DeepSeek V4, Anthropic Claude 5.5, Alibaba Qwen 3.8-Max, OpenAI GPT-4o, dan OpenRouter).
+* **The PAMs AI Academic Assistant (Multi-Model AI)**: Asisten cerdas yang mendukung beragam provider LLM kelas dunia (Google Gemini 3.7/3.5, DeepSeek V4, Anthropic Claude 5.5, Alibaba Qwen 3.8-Max, OpenAI GPT-4o, dan OpenRouter).
 * **Vision OCR Soal Kuis & Modul**: Memindai foto soal kuis atau tugas kuliah langsung dari kamera atau galeri dengan analisis optik multimodal.
 * **AI Otomatis Isi Kuesioner Dosen**: Menganalisis form kuesioner evaluasi dosen di Mentari dan merancang draf catatan apresiasi konstruktif secara cerdas.
 * **AI Parafrase Akademik**: Mengolah redaksi teks karya tulis dengan 4 pilihan gaya bahasa (Formal, Santai, Akademis, Ringkas) untuk mencegah duplikasi/plagiarisme.
@@ -51,7 +51,7 @@ graph TD
     subgraph "PortalWebViewScreen (Bottom Navigation 3 Menu)"
         E --> F[Tab 0: Mentari LMS<br>mentari.unpam.ac.id]
         E --> G[Tab 1: MyUnpam SIAKAD<br>my.unpam.ac.id]
-        E --> H[Tab 2: UNPAM AI Screen<br>Ruang Konsultasi Akademik]
+        E --> H[Tab 2: The PAMs AI Screen<br>Ruang Konsultasi Akademik]
         
         F -.-> I[Draggable Floating AI Pill]
         G -.-> I
@@ -75,7 +75,7 @@ graph TD
 * **MyUnpam SIAKAD (`my.unpam.ac.id`)**: Akses terpadu ke Sistem Informasi Akademik Mahasiswa: Pengisian KRS, Kartu Hasil Studi (KHS), Transkrip Nilai, Informasi Keuangan & Pembayaran Kuliah, serta Jadwal Ujian.
 * **Penanganan Cerdas Berkas Cetak**: Otomatis mendeteksi unduhan berkas PDF (Cetak KRS, Cetak KHS, Kartu Ujian, dan Modul) agar langsung diteruskan ke aplikasi pembaca PDF eksternal di Android.
 
-### 2. UNPAM AI Multi-Engine & Vision OCR
+### 2. The PAMs AI Multi-Engine & Vision OCR
 * **Draggable Floating Action Pill**: Tombol aksi mengambang yang dapat digeser bebas di atas WebView perkuliahan tanpa menutupi materi penting.
 * **Fitur AI Terpadu**:
   * **AI Forum Diskusi**: Menganalisis topik pertanyaan diskusi dosen dan merancang argumen akademis yang orisinal.
@@ -92,7 +92,7 @@ graph TD
 ### 4. Gerbang Persetujuan Izin Wajib (Mandatory Gatekeeper)
 * Sebelum masuk ke portal, aplikasi memverifikasi 3 izin perangkat:
   1. **Notifikasi Sistem**: Menerima pengingat tenggat tugas, jadwal kuliah, dan rilis pembaruan aplikasi.
-  2. **Kamera**: Diperlukan fitur UNPAM AI Vision OCR untuk memindai soal ujian dan catatan kuliah.
+  2. **Kamera**: Diperlukan fitur The PAMs AI Vision OCR untuk memindai soal ujian dan catatan kuliah.
   3. **Penyimpanan & Galeri Foto**: Mengunggah berkas jawaban tugas mahasiswa ke portal Mentari/MyUnpam.
 * Pengguna tidak dapat menggunakan aplikasi jika izin belum diberikan. Jika diblokir permanen oleh sistem, disediakan tombol langsung menuju menu Pengaturan HP (`openAppSettings()`) dan status diperbarui otomatis begitu kembali ke aplikasi.
 
@@ -137,7 +137,7 @@ unpam_mobile/
 │   │   ├── github_release.dart           # Model payload rilis GitHub API & format tanggal
 │   │   └── paraphrase_model.dart         # Model gaya parafrase & perbandingan teks
 │   ├── providers/
-│   │   ├── ai_provider.dart              # State management UNPAM AI & penyimpanan riwayat
+│   │   ├── ai_provider.dart              # State management The PAMs AI & penyimpanan riwayat
 │   │   └── biometric_provider.dart       # State management status biometrik & kredensial
 │   ├── screens/
 │   │   ├── ai_assistant_screen.dart      # Layar percakapan AI, kuis, & Vision OCR

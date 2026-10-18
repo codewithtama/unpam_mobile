@@ -43,7 +43,7 @@ class BiometricProvider extends ChangeNotifier {
     notifyListeners();
     try {
       final authenticated = await _service.authenticate(
-        localizedReason: 'Konfirmasi sidik jari untuk menyimpan kredensial UNPAM.',
+        localizedReason: 'Konfirmasi sidik jari untuk menyimpan kredensial akun.',
       );
       if (!authenticated) {
         _isLoading = false;

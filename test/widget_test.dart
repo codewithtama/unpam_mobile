@@ -281,7 +281,7 @@ void main() {
 
       expect(find.text('Persetujuan Izin Wajib'), findsOneWidget);
       expect(find.text('Notifikasi Sistem & Perkuliahan'), findsOneWidget);
-      expect(find.text('Kamera (UNPAM AI Vision OCR)'), findsOneWidget);
+      expect(find.text('Kamera (The PAMs AI Vision OCR)'), findsOneWidget);
       expect(find.text('Foto & Media Penyimpanan'), findsOneWidget);
       expect(find.text('Izinkan Seluruh Akses'), findsOneWidget);
       expect(find.text('Tolak & Keluar dari Aplikasi'), findsOneWidget);

@@ -420,7 +420,7 @@ class AiService {
           mimeType: mimeType,
           extraHeaders: {
             'HTTP-Referer': 'https://mentari.unpam.ac.id',
-            'X-Title': 'UNPAM Mobile App',
+            'X-Title': 'The PAMs',
           },
         );
 

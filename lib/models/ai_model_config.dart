@@ -32,7 +32,7 @@ class AiModelOption {
   static const List<AiModelOption> availableModels = [
     AiModelOption(
       id: 'free_cloud',
-      name: 'UNPAM Cloud AI',
+      name: 'The PAMs Cloud AI',
       shortName: 'Cloud AI',
       description: 'Bebas kuota, tanpa API key. Cepat untuk tanya jawab umum & tugas perkuliahan.',
       provider: AiProviderType.freeCloud,

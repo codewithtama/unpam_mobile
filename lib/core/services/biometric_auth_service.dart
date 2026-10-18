@@ -40,7 +40,7 @@ class BiometricAuthService {
   /// Melakukan otentikasi biometrik dengan dialog bawaan sistem operasi
   Future<bool> authenticate({
     String localizedReason =
-        'Pindai sidik jari Anda untuk memverifikasi akun UNPAM.',
+        'Pindai sidik jari Anda untuk memverifikasi akun.',
   }) async {
     try {
       final available = await canAuthenticateWithBiometrics();
@@ -100,7 +100,7 @@ class BiometricAuthService {
 
   /// Mengambil kredensial setelah lolos otentikasi biometrik
   Future<Map<String, String>?> getCredentialsWithBiometric({
-    String reason = 'Otentikasi sidik jari untuk login otomatis ke Mentari UNPAM.',
+    String reason = 'Otentikasi sidik jari untuk login otomatis ke portal Mentari.',
   }) async {
     final hasCreds = await hasSavedCredentials();
     if (!hasCreds) return null;

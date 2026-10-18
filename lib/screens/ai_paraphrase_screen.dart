@@ -781,7 +781,7 @@ class _AiParaphraseScreenState extends State<AiParaphraseScreen> {
               Text(
                 '1. Parafrase bertujuan menyampaikan kembali gagasan penulis lain menggunakan kalimat Anda sendiri tanpa mengubah makna aslinya.\n'
                 '2. Hindari hanya mengganti satu atau dua kata (synonym replacement). AI ini merombak struktur kalimat secara konseptual.\n'
-                '3. Tetap cantumkan sumber rujukan atau nama penulis asli pada daftar pustaka tugas Anda agar sesuai kaidah integritas akademik UNPAM.',
+                '3. Tetap cantumkan sumber rujukan atau nama penulis asli pada daftar pustaka tugas Anda agar sesuai kaidah integritas akademik.',
                 style: TextStyle(fontSize: 12, height: 1.45, color: AppTheme.textMuted),
               ),
             ],

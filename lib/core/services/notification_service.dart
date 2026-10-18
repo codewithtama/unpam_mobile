@@ -15,9 +15,9 @@ class NotificationService {
   void Function(AppUpdateInfo info)? onUpdateNotificationTap;
   AppUpdateInfo? _pendingUpdateInfo;
 
-  static const String _channelId = 'unpam_update_channel_v2';
-  static const String _channelName = 'Pembaruan Aplikasi UNPAM';
-  static const String _channelDesc = 'Pemberitahuan ketika versi baru aplikasi UNPAM Mobile tersedia.';
+  static const String _channelId = 'the_pams_update_channel_v1';
+  static const String _channelName = 'Pembaruan Aplikasi The PAMs';
+  static const String _channelDesc = 'Pemberitahuan ketika versi baru aplikasi The PAMs tersedia.';
 
   Future<void> initialize({void Function(AppUpdateInfo info)? onUpdateTap}) async {
     if (onUpdateTap != null) {
@@ -138,7 +138,7 @@ class NotificationService {
         ticker: 'Pembaruan Tersedia',
         styleInformation: BigTextStyleInformation(
           '${updateInfo.releaseTitle}\n\nKetuk untuk mengunduh dan memasang versi terbaru.',
-          contentTitle: 'Pembaruan UNPAM Mobile ${updateInfo.latestVersion} Tersedia! 🚀',
+          contentTitle: 'Pembaruan The PAMs ${updateInfo.latestVersion} Tersedia! 🚀',
           summaryText: 'Pembaruan Tersedia (${updateInfo.latestVersion})',
         ),
       );
@@ -152,7 +152,7 @@ class NotificationService {
         ),
       );
 
-      final title = 'Pembaruan UNPAM Mobile ${updateInfo.latestVersion} Tersedia! 🚀';
+      final title = 'Pembaruan The PAMs ${updateInfo.latestVersion} Tersedia! 🚀';
       final body = '${updateInfo.releaseTitle} telah dirilis. Ketuk untuk mengunduh dan memasang versi terbaru.';
 
       await _plugin.show(

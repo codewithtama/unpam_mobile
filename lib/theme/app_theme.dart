@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 
 class AppTheme {
-  // Brand Colors UNPAM
+  // Brand Colors The PAMs
   static const Color primaryBlue = Color(0xFF1E3A8A); // Deep Navy Blue
   static const Color primaryLight = Color(0xFF2563EB); // Royal Blue
   static const Color accentGold = Color(0xFFD97706); // Amber Gold

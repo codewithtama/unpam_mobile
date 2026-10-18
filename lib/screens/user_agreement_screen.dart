@@ -89,7 +89,7 @@ class _UserAgreementScreenState extends State<UserAgreementScreen> {
           ],
         ),
         content: const Text(
-          'Untuk menggunakan aplikasi UNPAM Mobile dan mengakses portal Mentari, persetujuan syarat dan ketentuan diperlukan. Jika Anda menolak, aplikasi akan ditutup.',
+          'Untuk menggunakan aplikasi The PAMs dan mengakses portal Mentari, persetujuan syarat dan ketentuan diperlukan. Jika Anda menolak, aplikasi akan ditutup.',
           style: TextStyle(fontSize: 14, color: AppTheme.textDark, height: 1.45),
         ),
         actions: [
@@ -181,7 +181,7 @@ class _UserAgreementScreenState extends State<UserAgreementScreen> {
                 borderRadius: BorderRadius.circular(12),
               ),
               child: const Text(
-                'UNPAM Mobile',
+                'The PAMs',
                 style: TextStyle(
                   color: Colors.white,
                   fontSize: 11,
@@ -212,14 +212,14 @@ class _UserAgreementScreenState extends State<UserAgreementScreen> {
                           number: '1',
                           title: 'Status Aplikasi',
                           content:
-                              'Aplikasi ini adalah perangkat lunak tidak resmi yang dikembangkan secara independen dan tidak berafiliasi, tidak didukung, serta tidak diotorisasi oleh Universitas Pamulang (UNPAM) dalam bentuk apapun. Seluruh data akademik yang ditampilkan bersumber dari portal Mentari UNPAM dan merupakan milik Universitas Pamulang.',
+                              'Aplikasi The PAMs adalah perangkat lunak independen dan BUKAN merupakan aplikasi resmi yang berafiliasi, didukung, maupun diotorisasi oleh pihak universitas dalam bentuk apapun. Seluruh data perkuliahan dan akademik yang ditampilkan bersumber langsung dari portal web Mentari & MyUnpam.',
                         ),
                         const SizedBox(height: 12),
                         _buildSimpleSection(
                           number: '2',
                           title: 'Penggunaan Data Akun',
                           content:
-                              'Untuk mengakses fitur aplikasi, Anda diperlukan memasukkan kredensial akun Mentari UNPAM (NIM dan kata sandi). Data ini digunakan hanya untuk keperluan autentikasi ke server Mentari dan tidak disimpan di server pihak ketiga manapun. Anda bertanggung jawab penuh atas kerahasiaan akun Anda.',
+                              'Untuk mengakses fitur aplikasi, Anda diperlukan memasukkan kredensial akun portal Mentari / MyUnpam (NIM dan kata sandi). Data ini digunakan hanya untuk keperluan autentikasi ke server portal terkait dan tidak disimpan di server pihak ketiga manapun. Anda bertanggung jawab penuh atas kerahasiaan akun Anda.',
                         ),
                         const SizedBox(height: 12),
                         _buildAiFeatureSection(),
@@ -422,7 +422,7 @@ class _UserAgreementScreenState extends State<UserAgreementScreen> {
   Widget _buildAiFeatureSection() {
     final List<String> aiPoints = [
       'Respons yang diberikan AI bersifat bantuan, bukan keputusan resmi. Jangan jadikan output AI sebagai dasar keputusan akademik yang penting.',
-      'AI dapat memberikan informasi yang tidak akurat atau tidak mutakhir. Selalu verifikasi ke sumber resmi UNPAM.',
+      'AI dapat memberikan informasi yang tidak akurat atau tidak mutakhir. Selalu verifikasi ke sumber resmi kampus atau dosen pengampu.',
       'Percakapan dengan fitur AI dapat diproses oleh penyedia layanan AI pihak ketiga sesuai kebijakan privasi mereka.',
       'Jangan memasukkan informasi sensitif seperti kata sandi, data keuangan, atau informasi pribadi yang tidak relevan ke dalam kolom percakapan AI.',
     ];
@@ -500,8 +500,8 @@ class _UserAgreementScreenState extends State<UserAgreementScreen> {
   Widget _buildLiabilitySection() {
     final List<String> liabilityPoints = [
       'Kerusakan data atau kerugian yang timbul akibat penggunaan aplikasi ini',
-      'Ketidakakuratan data yang bersumber dari portal Mentari UNPAM',
-      'Gangguan akses yang disebabkan oleh perubahan sistem dari pihak UNPAM',
+      'Ketidakakuratan data yang bersumber dari portal web Mentari atau MyUnpam',
+      'Gangguan akses yang disebabkan oleh pemeliharaan atau perubahan sistem dari server portal kampus',
       'Keputusan yang diambil berdasarkan output fitur AI',
     ];
 
