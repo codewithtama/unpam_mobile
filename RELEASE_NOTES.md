@@ -1,15 +1,14 @@
-# Pembaruan The PAMs v1.0.23
+# Pembaruan The PAMs v1.0.24
 
-Pembaruan The PAMs v1.0.23:
+Pembaruan The PAMs v1.0.24:
 
-- **Bypass Proteksi Cloudflare pada Unduhan Berkas Akademik**:
-  * Mengatasi kegagalan dan pemblokiran unduhan berkas PDF perkuliahan (Cetak KRS, KHS, Kartu Ujian UTS/UAS, Jadwal Kuliah, Modul LMS Moodle, Transkrip Nilai) oleh Cloudflare Turnstile & Bot Management.
-  * Menerapkan arsitektur **In-WebView Chromium Fetch Bridge**: unduhan dieksekusi langsung di dalam konteks peramban WebView yang memegang sesi login resmi dan sidik jari TLS (*TLS Client Hello*) Chromium asli, menghindari diskrepansi TLS stack Dart/Dio.
-  * Aliran biner berkas ditransfer secara aman menggunakan *chunked Base64 streaming* (256 KB per payload) langsung ke sistem penyimpanan lokal tanpa membebani memori (*Zero OOM/Binder Limit*).
-  * Otomatis membuka dokumen hasil unduhan dengan aplikasi penampil PDF bawaan perangkat HP (Google PDF Viewer, WPS Office, Adobe Acrobat, dsb.).
-  * Menyediakan lapisan cadangan (*Dio fallback*) dan opsi buka di browser eksternal jika dokumen berasal dari host eksternal (Google Drive, Dropbox, repo publik).
-- **Format Penamaan Berkas Dokumen The PAMs**:
-  * Nama dokumen akademik yang diunduh kini secara rapi diberi penanda resmi The PAMs (`Cetak_KRS_ThePAMs_...`, `Cetak_KHS_ThePAMs_...`, `Kartu_UTS_ThePAMs_...`, `Modul_Kuliah_ThePAMs_...`).
-- **Peningkatan Stabilitas & Efisiensi Memori**:
-  * Pembersihan berkas sementara secara otomatis setelah berkas dipindahkan ke folder Downloads.
-  * Seluruh pengujian otomatis unit & widget test tervalidasi 100% lulus.
+- **Dukungan Penuh Ekstraksi Berkas Memori Browser (Skema `blob:`)**:
+  * Mengatasi error *"No host specified in URI blob:https://..."* saat menekan tombol **CETAK** pada menu Jadwal Kuliah, KRS, dan KHS MyUnpam.
+  * Berkas PDF yang dibuat secara dinamis oleh JavaScript peramban (*client-side Blob*) kini langsung diekstraksi dari memori peramban menggunakan transmisi biner W3C compliant tanpa parameter credentials/headers yang memicu penolakan browser.
+  * Mencegah Dio dari memproses URL skema `blob:` yang hanya ada di RAM peramban.
+  * Otomatis memberikan nama berkas resmi yang bermakna (`Jadwal_Kuliah_ThePAMs_...`, `Cetak_KRS_ThePAMs_...`, dsb.) berdasarkan konteks halaman yang sedang aktif.
+- **Pembersihan Menu The PAMs AI Tools**:
+  * Menghapus opsi manual unduh berkas halaman agar tampilan menu asisten AI lebih bersih dan fokus pada kapabilitas kecerdasan buatan.
+- **Pengujian & Kualitas**:
+  * Seluruh 24 pengujian otomatis unit & widget tests lulus 100%.
+  * Bebas dari error atau peringatan analisis (*0 issues*).

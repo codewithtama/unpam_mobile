@@ -406,6 +406,7 @@ void main() {
       expect(FileDownloadService.isDocumentUrl('https://my.unpam.ac.id/dokumen.pdf?token=123'), isTrue);
       expect(FileDownloadService.isDocumentUrl('https://my.unpam.ac.id/export?format=pdf'), isTrue);
       expect(FileDownloadService.isDocumentUrl('data:application/pdf;base64,JVBERi0xLjQK...'), isTrue);
+      expect(FileDownloadService.isDocumentUrl('blob:https://my.unpam.ac.id/a1f49c6f-f06b-47c0-8e40-71450a1b2e46'), isTrue);
     });
 
     test('Ignores regular non-document portal navigation URLs', () {
@@ -423,6 +424,10 @@ void main() {
 
       expect(result.isSuccess, isFalse);
       expect(result.errorMessage, contains('tidak valid'));
+
+      final blobResult = await service.downloadAndOpenFile(url: 'blob:https://my.unpam.ac.id/1234');
+      expect(blobResult.isSuccess, isFalse);
+      expect(blobResult.errorMessage, contains('tidak dapat diakses'));
     });
 
     test('resolveFileName correctly decodes UTF-8 and standard Content-Disposition', () {

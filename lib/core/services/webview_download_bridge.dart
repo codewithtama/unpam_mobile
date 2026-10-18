@@ -106,31 +106,69 @@ class WebViewDownloadBridge {
   var dId = $safeId;
   var targetUrl = $safeUrl;
   try {
-    var resp = await fetch(targetUrl, {
-      method: 'GET',
-      credentials: 'include',
-      headers: {
-        'Accept': 'application/pdf,application/octet-stream,text/html,*/*'
-      }
-    });
+    var blob = null;
+    var disp = '';
+    var ctype = '';
 
-    if (!resp.ok) {
-      if (window.$channelName) {
-        window.$channelName.postMessage(JSON.stringify({
-          id: dId,
-          type: 'error',
-          message: 'HTTP ' + resp.status + ' ' + (resp.statusText || '')
-        }));
+    if (targetUrl.indexOf('blob:') === 0) {
+      // 1. Penanganan khusus skema blob:
+      // Sesuai W3C Fetch spec, URL blob: DILARANG menggunakan credentials: 'include' atau headers kustom.
+      try {
+        var blobResp = await fetch(targetUrl);
+        if (blobResp.ok) {
+          blob = await blobResp.blob();
+        }
+      } catch (fErr) {}
+
+      if (!blob) {
+        blob = await new Promise(function(resolve, reject) {
+          var xhr = new XMLHttpRequest();
+          xhr.open('GET', targetUrl, true);
+          xhr.responseType = 'blob';
+          xhr.onload = function() {
+            if (xhr.status === 200 || xhr.status === 0) {
+              resolve(xhr.response);
+            } else {
+              reject(new Error('Gagal mengambil blob: HTTP ' + xhr.status));
+            }
+          };
+          xhr.onerror = function() {
+            reject(new Error('Gagal membaca data memori blob peramban.'));
+          };
+          xhr.send();
+        });
       }
-      return;
+
+      ctype = (blob && blob.type) ? blob.type : 'application/pdf';
+    } else {
+      // 2. Penanganan URL jaringan http/https (Bypass Cloudflare via in-WebView fetch)
+      var resp = await fetch(targetUrl, {
+        method: 'GET',
+        credentials: 'include',
+        headers: {
+          'Accept': 'application/pdf,application/octet-stream,text/html,*/*'
+        }
+      });
+
+      if (!resp.ok) {
+        if (window.$channelName) {
+          window.$channelName.postMessage(JSON.stringify({
+            id: dId,
+            type: 'error',
+            message: 'HTTP ' + resp.status + ' ' + (resp.statusText || '')
+          }));
+        }
+        return;
+      }
+
+      disp = resp.headers.get('content-disposition') || '';
+      ctype = resp.headers.get('content-type') || '';
+      blob = await resp.blob();
     }
 
-    var disp = resp.headers.get('content-disposition') || '';
-    var ctype = resp.headers.get('content-type') || '';
-    var blob = await resp.blob();
-    var totalSize = blob.size;
+    var totalSize = blob ? blob.size : 0;
 
-    if (totalSize === 0) {
+    if (!blob || totalSize === 0) {
       if (window.$channelName) {
         window.$channelName.postMessage(JSON.stringify({
           id: dId,

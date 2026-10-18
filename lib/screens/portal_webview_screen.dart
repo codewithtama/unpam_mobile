@@ -1117,12 +1117,11 @@ class _PortalWebViewScreenState extends State<PortalWebViewScreen> with WidgetsB
   }
 
   WebViewController _getControllerForUrl(String targetUrl) {
-    final uri = Uri.tryParse(targetUrl);
-    final host = uri?.host.toLowerCase() ?? '';
-    if (host.contains('my.unpam.ac.id') && _myUnpamController != null) {
+    final lower = targetUrl.toLowerCase();
+    if (lower.contains('my.unpam.ac.id') && _myUnpamController != null) {
       return _myUnpamController!;
     }
-    if (host.contains('mentari.unpam.ac.id')) {
+    if (lower.contains('mentari.unpam.ac.id')) {
       return _controller;
     }
     return _activeController;
@@ -1169,7 +1168,29 @@ class _PortalWebViewScreenState extends State<PortalWebViewScreen> with WidgetsB
 
     final activeUrl = _currentNavIndex == 1 ? _myUnpamCurrentUrl : _currentUrl;
     String targetUrl = url.trim();
-    if (!targetUrl.startsWith('http://') && !targetUrl.startsWith('https://')) {
+
+    // Resolusi nama dokumen kontekstual jika URL adalah blob UUID (seperti pada tombol Cetak Jadwal Kuliah)
+    String? resolvedCustomName = customName;
+    if (resolvedCustomName == null && targetUrl.startsWith('blob:')) {
+      final titleLower = _pageTitle.toLowerCase();
+      if (titleLower.contains('jadwal')) {
+        resolvedCustomName = 'Jadwal_Kuliah_ThePAMs';
+      } else if (titleLower.contains('krs')) {
+        resolvedCustomName = 'Cetak_KRS_ThePAMs';
+      } else if (titleLower.contains('khs')) {
+        resolvedCustomName = 'Cetak_KHS_ThePAMs';
+      } else if (titleLower.contains('ujian') || titleLower.contains('uts') || titleLower.contains('uas')) {
+        resolvedCustomName = 'Kartu_Ujian_ThePAMs';
+      } else if (titleLower.contains('transkrip')) {
+        resolvedCustomName = 'Transkrip_Nilai_ThePAMs';
+      }
+    }
+
+    // Resolusi URL relatif hanya jika bukan URL memori blob: atau data:
+    if (!targetUrl.startsWith('http://') &&
+        !targetUrl.startsWith('https://') &&
+        !targetUrl.startsWith('blob:') &&
+        !targetUrl.startsWith('data:')) {
       final base = Uri.tryParse(activeUrl);
       if (base != null) {
         targetUrl = base.resolve(targetUrl).toString();
@@ -1179,24 +1200,24 @@ class _PortalWebViewScreenState extends State<PortalWebViewScreen> with WidgetsB
     final targetController = _getControllerForUrl(targetUrl);
     FileDownloadResult result;
 
-    // 2. Prioritas Utama: Unduh via peramban internal WebView (Bypass Cloudflare Turnstile & TLS fingerprinting)
+    // 2. Prioritas Utama: Unduh via peramban internal WebView (Bypass Cloudflare Turnstile & Blob memory extractor)
     try {
       result = await WebViewDownloadBridge().downloadFile(
         controller: targetController,
         url: targetUrl,
-        customName: customName,
+        customName: resolvedCustomName,
       );
     } catch (e) {
       result = FileDownloadResult.failure('Gagal unduh peramban: $e');
     }
 
-    // 3. Cadangan (Fallback): Jika in-WebView gagal (misal CORS pada berkas host luar seperti Google Drive)
-    if (!result.isSuccess) {
+    // 3. Cadangan (Fallback): Hanya untuk berkas jaringan http/https (JANGAN untuk blob/data)
+    if (!result.isSuccess && !targetUrl.startsWith('blob:') && !targetUrl.startsWith('data:')) {
       debugPrint('In-WebView download failed: ${result.errorMessage}. Mencoba fallback Dio...');
       final cookies = await FileDownloadService().getSessionCookiesForUrl(targetUrl.isNotEmpty ? targetUrl : activeUrl);
       result = await FileDownloadService().downloadAndOpenFile(
         url: targetUrl,
-        customFileName: customName,
+        customFileName: resolvedCustomName,
         explicitCookies: cookies,
         userAgent: _customUserAgent,
         referer: activeUrl,
@@ -1395,6 +1416,7 @@ class _PortalWebViewScreenState extends State<PortalWebViewScreen> with WidgetsB
           function isDocumentUrl(u) {
             if (!u || typeof u !== 'string') return false;
             var low = u.toLowerCase().trim();
+            if (low.startsWith('blob:')) return true;
             if (low.startsWith('data:application/pdf') ||
                 low.startsWith('data:application/octet-stream') ||
                 low.startsWith('data:binary/octet-stream')) return true;

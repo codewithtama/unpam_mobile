@@ -59,10 +59,11 @@ class FileDownloadService {
     if (rawUrl.isEmpty) return false;
     final lower = rawUrl.toLowerCase().trim();
 
-    // Data URI berkas PDF atau stream biner
+    // Data URI berkas PDF, stream biner, atau blob URL peramban
     if (lower.startsWith('data:application/pdf') ||
         lower.startsWith('data:application/octet-stream') ||
-        lower.startsWith('data:binary/octet-stream')) {
+        lower.startsWith('data:binary/octet-stream') ||
+        lower.startsWith('blob:')) {
       return true;
     }
 
@@ -173,6 +174,13 @@ class FileDownloadService {
       // 1. Penanganan Data URI (Base64)
       if (url.startsWith('data:')) {
         return await _saveAndOpenBase64DataUri(url, customFileName);
+      }
+
+      // Berkas skema blob: berada di memori browser dan tidak dapat diakses socket HTTP Dio
+      if (url.startsWith('blob:')) {
+        return FileDownloadResult.failure(
+          'Berkas memori peramban (blob) tidak dapat diakses melalui HTTP soket luar.',
+        );
       }
 
       final uri = Uri.tryParse(url);
@@ -389,6 +397,8 @@ class FileDownloadService {
       prefix = 'Transkrip_Nilai_ThePAMs';
     } else if (lower.contains('kartu') || lower.contains('ujian')) {
       prefix = 'Kartu_Ujian_ThePAMs';
+    } else if (lower.contains('jadwal')) {
+      prefix = 'Jadwal_Kuliah_ThePAMs';
     } else if (lower.contains('kwitansi') || lower.contains('tagihan')) {
       prefix = 'Kwitansi_Pembayaran_ThePAMs';
     } else if (lower.contains('modul') || lower.contains('resource')) {
