@@ -341,6 +341,32 @@ void main() {
       expect(json['apk_size_bytes'], equals(44040192));
     });
 
+    test('GitHubRelease.selectBestApkAsset intelligently selects optimal split APK for device ABI', () {
+      final assets = [
+        {'name': 'app-armeabi-v7a-release.apk', 'browser_download_url': 'https://download/armeabi-v7a.apk', 'size': 17112000},
+        {'name': 'app-arm64-v8a-release.apk', 'browser_download_url': 'https://download/arm64-v8a.apk', 'size': 19725000},
+        {'name': 'app-x86_64-release.apk', 'browser_download_url': 'https://download/x86_64.apk', 'size': 21000000},
+        {'name': 'app-release.apk', 'browser_download_url': 'https://download/universal.apk', 'size': 57600000},
+      ];
+
+      // 1. Perangkat 64-bit modern (arm64-v8a) memilih app-arm64-v8a-release.apk (~19MB)
+      final arm64Choice = GitHubRelease.selectBestApkAsset(assets, ['arm64-v8a', 'armeabi-v7a']);
+      expect(arm64Choice?['name'], equals('app-arm64-v8a-release.apk'));
+      expect(arm64Choice?['size'], equals(19725000));
+
+      // 2. Perangkat 32-bit (armeabi-v7a) memilih app-armeabi-v7a-release.apk (~17MB)
+      final armV7Choice = GitHubRelease.selectBestApkAsset(assets, ['armeabi-v7a', 'armeabi']);
+      expect(armV7Choice?['name'], equals('app-armeabi-v7a-release.apk'));
+
+      // 3. Emulator x86_64 memilih app-x86_64-release.apk (~21MB)
+      final x86Choice = GitHubRelease.selectBestApkAsset(assets, ['x86_64']);
+      expect(x86Choice?['name'], equals('app-x86_64-release.apk'));
+
+      // 4. Default tanpa parameter ABI memilih arm64-v8a
+      final defaultChoice = GitHubRelease.selectBestApkAsset(assets);
+      expect(defaultChoice?['name'], equals('app-arm64-v8a-release.apk'));
+    });
+
     testWidgets('ReleaseHistoryDialog renders header title and close button', (WidgetTester tester) async {
       await tester.pumpWidget(
         MaterialApp(

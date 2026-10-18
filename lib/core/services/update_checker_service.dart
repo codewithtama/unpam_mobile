@@ -1,5 +1,6 @@
 import 'dart:convert';
 import 'dart:io';
+import 'package:device_info_plus/device_info_plus.dart';
 import 'package:dio/dio.dart';
 import 'package:open_filex/open_filex.dart';
 import 'package:package_info_plus/package_info_plus.dart';
@@ -62,23 +63,20 @@ class UpdateCheckerService {
           publishedAt = DateTime.tryParse(publishedStr);
         }
 
-        // Cari file APK pada daftar assets rilis GitHub
+        // Cari file APK paling optimal sesuai arsitektur CPU perangkat (Split-per-ABI)
         String apkUrl = '';
         int apkSize = 0;
         final assets = data['assets'] as List<dynamic>? ?? [];
-        for (final asset in assets) {
-          final assetMap = asset as Map<String, dynamic>;
-          final name = assetMap['name']?.toString().toLowerCase() ?? '';
-          if (name.endsWith('.apk')) {
-            apkUrl = assetMap['browser_download_url']?.toString() ?? '';
-            apkSize = (assetMap['size'] as num?)?.toInt() ?? 0;
-            break;
-          }
+        final deviceAbis = await _getDeviceSupportedAbis();
+        final bestAsset = GitHubRelease.selectBestApkAsset(assets, deviceAbis);
+        if (bestAsset != null) {
+          apkUrl = bestAsset['browser_download_url']?.toString() ?? '';
+          apkSize = (bestAsset['size'] as num?)?.toInt() ?? 0;
         }
 
         // Jika rilis baru dibuat namun APK belum selesai di-attach pada assets, gunakan direct download URL release
         if (apkUrl.isEmpty && tagName.isNotEmpty) {
-          apkUrl = 'https://github.com/$_repoOwner/$_repoName/releases/download/$tagName/app-release.apk';
+          apkUrl = 'https://github.com/$_repoOwner/$_repoName/releases/download/$tagName/app-arm64-v8a-release.apk';
         }
 
         final hasUpdate = AppUpdateInfo.isNewerVersion(tagName, currentVersion);
@@ -187,6 +185,16 @@ class UpdateCheckerService {
     return result;
   }
 
+  Future<List<String>> _getDeviceSupportedAbis() async {
+    if (Platform.isAndroid) {
+      try {
+        final info = await DeviceInfoPlugin().androidInfo;
+        return info.supportedAbis;
+      } catch (_) {}
+    }
+    return const [];
+  }
+
   /// Mengambil seluruh riwayat pembaruan langsung dari GitHub Releases API
   Future<List<GitHubRelease>> fetchReleaseHistory({bool forceRefresh = false}) async {
     final prefs = await SharedPreferences.getInstance();
@@ -198,10 +206,11 @@ class UpdateCheckerService {
       final response = await _dio.get<List<dynamic>>(url);
 
       if (response.statusCode == 200 && response.data != null) {
+        final deviceAbis = await _getDeviceSupportedAbis();
         final List<GitHubRelease> releases = [];
         for (final item in response.data!) {
           if (item is Map<String, dynamic>) {
-            final release = GitHubRelease.fromJson(item);
+            final release = GitHubRelease.fromJson(item, supportedAbis: deviceAbis);
             if (!release.isDraft) {
               releases.add(release);
             }
@@ -231,8 +240,9 @@ class UpdateCheckerService {
     final cached = prefs.getString(cacheKey);
     if (cached != null && cached.isNotEmpty) {
       try {
+        final deviceAbis = await _getDeviceSupportedAbis();
         final List<dynamic> list = jsonDecode(cached) as List<dynamic>;
-        return list.map((e) => GitHubRelease.fromJson(e as Map<String, dynamic>)).toList();
+        return list.map((e) => GitHubRelease.fromJson(e as Map<String, dynamic>, supportedAbis: deviceAbis)).toList();
       } catch (_) {}
     }
 

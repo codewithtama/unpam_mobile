@@ -51,7 +51,55 @@ class GitHubRelease {
 
   bool get hasApkAsset => apkDownloadUrl != null && apkDownloadUrl!.isNotEmpty;
 
-  factory GitHubRelease.fromJson(Map<String, dynamic> json) {
+  /// Memilih berkas APK paling optimal berdasarkan arsitektur CPU perangkat (Split-per-ABI)
+  static Map<String, dynamic>? selectBestApkAsset(List<dynamic> assets, [List<String>? supportedAbis]) {
+    final apkAssets = <Map<String, dynamic>>[];
+    for (final raw in assets) {
+      if (raw is Map<String, dynamic>) {
+        final name = raw['name']?.toString().toLowerCase() ?? '';
+        if (name.endsWith('.apk')) {
+          apkAssets.add(raw);
+        }
+      }
+    }
+
+    if (apkAssets.isEmpty) return null;
+    if (apkAssets.length == 1) return apkAssets.first;
+
+    // 1. Jika ada daftar ABI perangkat, cocokkan secara presisi
+    if (supportedAbis != null && supportedAbis.isNotEmpty) {
+      for (final abi in supportedAbis) {
+        final cleanAbi = abi.toLowerCase().trim();
+        for (final asset in apkAssets) {
+          final name = asset['name']?.toString().toLowerCase() ?? '';
+          if (name.contains(cleanAbi)) {
+            return asset;
+          }
+        }
+      }
+    }
+
+    // 2. Default preferensi: arm64-v8a (standar HP Android modern)
+    for (final asset in apkAssets) {
+      final name = asset['name']?.toString().toLowerCase() ?? '';
+      if (name.contains('arm64-v8a')) {
+        return asset;
+      }
+    }
+
+    // 3. Cari universal fat APK (app-release.apk)
+    for (final asset in apkAssets) {
+      final name = asset['name']?.toString().toLowerCase() ?? '';
+      if (!name.contains('arm') && !name.contains('x86')) {
+        return asset;
+      }
+    }
+
+    // 4. Fallback ke elemen pertama
+    return apkAssets.first;
+  }
+
+  factory GitHubRelease.fromJson(Map<String, dynamic> json, {List<String>? supportedAbis}) {
     final id = json['id'] is int ? json['id'] as int : int.tryParse(json['id']?.toString() ?? '0') ?? 0;
     final tagName = json['tag_name']?.toString() ?? '';
     final name = json['name']?.toString() ?? '';
@@ -71,16 +119,11 @@ class GitHubRelease {
     int downloads = 0;
 
     final assets = json['assets'] as List<dynamic>? ?? [];
-    for (final rawAsset in assets) {
-      if (rawAsset is Map<String, dynamic>) {
-        final assetName = rawAsset['name']?.toString().toLowerCase() ?? '';
-        if (assetName.endsWith('.apk')) {
-          apkUrl = rawAsset['browser_download_url']?.toString();
-          apkSize = (rawAsset['size'] as num?)?.toInt() ?? 0;
-          downloads = (rawAsset['download_count'] as num?)?.toInt() ?? 0;
-          break;
-        }
-      }
+    final bestAsset = selectBestApkAsset(assets, supportedAbis);
+    if (bestAsset != null) {
+      apkUrl = bestAsset['browser_download_url']?.toString();
+      apkSize = (bestAsset['size'] as num?)?.toInt() ?? 0;
+      downloads = (bestAsset['download_count'] as num?)?.toInt() ?? 0;
     }
 
     return GitHubRelease(
