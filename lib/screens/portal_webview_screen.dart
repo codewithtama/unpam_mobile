@@ -16,6 +16,7 @@ import '../widgets/biometric_quick_prompt_sheet.dart';
 import '../core/services/update_checker_service.dart';
 import '../core/services/notification_service.dart';
 import '../core/services/file_download_service.dart';
+import '../core/services/webview_download_bridge.dart';
 import '../widgets/update_dialog.dart';
 import '../widgets/release_history_dialog.dart';
 import 'package:open_filex/open_filex.dart';
@@ -195,6 +196,12 @@ class _PortalWebViewScreenState extends State<PortalWebViewScreen> with WidgetsB
         'CampusDownloadChannel',
         onMessageReceived: (message) {
           _handleAcademicFileDownload(message.message);
+        },
+      )
+      ..addJavaScriptChannel(
+        WebViewDownloadBridge.channelName,
+        onMessageReceived: (message) {
+          WebViewDownloadBridge().handlePayloadMessage(message.message);
         },
       )
       ..setNavigationDelegate(
@@ -452,6 +459,12 @@ class _PortalWebViewScreenState extends State<PortalWebViewScreen> with WidgetsB
         'CampusDownloadChannel',
         onMessageReceived: (message) {
           _handleAcademicFileDownload(message.message);
+        },
+      )
+      ..addJavaScriptChannel(
+        WebViewDownloadBridge.channelName,
+        onMessageReceived: (message) {
+          WebViewDownloadBridge().handlePayloadMessage(message.message);
         },
       )
       ..setNavigationDelegate(
@@ -1129,6 +1142,18 @@ class _PortalWebViewScreenState extends State<PortalWebViewScreen> with WidgetsB
     await _handleAcademicFileDownload(currentUrl);
   }
 
+  WebViewController _getControllerForUrl(String targetUrl) {
+    final uri = Uri.tryParse(targetUrl);
+    final host = uri?.host.toLowerCase() ?? '';
+    if (host.contains('my.unpam.ac.id') && _myUnpamController != null) {
+      return _myUnpamController!;
+    }
+    if (host.contains('mentari.unpam.ac.id')) {
+      return _controller;
+    }
+    return _activeController;
+  }
+
   Future<void> _handleAcademicFileDownload(String url, {String? customName}) async {
     if (!mounted || url.isEmpty) return;
 
@@ -1156,32 +1181,63 @@ class _PortalWebViewScreenState extends State<PortalWebViewScreen> with WidgetsB
           ],
         ),
         backgroundColor: AppTheme.primaryBlue,
-        duration: Duration(seconds: 4),
+        duration: Duration(seconds: 15),
       ),
     );
 
+    // 1. Tangani Data URI langsung
+    if (url.startsWith('data:')) {
+      final result = await FileDownloadService().saveAndOpenBase64DataUri(url, customName);
+      if (!mounted) return;
+      _showDownloadResultSnackBar(scaffoldMessenger, result, url);
+      return;
+    }
+
     final activeUrl = _currentNavIndex == 1 ? _myUnpamCurrentUrl : _currentUrl;
     String targetUrl = url.trim();
-    if (!targetUrl.startsWith('data:') &&
-        !targetUrl.startsWith('http://') &&
-        !targetUrl.startsWith('https://')) {
+    if (!targetUrl.startsWith('http://') && !targetUrl.startsWith('https://')) {
       final base = Uri.tryParse(activeUrl);
       if (base != null) {
         targetUrl = base.resolve(targetUrl).toString();
       }
     }
 
-    final cookies = await FileDownloadService().getSessionCookiesForUrl(targetUrl.isNotEmpty ? targetUrl : activeUrl);
+    final targetController = _getControllerForUrl(targetUrl);
+    FileDownloadResult result;
 
-    final result = await FileDownloadService().downloadAndOpenFile(
-      url: targetUrl,
-      customFileName: customName,
-      explicitCookies: cookies,
-      userAgent: _customUserAgent,
-      referer: activeUrl,
-    );
+    // 2. Prioritas Utama: Unduh via peramban internal WebView (Bypass Cloudflare Turnstile & TLS fingerprinting)
+    try {
+      result = await WebViewDownloadBridge().downloadFile(
+        controller: targetController,
+        url: targetUrl,
+        customName: customName,
+      );
+    } catch (e) {
+      result = FileDownloadResult.failure('Gagal unduh peramban: $e');
+    }
+
+    // 3. Cadangan (Fallback): Jika in-WebView gagal (misal CORS pada berkas host luar seperti Google Drive)
+    if (!result.isSuccess) {
+      debugPrint('In-WebView download failed: ${result.errorMessage}. Mencoba fallback Dio...');
+      final cookies = await FileDownloadService().getSessionCookiesForUrl(targetUrl.isNotEmpty ? targetUrl : activeUrl);
+      result = await FileDownloadService().downloadAndOpenFile(
+        url: targetUrl,
+        customFileName: customName,
+        explicitCookies: cookies,
+        userAgent: _customUserAgent,
+        referer: activeUrl,
+      );
+    }
 
     if (!mounted) return;
+    _showDownloadResultSnackBar(scaffoldMessenger, result, targetUrl);
+  }
+
+  void _showDownloadResultSnackBar(
+    ScaffoldMessengerState scaffoldMessenger,
+    FileDownloadResult result,
+    String fallbackUrl,
+  ) {
     scaffoldMessenger.hideCurrentSnackBar();
 
     if (result.isSuccess && result.filePath != null) {
@@ -1227,7 +1283,17 @@ class _PortalWebViewScreenState extends State<PortalWebViewScreen> with WidgetsB
             ],
           ),
           backgroundColor: Colors.red.shade900,
-          duration: const Duration(seconds: 5),
+          action: SnackBarAction(
+            label: 'BROWSER',
+            textColor: Colors.white,
+            onPressed: () async {
+              final uri = Uri.tryParse(fallbackUrl);
+              if (uri != null && await canLaunchUrl(uri)) {
+                await launchUrl(uri, mode: LaunchMode.externalApplication);
+              }
+            },
+          ),
+          duration: const Duration(seconds: 7),
         ),
       );
     }
@@ -1271,53 +1337,7 @@ class _PortalWebViewScreenState extends State<PortalWebViewScreen> with WidgetsB
       final currentUrl = await controller.currentUrl() ?? '';
       debugPrint('Raw PDF stream detected on current WebView page: $currentUrl');
 
-      if (!mounted) {
-        _isHandlingRawPdf = false;
-        return;
-      }
-
-      // 1. Ekstrak Base64 binary PDF melalui same-origin fetch yang mewarisi semua cookie & header autentikasi
-      String? dataUri;
-      try {
-        final fetchResult = await controller.runJavaScriptReturningResult(r'''
-          (async function() {
-            try {
-              var resp = await fetch(window.location.href, {
-                method: 'GET',
-                credentials: 'include'
-              });
-              if (!resp.ok) return 'ERR_' + resp.status;
-              var blob = await resp.blob();
-              return new Promise(function(resolve) {
-                var reader = new FileReader();
-                reader.onloadend = function() {
-                  resolve(reader.result || '');
-                };
-                reader.onerror = function() {
-                  resolve('');
-                };
-                reader.readAsDataURL(blob);
-              });
-            } catch(e) {
-              return 'ERR_' + e;
-            }
-          })()
-        ''');
-
-        if (fetchResult is String) {
-          String cleaned = fetchResult.trim();
-          if (cleaned.startsWith('"') && cleaned.endsWith('"') && cleaned.length >= 2) {
-            cleaned = cleaned.substring(1, cleaned.length - 1);
-          }
-          if (cleaned.startsWith('data:application/pdf') || cleaned.startsWith('data:')) {
-            dataUri = cleaned;
-          }
-        }
-      } catch (e) {
-        debugPrint('Failed to extract PDF via in-page fetch: $e');
-      }
-
-      // 2. Segera kembalikan WebView ke halaman portal sebelumnya agar layar tidak terkunci pada kode mentah %PDF-
+      // 1. Segera kembalikan WebView ke halaman portal sebelumnya agar layar tidak terkunci pada kode mentah %PDF-
       try {
         final canBack = await controller.canGoBack();
         if (canBack && mounted) {
@@ -1327,12 +1347,9 @@ class _PortalWebViewScreenState extends State<PortalWebViewScreen> with WidgetsB
         debugPrint('Go back error after raw PDF intercept: $e');
       }
 
-      // 3. Simpan dan buka PDF di aplikasi penampil PDF perangkat
-      if (mounted) {
-        final pdfToOpen = (dataUri != null && dataUri.isNotEmpty) ? dataUri : currentUrl;
-        if (pdfToOpen.isNotEmpty) {
-          await _handleAcademicFileDownload(pdfToOpen, customName: 'Kartu_Ujian.pdf');
-        }
+      // 2. Simpan dan buka PDF di aplikasi penampil PDF perangkat
+      if (mounted && currentUrl.isNotEmpty) {
+        await _handleAcademicFileDownload(currentUrl, customName: 'Dokumen_Akademik.pdf');
       }
     } catch (e) {
       debugPrint('Error detecting raw PDF: $e');
@@ -1506,18 +1523,24 @@ class _PortalWebViewScreenState extends State<PortalWebViewScreen> with WidgetsB
             // 2. Tag <button> atau <input type="submit" / "button">
             if (el.tagName === 'BUTTON' || (el.tagName === 'INPUT' && (el.type === 'submit' || el.type === 'button'))) {
               var form = el.form || el.closest('form');
-              var formAction = form ? (form.getAttribute('action') || form.action || '') : '';
-              var absAction = formAction ? toAbsoluteUrl(formAction) : '';
+              // Jika tombol berada di dalam form, biarkan peramban mengirim payload form/CSRF secara utuh;
+              // hasilnya akan ditangkap otomatis oleh onNavigationRequest / raw PDF interceptor
+              if (form) {
+                return;
+              }
+
+              var btnUrl = el.getAttribute('data-url') || el.getAttribute('data-href') || '';
+              var absBtnUrl = btnUrl ? toAbsoluteUrl(btnUrl) : '';
               var text = (el.innerText || el.value || '').toLowerCase().trim();
 
-              var isDocBtn = (absAction && isDocumentUrl(absAction)) ||
+              var isDocBtn = (absBtnUrl && isDocumentUrl(absBtnUrl)) ||
                              ((text.indexOf('cetak') !== -1 || text.indexOf('download') !== -1 || text.indexOf('unduh') !== -1 || text.indexOf('print') !== -1) &&
                               (text.indexOf('uts') !== -1 || text.indexOf('uas') !== -1 || text.indexOf('krs') !== -1 || text.indexOf('khs') !== -1 || text.indexOf('kartu') !== -1 || text.indexOf('pdf') !== -1 || text.indexOf('ujian') !== -1));
 
-              if (isDocBtn && window.CampusDownloadChannel && absAction) {
+              if (isDocBtn && window.CampusDownloadChannel && absBtnUrl) {
                 ev.preventDefault();
                 ev.stopPropagation();
-                window.CampusDownloadChannel.postMessage(absAction);
+                window.CampusDownloadChannel.postMessage(absBtnUrl);
                 return;
               }
             }

@@ -14,6 +14,7 @@ import 'package:unpam_mobile/models/github_release.dart';
 import 'package:unpam_mobile/core/services/update_checker_service.dart';
 import 'package:unpam_mobile/widgets/release_history_dialog.dart';
 import 'package:unpam_mobile/core/services/file_download_service.dart';
+import 'package:unpam_mobile/core/services/webview_download_bridge.dart';
 import 'package:unpam_mobile/models/app_update_info.dart';
 
 void main() {
@@ -422,6 +423,48 @@ void main() {
 
       expect(result.isSuccess, isFalse);
       expect(result.errorMessage, contains('tidak valid'));
+    });
+
+    test('resolveFileName correctly decodes UTF-8 and standard Content-Disposition', () {
+      final service = FileDownloadService();
+
+      final utf8Name = service.resolveFileName(
+        url: 'https://mentari.unpam.ac.id/mod/resource/view.php?id=123',
+        contentDisposition: "attachment; filename*=UTF-8''Modul_Pertemuan_01_AI.pdf",
+        isPdf: true,
+      );
+      expect(utf8Name, equals('Modul_Pertemuan_01_AI.pdf'));
+
+      final standardName = service.resolveFileName(
+        url: 'https://my.unpam.ac.id/cetak_krs.php',
+        contentDisposition: 'attachment; filename="Cetak_KRS_Semester_5.pdf"',
+        isPdf: true,
+      );
+      expect(standardName, equals('Cetak_KRS_Semester_5.pdf'));
+
+      final contextualKrs = service.resolveFileName(
+        url: 'https://my.unpam.ac.id/krs/cetak',
+        isPdf: true,
+      );
+      expect(contextualKrs, startsWith('Cetak_KRS_ThePAMs_'));
+      expect(contextualKrs, endsWith('.pdf'));
+
+      final contextualUts = service.resolveFileName(
+        url: 'https://my.unpam.ac.id/cetak_uts',
+        isPdf: true,
+      );
+      expect(contextualUts, startsWith('Kartu_UTS_ThePAMs_'));
+      expect(contextualUts, endsWith('.pdf'));
+    });
+
+    test('WebViewDownloadBridge validates payload channel name and handles malformed messages safely', () async {
+      expect(WebViewDownloadBridge.channelName, equals('CampusDownloadPayloadChannel'));
+
+      final bridge = WebViewDownloadBridge();
+      // Verifikasi penanganan payload rusak tanpa melempar exception
+      await bridge.handlePayloadMessage('invalid json {');
+      await bridge.handlePayloadMessage('{}');
+      await bridge.handlePayloadMessage('{"id":"non-existent","type":"chunk"}');
     });
   });
 

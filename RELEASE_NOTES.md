@@ -1,15 +1,15 @@
-# Pembaruan The PAMs v1.0.22
+# Pembaruan The PAMs v1.0.23
 
-Pembaruan The PAMs v1.0.22:
+Pembaruan The PAMs v1.0.23:
 
-- **Rebranding Resmi Menjadi "The PAMs"**:
-  * Menetapkan nama aplikasi baru secara resmi menjadi **The PAMs** pada launcher Android, title bar aplikasi, web manifest, dan seluruh dialog sistem.
-  * Menghapus semua atribusi merek resmi institusi, menegaskan posisi The PAMs sebagai portal perkuliahan independen pihak ketiga yang aman dan privat bagi mahasiswa.
-  * Tetap mempertahankan integrasi resmi portal **Mentari LMS** dan **MyUnpam SIAKAD** tanpa gangguan fungsionalitas.
-  * Memperbarui asisten kecerdasan buatan menjadi **The PAMs AI** (The PAMs Cloud AI, The PAMs AI Vision OCR, AI Assistant, dan Parafrase).
-- **Distribusi APK Ultra-Ringan (Split-Per-ABI ~18.8 MB)**:
-  * Mengompresi dan membagi build APK rilis berdasarkan arsitektur CPU perangkat (`--split-per-abi` + `--obfuscate --split-debug-info`).
-  * Ukuran download APK terpangkas drastis hingga **65% lebih hemat** (dari ~55 MB menjadi hanya **~18.8 MB** untuk perangkat Android modern 64-bit `arm64-v8a`).
-  * In-App OTA Updater cerdas otomatis mendeteksi chipset HP pengguna dan hanya mengunduh varian APK yang paling sesuai dan efisien.
-- **Jaminan Kompatibilitas Pembaruan Android (Zero Data Loss)**:
-  * Mempertahankan `applicationId` Android (`com.unpam.mobile.lms`) dan sertifikat penandatanganan rilis (*Release Keystore*) asli, sehingga aplikasi terpasang di HP pengguna akan langsung ter-update secara otomatis tanpa bentrok paket ataupun kehilangan sesi login dan data yang tersimpan.
+- **Bypass Proteksi Cloudflare pada Unduhan Berkas Akademik**:
+  * Mengatasi kegagalan dan pemblokiran unduhan berkas PDF perkuliahan (Cetak KRS, KHS, Kartu Ujian UTS/UAS, Jadwal Kuliah, Modul LMS Moodle, Transkrip Nilai) oleh Cloudflare Turnstile & Bot Management.
+  * Menerapkan arsitektur **In-WebView Chromium Fetch Bridge**: unduhan dieksekusi langsung di dalam konteks peramban WebView yang memegang sesi login resmi dan sidik jari TLS (*TLS Client Hello*) Chromium asli, menghindari diskrepansi TLS stack Dart/Dio.
+  * Aliran biner berkas ditransfer secara aman menggunakan *chunked Base64 streaming* (256 KB per payload) langsung ke sistem penyimpanan lokal tanpa membebani memori (*Zero OOM/Binder Limit*).
+  * Otomatis membuka dokumen hasil unduhan dengan aplikasi penampil PDF bawaan perangkat HP (Google PDF Viewer, WPS Office, Adobe Acrobat, dsb.).
+  * Menyediakan lapisan cadangan (*Dio fallback*) dan opsi buka di browser eksternal jika dokumen berasal dari host eksternal (Google Drive, Dropbox, repo publik).
+- **Format Penamaan Berkas Dokumen The PAMs**:
+  * Nama dokumen akademik yang diunduh kini secara rapi diberi penanda resmi The PAMs (`Cetak_KRS_ThePAMs_...`, `Cetak_KHS_ThePAMs_...`, `Kartu_UTS_ThePAMs_...`, `Modul_Kuliah_ThePAMs_...`).
+- **Peningkatan Stabilitas & Efisiensi Memori**:
+  * Pembersihan berkas sementara secara otomatis setelah berkas dipindahkan ke folder Downloads.
+  * Seluruh pengujian otomatis unit & widget test tervalidasi 100% lulus.

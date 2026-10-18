@@ -270,6 +270,10 @@ class FileDownloadService {
   }
 
   /// Menangani berkas base64 (data:application/pdf;base64,...)
+  Future<FileDownloadResult> saveAndOpenBase64DataUri(String dataUri, String? customName) async {
+    return _saveAndOpenBase64DataUri(dataUri, customName);
+  }
+
   Future<FileDownloadResult> _saveAndOpenBase64DataUri(String dataUri, String? customName) async {
     try {
       final commaIndex = dataUri.indexOf(',');
@@ -291,10 +295,10 @@ class FileDownloadService {
       final ext = isPdf ? '.pdf' : '.bin';
       final base = customName?.trim().isNotEmpty == true
           ? customName!.trim()
-          : 'Dokumen_UNPAM_${DateTime.now().millisecondsSinceEpoch}';
+          : 'Dokumen_ThePAMs_${DateTime.now().millisecondsSinceEpoch}';
       final fileName = base.endsWith(ext) ? base : '$base$ext';
 
-      final savedFile = await _persistBytesToFile(bytes, fileName);
+      final savedFile = await persistBytesToFile(bytes, fileName);
       await OpenFilex.open(savedFile.path);
 
       return FileDownloadResult.success(
@@ -307,6 +311,22 @@ class FileDownloadService {
   }
 
   /// Mengekstrak atau menyusun nama berkas dokumen yang ramah pengguna
+  String resolveFileName({
+    required String url,
+    String? contentDisposition,
+    String? contentType,
+    required bool isPdf,
+    String? customName,
+  }) {
+    return _resolveFileName(
+      url: url,
+      contentDisposition: contentDisposition,
+      contentType: contentType,
+      isPdf: isPdf,
+      customName: customName,
+    );
+  }
+
   String _resolveFileName({
     required String url,
     String? contentDisposition,
@@ -355,24 +375,24 @@ class FileDownloadService {
     // 3. Nama kontekstual berdasarkan kata kunci pada URL
     final lower = url.toLowerCase();
     final timestamp = DateTime.now().millisecondsSinceEpoch;
-    String prefix = 'Dokumen_UNPAM';
+    String prefix = 'Dokumen_ThePAMs';
 
     if (lower.contains('uts')) {
-      prefix = 'Kartu_UTS_UNPAM';
+      prefix = 'Kartu_UTS_ThePAMs';
     } else if (lower.contains('uas')) {
-      prefix = 'Kartu_UAS_UNPAM';
+      prefix = 'Kartu_UAS_ThePAMs';
     } else if (lower.contains('krs')) {
-      prefix = 'Cetak_KRS_UNPAM';
+      prefix = 'Cetak_KRS_ThePAMs';
     } else if (lower.contains('khs')) {
-      prefix = 'Cetak_KHS_UNPAM';
+      prefix = 'Cetak_KHS_ThePAMs';
     } else if (lower.contains('transkrip')) {
-      prefix = 'Transkrip_Nilai_UNPAM';
+      prefix = 'Transkrip_Nilai_ThePAMs';
     } else if (lower.contains('kartu') || lower.contains('ujian')) {
-      prefix = 'Kartu_Ujian_UNPAM';
+      prefix = 'Kartu_Ujian_ThePAMs';
     } else if (lower.contains('kwitansi') || lower.contains('tagihan')) {
-      prefix = 'Kwitansi_Pembayaran_UNPAM';
+      prefix = 'Kwitansi_Pembayaran_ThePAMs';
     } else if (lower.contains('modul') || lower.contains('resource')) {
-      prefix = 'Modul_Kuliah_UNPAM';
+      prefix = 'Modul_Kuliah_ThePAMs';
     }
 
     final ext = isPdf || contentType?.contains('pdf') == true ? '.pdf' : '.bin';
@@ -387,7 +407,39 @@ class FileDownloadService {
         .trim();
   }
 
+  /// Menyalin berkas sumber ke direktori unduhan permanen perangkat
+  Future<File> persistFileToStorage(File sourceFile, String fileName) async {
+    Directory targetDir;
+    try {
+      final extDir = await getExternalStorageDirectory();
+      if (extDir != null) {
+        final downloadSubDir = Directory(p.join(extDir.path, 'Downloads'));
+        if (!await downloadSubDir.exists()) {
+          await downloadSubDir.create(recursive: true);
+        }
+        targetDir = downloadSubDir;
+      } else {
+        targetDir = await getApplicationDocumentsDirectory();
+      }
+    } catch (_) {
+      targetDir = await getApplicationDocumentsDirectory();
+    }
+
+    final filePath = p.join(targetDir.path, fileName);
+    final targetFile = File(filePath);
+    if (await targetFile.exists()) {
+      try {
+        await targetFile.delete();
+      } catch (_) {}
+    }
+    return await sourceFile.copy(filePath);
+  }
+
   /// Menyimpan byte ke direktori dokumen lokal perangkat
+  Future<File> persistBytesToFile(List<int> bytes, String fileName) async {
+    return _persistBytesToFile(bytes, fileName);
+  }
+
   Future<File> _persistBytesToFile(List<int> bytes, String fileName) async {
     Directory targetDir;
     try {
