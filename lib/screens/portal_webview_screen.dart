@@ -1050,20 +1050,7 @@ class _PortalWebViewScreenState extends State<PortalWebViewScreen> with WidgetsB
                           },
                         ),
 
-                        // Opsi 6: Unduh Berkas / Dokumen Halaman Ini
-                        _buildAiToolTile(
-                          icon: Icons.download_rounded,
-                          iconColor: Colors.indigo.shade700,
-                          iconBgColor: Colors.indigo.shade50,
-                          title: 'Unduh Berkas / PDF Halaman',
-                          subtitle: 'Unduh dokumen perkuliahan (Cetak KRS, KHS, Modul PDF) dengan sesi login aktif',
-                          onTap: () {
-                            Navigator.pop(ctx);
-                            _handleManualDocumentDownload();
-                          },
-                        ),
-
-                        // Opsi 7: Biometric Auto-Login Vault
+                        // Opsi 6: Biometric Auto-Login Vault
                         _buildAiToolTile(
                           icon: Icons.fingerprint_rounded,
                           iconColor: AppTheme.accentGold,
@@ -1127,19 +1114,6 @@ class _PortalWebViewScreenState extends State<PortalWebViewScreen> with WidgetsB
         onTap: onTap,
       ),
     );
-  }
-
-  Future<void> _handleManualDocumentDownload() async {
-    final currentUrl = _currentNavIndex == 1 ? _myUnpamCurrentUrl : _currentUrl;
-    if (currentUrl.isEmpty) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Tidak ada halaman aktif untuk diunduh.')),
-        );
-      }
-      return;
-    }
-    await _handleAcademicFileDownload(currentUrl);
   }
 
   WebViewController _getControllerForUrl(String targetUrl) {
