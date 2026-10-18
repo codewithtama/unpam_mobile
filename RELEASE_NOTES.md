@@ -12,5 +12,3 @@
 - **Pengujian & Kualitas**:
   - Seluruh 24 pengujian otomatis unit & widget tests lulus 100%.
   - Bebas dari error atau peringatan analisis (*0 issues*).
-
----
