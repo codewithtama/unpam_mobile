@@ -201,7 +201,7 @@ class AiService {
             id: DateTime.now().millisecondsSinceEpoch.toString(),
             content:
                 'Model ${activeOption.name} berfokus pada penalaran teks murni dan belum mendukung input gambar screenshot secara langsung.\n\n'
-                '💡 Saran: Untuk menganalisis screenshot soal kuis dengan Vision OCR, pilih model **Google Gemini 3.7**, **Anthropic Claude 5.5**, atau **OpenAI GPT-5.5** melalui pemilih model di bagian atas.',
+                '💡 Saran: Untuk menganalisis screenshot soal kuis dengan Vision OCR, pilih model **Google Gemini** atau **Anthropic Claude 3.5** melalui pemilih model di bagian atas.',
             isUser: false,
             timestamp: DateTime.now(),
             relatedCourseName: courseName,
@@ -284,7 +284,7 @@ class AiService {
         id: DateTime.now().millisecondsSinceEpoch.toString(),
         content:
             '[Screenshot Gambar Diterima]\n\n'
-            'Untuk membaca dan menganalisis soal kuis langsung dari screenshot gambar menggunakan Vision OCR, silakan masukkan API Key Gemini 3.7, Claude 5.5, atau GPT-5.5 Anda di menu pengaturan model (ikon kunci / model di kanan atas).\n\n'
+            'Untuk membaca dan menganalisis soal kuis langsung dari screenshot gambar menggunakan Vision OCR, silakan masukkan API Key Gemini atau Claude Anda di menu pengaturan model (ikon kunci / model di kanan atas).\n\n'
             'Catatan: Untuk pertanyaan berupa teks atau soal yang diekstrak langsung dari web portal LMS, Anda dapat langsung bertanya tanpa memerlukan API Key!',
         isUser: false,
         timestamp: DateTime.now(),
@@ -399,31 +399,15 @@ class AiService {
         throw Exception('Alibaba Qwen DashScope API tidak memberikan respons');
 
       case AiProviderType.openai:
-        final openaiModelsToTry = [
-          option.defaultModelId,
-          ..._openaiCandidateModels.where((m) => m != option.defaultModelId),
-        ];
-        DioException? lastOpenAiErr;
-        for (final m in openaiModelsToTry) {
-          try {
-            return await _callOpenAiWithVision(
-              url: 'https://api.openai.com/v1/chat/completions',
-              apiKey: apiKey,
-              model: m,
-              systemPrompt: systemPrompt,
-              userPrompt: prompt,
-              imageBytes: imageBytes,
-              mimeType: mimeType,
-            );
-          } on DioException catch (e) {
-            lastOpenAiErr = e;
-            final code = e.response?.statusCode;
-            if (code == 401 || code == 403 || code == 429) rethrow;
-            continue;
-          }
-        }
-        if (lastOpenAiErr != null) throw lastOpenAiErr;
-        throw Exception('OpenAI API tidak memberikan respons');
+        return await _callOpenAiWithVision(
+          url: 'https://api.openai.com/v1/chat/completions',
+          apiKey: apiKey,
+          model: option.defaultModelId,
+          systemPrompt: systemPrompt,
+          userPrompt: prompt,
+          imageBytes: imageBytes,
+          mimeType: mimeType,
+        );
 
       case AiProviderType.openrouter:
         return await _callOpenAiWithVision(
@@ -474,9 +458,7 @@ class AiService {
   static const List<String> _deepseekCandidateModels = [
     'deepseek-v4-flash',
     'deepseek-v4-pro',
-    'deepseek-r2',
     'deepseek-chat',
-    'deepseek-reasoner',
   ];
 
   static const List<String> _qwenCandidateModels = [
@@ -485,15 +467,6 @@ class AiService {
     'qwen-max',
     'qwen-plus',
     'qwen-turbo',
-  ];
-
-  static const List<String> _openaiCandidateModels = [
-    'gpt-5.5-mini',
-    'gpt-5.5',
-    'o4-mini',
-    'gpt-4.1-mini',
-    'gpt-4o-mini',
-    'gpt-4o',
   ];
 
   /// Engine Google Gemini (Multimodal Vision OCR & Fast Text)

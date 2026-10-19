@@ -43,7 +43,7 @@ class AiProvider extends ChangeNotifier {
         id: 'welcome_msg',
         content:
             'Halo! Saya **The PAMs AI**, asisten cerdas portal perkuliahan & akademik.\n\n'
-            'Kini Anda dapat memilih berbagai model AI generasi terbaru (Google Gemini 3.7 Flash, DeepSeek V4 Pro/Flash, Claude Sonnet 5.5, Qwen 3.8-Max, OpenAI GPT-5.5 / o4-mini, atau Cloud AI Gratis) melalui menu pilihan model di bagian atas.',
+            'Kini Anda dapat memilih berbagai model AI terdepan (Google Gemini, DeepSeek R1/V3, Claude 3.5 Sonnet, Qwen 2.5, OpenAI, atau Cloud AI Gratis) melalui menu pilihan model di bagian atas.',
         isUser: false,
         timestamp: DateTime.now(),
         type: AiMessageType.text,

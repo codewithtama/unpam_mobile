@@ -899,7 +899,7 @@ class _AiAssistantScreenState extends State<AiAssistantScreen> {
                               Text(
                                 isEditing
                                     ? 'Kelola atau perbarui API Key untuk model ini'
-                                    : 'Gunakan Gemini 3.7, DeepSeek V4, Claude 5.5, Qwen 3.8, GPT-5.5, atau Cloud AI',
+                                    : 'Gunakan Gemini, DeepSeek, Claude, Qwen, ChatGPT, atau Cloud AI',
                                 style: const TextStyle(fontSize: 11, color: AppTheme.textMuted),
                               ),
                             ],
