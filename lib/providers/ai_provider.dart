@@ -35,15 +35,15 @@ class AiProvider extends ChangeNotifier {
   }
 
   bool get hasCustomApiKey =>
-      _storage.getGeminiApiKey() != null && _storage.getGeminiApiKey()!.isNotEmpty;
+      _storage.getGeminiApiKey() != null &&
+      _storage.getGeminiApiKey()!.isNotEmpty;
 
   void _initWelcomeMessage() {
     _messages.add(
       AiMessage(
         id: 'welcome_msg',
         content:
-            'Halo! Saya **The PAMs AI**, asisten cerdas portal perkuliahan & akademik.\n\n'
-            'Kini Anda dapat memilih berbagai model AI terdepan (Google Gemini, DeepSeek R1/V3, Claude 3.5 Sonnet, Qwen 2.5, OpenAI, atau Cloud AI Gratis) melalui menu pilihan model di bagian atas.',
+            'Halo! Saya **The PAMs AI**, asisten cerdas portal perkuliahan & akademik.\n\n',
         isUser: false,
         timestamp: DateTime.now(),
         type: AiMessageType.text,
@@ -151,7 +151,8 @@ class AiProvider extends ChangeNotifier {
       _messages.add(
         AiMessage(
           id: DateTime.now().millisecondsSinceEpoch.toString(),
-          content: 'Maaf, terjadi kendala saat menghubungi asisten AI ($e). Silakan coba lagi.',
+          content:
+              'Maaf, terjadi kendala saat menghubungi asisten AI ($e). Silakan coba lagi.',
           isUser: false,
           timestamp: DateTime.now(),
         ),
