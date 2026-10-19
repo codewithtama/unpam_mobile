@@ -1,6 +1,17 @@
 # Catatan Pembaruan Rilis The PAMs
 
-## Versi 1.0.28 (Terbaru)
+## Versi 1.0.31 (Terbaru)
+
+- **Rollback to v1.0.28 Engine (Pemulihan Arsitektur Stabil)**:
+  - Mengembalikan seluruh basis kode ke arsitektur stabil versi 1.0.28 untuk menjamin keandalan sistem secara menyeluruh.
+  - Memungkinkan seluruh pengguna yang telah memasang versi 1.0.29 atau 1.0.30 untuk menerima pembaruan otomatis tanpa kendala *downgrade*.
+- **Fitur Unggulan Basis Mesin v1.0.28**:
+  - Integrasi AI Flagship: OpenAI (GPT-5.5, GPT-5.5-mini, o4-mini) dengan multi-model fallback, DeepSeek (V4 & R2 Reasoner), Google Gemini (3.7 Flash & 3.5 Pro), Claude Sonnet/Opus 5.5, dan Qwen 3.8-Max.
+  - Banner pemantau stabilitas jaringan dan latensi koneksi real-time.
+  - Performa UI reaktif terisolasi via `ValueNotifier`.
+  - Pengunduhan pembaruan mandiri *resumable* dengan HTTP Range Request dan toleransi layar mati (*screen-off*).
+
+## Versi 1.0.28
 
 - **Pembaruan Generasi Model AI Flagship (Oktober 2026)**:
   - **OpenAI**: Menghadirkan dukungan model `GPT-5.5`, `GPT-5.5-mini`, penalaran `o4-mini`, dan `gpt-4.1-mini` lengkap dengan mekanisme otomatis fallback multi-model (`openaiModelsToTry`) untuk menjamin ketersediaan respons saat kuota/traffic tinggi.
