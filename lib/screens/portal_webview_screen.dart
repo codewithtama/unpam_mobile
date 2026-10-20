@@ -22,6 +22,13 @@ import '../widgets/release_history_dialog.dart';
 import '../widgets/mini_ai_overlay_panel.dart';
 import '../widgets/in_page_quick_action_pill.dart';
 import 'package:open_filex/open_filex.dart';
+import 'academic_hub_screen.dart';
+import '../core/constants/api_constants.dart';
+import '../core/constants/my_unpam_scripts.dart';
+import '../core/services/my_unpam_session.dart';
+import '../core/services/storage_service.dart';
+import '../providers/academic_portal_provider.dart';
+import '../providers/finance_provider.dart';
 
 class PortalWebViewScreen extends StatefulWidget {
   final String initialUrl;
@@ -79,8 +86,7 @@ class _PortalWebViewScreenState extends State<PortalWebViewScreen> with WidgetsB
   bool _isUpdateDialogShowing = false;
   bool _isHandlingRawPdf = false;
 
-  static const String _customUserAgent =
-      'Mozilla/5.0 (Linux; Android 13; SM-S918B) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.6613.127 Mobile Safari/537.36';
+  static const String _customUserAgent = ApiConstants.webViewUserAgent;
 
 
   bool _isAtTop = true;
@@ -442,6 +448,14 @@ class _PortalWebViewScreenState extends State<PortalWebViewScreen> with WidgetsB
     }
   }
 
+  Future<void> _syncMyUnpamSession(String message) async {
+    final session = context.read<MyUnpamSession>();
+    final host = await session.captureToken(message);
+    if (host == null) return;
+    await session.syncCookies();
+    if (host.contains('my.unpam.ac.id')) await session.validate();
+  }
+
   void _ensureMyUnpamControllerInitialized() {
     if (_myUnpamController != null) return;
 
@@ -467,6 +481,10 @@ class _PortalWebViewScreenState extends State<PortalWebViewScreen> with WidgetsB
             });
           }
         },
+      )
+      ..addJavaScriptChannel(
+        MyUnpamScripts.tokenChannel,
+        onMessageReceived: (message) => _syncMyUnpamSession(message.message),
       )
       ..addJavaScriptChannel(
         'BiometricCaptureChannel',
@@ -515,6 +533,7 @@ class _PortalWebViewScreenState extends State<PortalWebViewScreen> with WidgetsB
               }
               if (_myUnpamController != null) {
                 _injectContextualPageDetectorScript(_myUnpamController!);
+              _myUnpamController!.runJavaScript(MyUnpamScripts.tokenSniffer);
               }
             }
           },
@@ -818,6 +837,17 @@ class _PortalWebViewScreenState extends State<PortalWebViewScreen> with WidgetsB
     try {
       // 4. Bersihkan HTTP disk & memory cache
       await _controller.clearCache();
+    } catch (_) {}
+
+    try {
+      // 5. Bersihkan sesi Satu UNPAM, My UNPAM & cache akademik
+      final storage = await StorageService.getInstance();
+      await storage.clearPortalCache();
+      if (mounted) await context.read<MyUnpamSession>().signOut();
+      if (mounted) {
+        context.read<FinanceProvider>().clear();
+        context.read<AcademicPortalProvider>().clear();
+      }
     } catch (_) {}
 
     if (mounted) {
@@ -1823,6 +1853,7 @@ class _PortalWebViewScreenState extends State<PortalWebViewScreen> with WidgetsB
         if (nim.isNotEmpty && pass.isNotEmpty) {
           _capturedNim = nim;
           _capturedPassword = pass;
+          context.read<MyUnpamSession>().rememberCredentials(nim, pass);
         }
 
         if (event == 'LOGIN_SUCCESS') {
@@ -5533,6 +5564,16 @@ class _PortalWebViewScreenState extends State<PortalWebViewScreen> with WidgetsB
           }
         } else if (idx == 2) {
           final previousTab = _currentNavIndex;
+          await Navigator.push(
+            context,
+            MaterialPageRoute(builder: (_) => const AcademicHubScreen()),
+          );
+          if (mounted) {
+            setState(() => _currentNavIndex = previousTab);
+            _updateHistoryState();
+          }
+        } else if (idx == 3) {
+          final previousTab = _currentNavIndex;
           await _openFullScreenAiAssistant();
           if (mounted) {
             setState(() => _currentNavIndex = previousTab);
@@ -5550,6 +5591,11 @@ class _PortalWebViewScreenState extends State<PortalWebViewScreen> with WidgetsB
           icon: Icon(Icons.badge_outlined),
           selectedIcon: Icon(Icons.badge_rounded, color: AppTheme.primaryBlue),
           label: 'MyUnpam',
+        ),
+        NavigationDestination(
+          icon: Icon(Icons.dashboard_outlined),
+          selectedIcon: Icon(Icons.dashboard_rounded, color: AppTheme.primaryBlue),
+          label: 'Akademik',
         ),
         NavigationDestination(
           icon: Icon(Icons.auto_awesome_outlined),

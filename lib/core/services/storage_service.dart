@@ -39,6 +39,77 @@ class StorageService {
     return _preferences?.getString(ApiConstants.cookiesKey);
   }
 
+  String? _readString(String key) {
+    final value = _preferences?.getString(key);
+    return value == null || value.isEmpty ? null : value;
+  }
+
+  Future<void> _writeString(String key, String? value) async {
+    if (value == null || value.isEmpty) {
+      await _preferences?.remove(key);
+    } else {
+      await _preferences?.setString(key, value);
+    }
+  }
+
+  Future<void> saveSatuUnpamToken(String token) =>
+      _writeString(ApiConstants.satuUnpamTokenKey, token.trim());
+
+  String? getSatuUnpamToken() => _readString(ApiConstants.satuUnpamTokenKey);
+
+  Future<void> saveSatuUnpamCookies(String cookies) =>
+      _writeString(ApiConstants.satuUnpamCookiesKey, cookies);
+
+  String? getSatuUnpamCookies() => _readString(ApiConstants.satuUnpamCookiesKey);
+
+  Future<void> saveMyUnpamToken(String token) =>
+      _writeString(ApiConstants.myUnpamTokenKey, token.trim());
+
+  String? getMyUnpamToken() => _readString(ApiConstants.myUnpamTokenKey);
+
+  bool get hasMyUnpamToken => getMyUnpamToken() != null;
+
+  Future<void> saveMyUnpamCookies(String cookies) =>
+      _writeString(ApiConstants.myUnpamCookiesKey, cookies);
+
+  String? getMyUnpamCookies() => _readString(ApiConstants.myUnpamCookiesKey);
+
+  Future<void> clearPortalSessions() async {
+    for (final key in const [
+      ApiConstants.satuUnpamTokenKey,
+      ApiConstants.satuUnpamCookiesKey,
+      ApiConstants.myUnpamTokenKey,
+      ApiConstants.myUnpamCookiesKey,
+    ]) {
+      await _preferences?.remove(key);
+    }
+  }
+
+  Future<void> clearPortalCache() async {
+    for (final key in ApiConstants.myUnpamCacheKeys) {
+      await _preferences?.remove(key);
+    }
+  }
+
+  String? getCachedJson(String key) => _readString(key);
+
+  Future<void> saveCachedJson(String key, String json) => _writeString(key, json);
+
+  Future<void> saveCachedFinanceData(String json) =>
+      _writeString(ApiConstants.myUnpamCachedKeuanganKey, json);
+
+  String? getCachedFinanceData() => _readString(ApiConstants.myUnpamCachedKeuanganKey);
+
+  Future<void> saveCachedSemesters(String json) =>
+      _writeString(ApiConstants.myUnpamCachedSemestersListKey, json);
+
+  String? getCachedSemesters() => _readString(ApiConstants.myUnpamCachedSemestersListKey);
+
+  Future<void> saveSelectedSemester(String semester) =>
+      _writeString(ApiConstants.myUnpamCachedSemesterKey, semester);
+
+  String? getSelectedSemester() => _readString(ApiConstants.myUnpamCachedSemesterKey);
+
   // Active AI Model Selection
   Future<void> saveActiveAiModelId(String modelId) async {
     await _preferences?.setString(ApiConstants.activeAiModelKey, modelId);
@@ -135,6 +206,8 @@ class StorageService {
   Future<void> clearSession() async {
     await _preferences?.remove(ApiConstants.tokenKey);
     await _preferences?.remove(ApiConstants.cookiesKey);
+    await clearPortalSessions();
+    await clearPortalCache();
   }
 
   Future<void> setUserAgreementAccepted(bool accepted) async {
