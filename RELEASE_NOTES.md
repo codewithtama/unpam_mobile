@@ -1,6 +1,15 @@
 # Catatan Pembaruan Rilis The PAMs
 
-## Versi 1.0.32 (Terbaru)
+## Versi 1.0.33 (Terbaru)
+
+- **Pembaruan Konfigurasi Engine AI Mutakhir (Per 21 Oktober 2026)**:
+  - **Google Gemini 3.8 Flash & 4 Argon**: Peningkatan default model ID ke `gemini-3.8-flash` dengan Vision OCR canggih untuk lembar soal kuis, jendela konteks 1 Juta token, serta fallback ke `gemini-4-argon` dan seri 3.x.
+  - **OpenAI GPT-5 & GPT-4o**: Integrasi model flagship OpenAI terbaru (`gpt-5-mini`, `gpt-5`, `gpt-4o`) dilengkapi fallback otomatis bertingkat dan analisis multimodal vision.
+  - **Anthropic Claude 5.5**: Dukungan generasi 5.5 (`claude-sonnet-5-5`, `claude-haiku-5-5`) dengan peningkatan validasi handshake API Key.
+  - **DeepSeek V4 & Alibaba Qwen 3.8-Max**: Pembaruan kompatibilitas API Key untuk DeepSeek V4 (`deepseek-v4-flash`, `deepseek-chat`) dan Alibaba Qwen (`qwen3.8-max`).
+  - **OpenRouter Multi-Model Hub**: Perutean otomatis ke model global mutakhir dengan basis default `google/gemini-3.8-flash`.
+
+## Versi 1.0.32
 
 - **Rollback to v1.0.25 Engine (Pemulihan Arsitektur Stabil)**:
   - Mengembalikan seluruh basis kode ke arsitektur stabil versi 1.0.25 untuk menjamin keandalan sistem secara menyeluruh.
