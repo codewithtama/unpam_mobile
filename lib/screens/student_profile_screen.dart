@@ -299,7 +299,7 @@ class _StudentProfileScreenState extends State<StudentProfileScreen> {
             'Semester',
             'Ke-${biodata.semester ?? '1'}',
             Icons.calendar_month_rounded,
-            Colors.teal,
+            AppTheme.accentGold,
           ),
         ),
       ],
@@ -312,7 +312,7 @@ class _StudentProfileScreenState extends State<StudentProfileScreen> {
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: Colors.grey.shade200),
+        border: Border.all(color: AppTheme.cardBorder),
         boxShadow: [
           BoxShadow(
             color: Colors.black.withOpacity(0.02),
@@ -416,7 +416,7 @@ class _StudentProfileScreenState extends State<StudentProfileScreen> {
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: Colors.grey.shade200),
+        border: Border.all(color: AppTheme.cardBorder),
         boxShadow: [
           BoxShadow(
             color: Colors.black.withOpacity(0.02),

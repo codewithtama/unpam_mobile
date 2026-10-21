@@ -141,7 +141,7 @@ class PortalErrorView extends StatelessWidget {
           child: Container(
             padding: const EdgeInsets.all(20),
             decoration: BoxDecoration(
-              color: needsLogin ? Colors.blue.shade50 : Colors.red.shade50,
+              color: (needsLogin ? AppTheme.primaryBlue : AppTheme.dangerRed).withOpacity(0.1),
               shape: BoxShape.circle,
             ),
             child: Icon(
@@ -205,18 +205,18 @@ class PortalSyncBanner extends StatelessWidget {
       margin: const EdgeInsets.only(bottom: 14),
       padding: const EdgeInsets.fromLTRB(12, 10, 6, 10),
       decoration: BoxDecoration(
-        color: Colors.amber.shade50,
+        color: AppTheme.accentGoldLight,
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: Colors.amber.shade300),
+        border: Border.all(color: AppTheme.accentGold.withOpacity(0.35)),
       ),
       child: Row(
         children: [
-          Icon(Icons.cloud_off_rounded, size: 18, color: Colors.amber.shade900),
+          const Icon(Icons.cloud_off_rounded, size: 18, color: AppTheme.accentGold),
           const SizedBox(width: 10),
           Expanded(
             child: Text(
               'Menampilkan data tersimpan. $message',
-              style: TextStyle(fontSize: 11.5, color: Colors.amber.shade900, height: 1.3),
+              style: const TextStyle(fontSize: 11.5, color: AppTheme.textDark, height: 1.3),
             ),
           ),
           TextButton(

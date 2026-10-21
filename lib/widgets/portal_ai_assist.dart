@@ -150,7 +150,7 @@ class _PortalAiAssistState extends State<PortalAiAssist> {
                     'Tanya AI sambil tetap melihat halaman', _openSplit),
                 tile(
                     Icons.open_in_full_rounded,
-                    Colors.indigo,
+                    AppTheme.primaryBlue,
                     'AI Layar Penuh',
                     'Buka The PAMs AI dengan data halaman ini',
                     () => _openFullScreen(initialPrompt: _buildPrompt())),

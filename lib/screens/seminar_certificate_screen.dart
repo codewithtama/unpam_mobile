@@ -95,9 +95,9 @@ class _SeminarCertificateScreenState extends State<SeminarCertificateScreen> {
             Container(
               padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
               decoration: BoxDecoration(
-                color: Colors.grey.shade100,
+                color: AppTheme.bgGrey,
                 borderRadius: BorderRadius.circular(8),
-                border: Border.all(color: Colors.grey.shade300),
+                border: Border.all(color: AppTheme.cardBorder),
               ),
               child: Row(
                 children: [
@@ -146,7 +146,7 @@ class _SeminarCertificateScreenState extends State<SeminarCertificateScreen> {
             style: TextStyle(
               fontSize: 12,
               fontWeight: FontWeight.bold,
-              color: isSuccess ? Colors.green.shade700 : AppTheme.textDark,
+              color: isSuccess ? AppTheme.successGreen : AppTheme.textDark,
             ),
           ),
         ],
@@ -294,7 +294,7 @@ class _SeminarCertificateScreenState extends State<SeminarCertificateScreen> {
         decoration: BoxDecoration(
           color: Colors.white,
           borderRadius: BorderRadius.circular(14),
-          border: Border.all(color: Colors.grey.shade200),
+          border: Border.all(color: AppTheme.cardBorder),
           boxShadow: [
             BoxShadow(
               color: Colors.black.withOpacity(0.02),
@@ -330,13 +330,13 @@ class _SeminarCertificateScreenState extends State<SeminarCertificateScreen> {
                       const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
                   decoration: BoxDecoration(
                     color: isVerified
-                        ? Colors.green.shade50
-                        : Colors.orange.shade50,
+                        ? AppTheme.successGreen.withOpacity(0.1)
+                        : AppTheme.accentGoldLight,
                     borderRadius: BorderRadius.circular(6),
                     border: Border.all(
                       color: isVerified
-                          ? Colors.green.shade200
-                          : Colors.orange.shade200,
+                          ? AppTheme.successGreen.withOpacity(0.35)
+                          : AppTheme.accentGold.withOpacity(0.35),
                     ),
                   ),
                   child: Row(
@@ -348,8 +348,8 @@ class _SeminarCertificateScreenState extends State<SeminarCertificateScreen> {
                             : Icons.access_time_rounded,
                         size: 12,
                         color: isVerified
-                            ? Colors.green.shade700
-                            : Colors.orange.shade700,
+                            ? AppTheme.successGreen
+                            : AppTheme.accentGold,
                       ),
                       const SizedBox(width: 4),
                       Text(
@@ -358,8 +358,8 @@ class _SeminarCertificateScreenState extends State<SeminarCertificateScreen> {
                           fontSize: 10.5,
                           fontWeight: FontWeight.bold,
                           color: isVerified
-                              ? Colors.green.shade700
-                              : Colors.orange.shade700,
+                              ? AppTheme.successGreen
+                              : AppTheme.accentGold,
                         ),
                       ),
                     ],
@@ -422,15 +422,15 @@ class _SeminarCertificateScreenState extends State<SeminarCertificateScreen> {
   }
 
   Widget _buildEmptyCertificates() {
-    return Center(
+    return const Center(
       child: Padding(
-        padding: const EdgeInsets.symmetric(vertical: 40),
+        padding: EdgeInsets.symmetric(vertical: 40),
         child: Column(
           children: [
             Icon(Icons.workspace_premium_outlined,
-                size: 52, color: Colors.grey.shade400),
-            const SizedBox(height: 12),
-            const Text(
+                size: 52, color: AppTheme.textMuted),
+            SizedBox(height: 12),
+            Text(
               'Belum ada sertifikat seminar',
               style: TextStyle(
                 fontSize: 14,
@@ -438,8 +438,8 @@ class _SeminarCertificateScreenState extends State<SeminarCertificateScreen> {
                 color: AppTheme.textDark,
               ),
             ),
-            const SizedBox(height: 4),
-            const Text(
+            SizedBox(height: 4),
+            Text(
               'Sertifikat kegiatan atau seminar akan muncul di sini',
               style: TextStyle(fontSize: 12, color: AppTheme.textMuted),
             ),

@@ -200,7 +200,7 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
         color: Colors.white,
         borderRadius: BorderRadius.circular(14),
         border: Border.all(
-          color: isExpanded ? AppTheme.primaryBlue.withOpacity(0.4) : Colors.grey.shade200,
+          color: isExpanded ? AppTheme.primaryBlue.withOpacity(0.4) : AppTheme.cardBorder,
         ),
         boxShadow: [
           BoxShadow(
@@ -308,11 +308,11 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
                                         ? 1.0
                                         : (summary.attended / summary.recorded)
                                             .clamp(0.0, 1.0),
-                                    backgroundColor: Colors.grey.shade200,
+                                    backgroundColor: AppTheme.cardBorder,
                                     valueColor: AlwaysStoppedAnimation<Color>(
                                       summary.percentage >= 75
-                                          ? Colors.green
-                                          : Colors.orange,
+                                          ? AppTheme.successGreen
+                                          : AppTheme.accentGold,
                                     ),
                                     minHeight: 6,
                                   ),
@@ -325,8 +325,8 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
                                   fontSize: 11,
                                   fontWeight: FontWeight.bold,
                                   color: summary.percentage >= 75
-                                      ? Colors.green.shade800
-                                      : Colors.orange.shade800,
+                                      ? AppTheme.successGreen
+                                      : AppTheme.accentGold,
                                 ),
                               ),
                             ],
@@ -378,7 +378,7 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
                 padding: const EdgeInsets.all(16),
                 child: Text(
                   errorMeetings,
-                  style: const TextStyle(fontSize: 12, color: Colors.red),
+                  style: const TextStyle(fontSize: 12, color: AppTheme.dangerRed),
                 ),
               )
             else if (meetings != null)
@@ -401,7 +401,7 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
     }
 
     return Container(
-      color: Colors.grey.shade50,
+      color: AppTheme.bgGrey,
       padding: const EdgeInsets.all(12),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -440,15 +440,15 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
     IconData statusIcon;
 
     if (m.isAttended) {
-      statusColor = Colors.green;
+      statusColor = AppTheme.successGreen;
       statusText = 'Hadir';
       statusIcon = Icons.check_circle_rounded;
     } else if (m.isAbsent) {
-      statusColor = Colors.red;
+      statusColor = AppTheme.dangerRed;
       statusText = 'Absen';
       statusIcon = Icons.cancel_rounded;
     } else {
-      statusColor = Colors.grey.shade600;
+      statusColor = AppTheme.textMuted;
       statusText = 'Mendatang';
       statusIcon = Icons.schedule_rounded;
     }
@@ -459,7 +459,7 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(10),
-        border: Border.all(color: Colors.grey.shade200),
+        border: Border.all(color: AppTheme.cardBorder),
       ),
       child: Row(
         children: [
@@ -503,8 +503,8 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
                             horizontal: 5, vertical: 1),
                         decoration: BoxDecoration(
                           color: m.isOnline
-                              ? Colors.purple.shade50
-                              : Colors.blue.shade50,
+                              ? AppTheme.accentGoldLight
+                              : AppTheme.primaryLight.withOpacity(0.1),
                           borderRadius: BorderRadius.circular(4),
                         ),
                         child: Text(
@@ -513,8 +513,8 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
                             fontSize: 9.5,
                             fontWeight: FontWeight.w600,
                             color: m.isOnline
-                                ? Colors.purple.shade700
-                                : Colors.blue.shade700,
+                                ? AppTheme.accentGold
+                                : AppTheme.primaryLight,
                           ),
                         ),
                       ),
@@ -533,9 +533,9 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
                   const SizedBox(height: 2),
                   Text(
                     'Presensi: ${m.formattedPresensiTime} (${m.presensiBy ?? 'Sistem'})',
-                    style: TextStyle(
+                    style: const TextStyle(
                       fontSize: 10,
-                      color: Colors.grey.shade600,
+                      color: AppTheme.textMuted,
                       fontStyle: FontStyle.italic,
                     ),
                   ),
@@ -572,15 +572,15 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
   }
 
   Widget _buildEmptyCourses() {
-    return Center(
+    return const Center(
       child: Padding(
-        padding: const EdgeInsets.symmetric(vertical: 40),
+        padding: EdgeInsets.symmetric(vertical: 40),
         child: Column(
           children: [
             Icon(Icons.event_note_outlined,
-                size: 52, color: Colors.grey.shade400),
-            const SizedBox(height: 12),
-            const Text(
+                size: 52, color: AppTheme.textMuted),
+            SizedBox(height: 12),
+            Text(
               'Belum ada daftar mata kuliah presensi',
               style: TextStyle(
                 fontSize: 14,
@@ -588,8 +588,8 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
                 color: AppTheme.textDark,
               ),
             ),
-            const SizedBox(height: 4),
-            const Text(
+            SizedBox(height: 4),
+            Text(
               'Daftar presensi akan tampil setelah semester aktif dimulai',
               style: TextStyle(fontSize: 12, color: AppTheme.textMuted),
             ),

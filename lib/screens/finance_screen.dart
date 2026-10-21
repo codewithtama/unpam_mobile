@@ -170,7 +170,7 @@ class _FinanceScreenState extends State<FinanceScreen> {
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: Colors.grey.shade200),
+        border: Border.all(color: AppTheme.cardBorder),
         boxShadow: [
           BoxShadow(
             color: Colors.black.withOpacity(0.02),
@@ -283,15 +283,15 @@ class _FinanceScreenState extends State<FinanceScreen> {
                         Container(
                           padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
                           decoration: BoxDecoration(
-                            color: Colors.green.shade50,
+                            color: AppTheme.successGreen.withOpacity(0.1),
                             borderRadius: BorderRadius.circular(6),
-                            border: Border.all(color: Colors.green.shade200),
+                            border: Border.all(color: AppTheme.successGreen.withOpacity(0.35)),
                           ),
-                          child: Text(
+                          child: const Text(
                             'Aktif',
                             style: TextStyle(
                                 fontSize: 10,
-                                color: Colors.green.shade800,
+                                color: AppTheme.successGreen,
                                 fontWeight: FontWeight.bold),
                           ),
                         ),
@@ -393,7 +393,7 @@ class _FinanceScreenState extends State<FinanceScreen> {
             child: LinearProgressIndicator(
               value: progress,
               minHeight: 8,
-              backgroundColor: Colors.grey.shade200,
+              backgroundColor: AppTheme.cardBorder,
               valueColor: AlwaysStoppedAnimation<Color>(
                 progress >= 1.0 ? AppTheme.successGreen : AppTheme.primaryLight,
               ),
@@ -457,7 +457,7 @@ class _FinanceScreenState extends State<FinanceScreen> {
         color: Colors.white,
         borderRadius: BorderRadius.circular(14),
         border: Border.all(
-          color: isPaid ? AppTheme.cardBorder : Colors.orange.shade200,
+          color: isPaid ? AppTheme.cardBorder : AppTheme.accentGold.withOpacity(0.35),
           width: isPaid ? 1 : 1.2,
         ),
       ),
@@ -501,10 +501,10 @@ class _FinanceScreenState extends State<FinanceScreen> {
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
                 decoration: BoxDecoration(
-                  color: isPaid ? Colors.green.shade50 : Colors.red.shade50,
+                  color: isPaid ? AppTheme.successGreen.withOpacity(0.1) : AppTheme.dangerRed.withOpacity(0.1),
                   borderRadius: BorderRadius.circular(8),
                   border: Border.all(
-                    color: isPaid ? Colors.green.shade200 : Colors.red.shade200,
+                    color: isPaid ? AppTheme.successGreen.withOpacity(0.35) : AppTheme.dangerRed.withOpacity(0.35),
                   ),
                 ),
                 child: Row(
@@ -573,7 +573,7 @@ class _FinanceScreenState extends State<FinanceScreen> {
               ] else ...[
                 const Text(
                   'Silakan bayar via Bank BNI/Loket',
-                  style: TextStyle(fontSize: 11, color: Colors.orange, fontWeight: FontWeight.w500),
+                  style: TextStyle(fontSize: 11, color: AppTheme.accentGold, fontWeight: FontWeight.w500),
                 ),
               ],
             ],

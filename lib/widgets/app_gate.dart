@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../core/services/permission_service.dart';
 import '../core/services/storage_service.dart';
+import '../screens/account_onboarding_screen.dart';
 import '../screens/permission_gate_screen.dart';
 import '../screens/portal_webview_screen.dart';
 import '../screens/user_agreement_screen.dart';
@@ -10,6 +11,7 @@ enum GateDestination {
   checking,
   agreement,
   permissionGate,
+  accountOnboarding,
   portal,
 }
 
@@ -65,11 +67,16 @@ class _AppGateState extends State<AppGate> with WidgetsBindingObserver {
         await _permissionService.areAllPermissionsGranted();
 
     if (!mounted) return;
+    if (!arePermissionsGranted) {
+      setState(() => _destination = GateDestination.permissionGate);
+      return;
+    }
 
+    final needsOnboarding = await AccountOnboardingScreen.shouldShow(widget.storageService);
+    if (!mounted) return;
     setState(() {
-      _destination = arePermissionsGranted
-          ? GateDestination.portal
-          : GateDestination.permissionGate;
+      _destination =
+          needsOnboarding ? GateDestination.accountOnboarding : GateDestination.portal;
     });
   }
 
@@ -119,6 +126,12 @@ class _AppGateState extends State<AppGate> with WidgetsBindingObserver {
       case GateDestination.permissionGate:
         return PermissionGateScreen(
           storageService: widget.storageService,
+        );
+
+      case GateDestination.accountOnboarding:
+        return AccountOnboardingScreen(
+          storageService: widget.storageService,
+          onFinished: _evaluateGateDestination,
         );
 
       case GateDestination.portal:

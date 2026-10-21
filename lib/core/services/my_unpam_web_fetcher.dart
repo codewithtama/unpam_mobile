@@ -18,7 +18,9 @@ class MyUnpamWebFetcher {
   Completer<void>? _pageReady;
   int _sequence = 0;
 
-  MyUnpamWebFetcher(this._session);
+  MyUnpamWebFetcher(this._session) {
+    _session.addSignOutListener(reset);
+  }
 
   Future<Response<dynamic>> get(String path, Map<String, dynamic>? query, String? token) async {
     final uri = Uri(path: path, queryParameters: query?.map((k, v) => MapEntry(k, '$v')));

@@ -218,6 +218,14 @@ class StorageService {
     return _preferences?.getBool(ApiConstants.userAgreementKey) ?? false;
   }
 
+  Future<void> setAccountOnboardingDone(bool done) async {
+    await _preferences?.setBool(ApiConstants.accountOnboardingDoneKey, done);
+  }
+
+  bool isAccountOnboardingDone() {
+    return _preferences?.getBool(ApiConstants.accountOnboardingDoneKey) ?? false;
+  }
+
   Future<void> resetAll() async {
     await _preferences?.clear();
   }

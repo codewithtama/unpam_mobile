@@ -34,6 +34,7 @@ class ApiConstants {
   ];
 
   static const String userAgreementKey = 'unpam_user_agreement_accepted';
+  static const String accountOnboardingDoneKey = 'unpam_account_onboarding_done';
   static const String biometricAutoLoginEnabledKey = 'unpam_biometric_auto_login_enabled';
   static const String biometricPromptDismissedKey = 'unpam_biometric_prompt_dismissed';
   static const String secureNimKey = 'unpam_secure_nim';

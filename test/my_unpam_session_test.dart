@@ -170,4 +170,19 @@ void main() {
     await session.signOut();
     expect(session.rememberedCredentials, isNull);
   });
+
+  test('signOut clears both sessions and notifies listeners', () async {
+    await storage.saveMyUnpamToken('my-token-abcdefghijklmnopqrstu');
+    await storage.saveSatuUnpamToken('satu-token-abcdefghijklmnopqr');
+    final session = buildSession(_FakeAdapter([]));
+    var notified = 0;
+    session.addSignOutListener(() => notified++);
+
+    await session.signOut();
+
+    expect(notified, 1);
+    expect(storage.getMyUnpamToken(), isNull);
+    expect(storage.getSatuUnpamToken(), isNull);
+    expect(session.needsLogin, isTrue);
+  });
 }

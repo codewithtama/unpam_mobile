@@ -33,17 +33,17 @@ class _HubMenu {
 
 class _AcademicHubScreenState extends State<AcademicHubScreen> {
   static final List<_HubMenu> _menus = [
-    _HubMenu('Biodata', 'Data diri & akademik', Icons.badge_rounded, Colors.blue,
+    _HubMenu('Biodata', 'Data diri & akademik', Icons.badge_rounded, AppTheme.primaryBlue,
         (_) => const StudentProfileScreen()),
     _HubMenu('Keuangan', 'Tagihan & pembayaran', Icons.account_balance_wallet_rounded,
-        AppTheme.primaryBlue, (_) => const FinanceScreen()),
-    _HubMenu('Nilai', 'Rangkuman & IPK', Icons.assessment_rounded, Colors.teal,
+        AppTheme.accentGold, (_) => const FinanceScreen()),
+    _HubMenu('Nilai', 'Rangkuman & IPK', Icons.assessment_rounded, AppTheme.primaryLight,
         (_) => const AcademicGradesScreen()),
-    _HubMenu('Jadwal', 'Jadwal perkuliahan', Icons.calendar_today_rounded, Colors.indigo,
+    _HubMenu('Jadwal', 'Jadwal perkuliahan', Icons.calendar_today_rounded, AppTheme.primaryBlue,
         (_) => const LectureScheduleScreen()),
-    _HubMenu('Presensi', 'Kehadiran per matkul', Icons.how_to_reg_rounded, Colors.deepOrange,
+    _HubMenu('Presensi', 'Kehadiran per matkul', Icons.how_to_reg_rounded, AppTheme.accentGold,
         (_) => const AttendanceScreen()),
-    _HubMenu('Sertifikat', 'Seminar & kegiatan', Icons.card_membership_rounded, AppTheme.accentGold,
+    _HubMenu('Sertifikat', 'Seminar & kegiatan', Icons.card_membership_rounded, AppTheme.primaryLight,
         (_) => const SeminarCertificateScreen()),
   ];
 

@@ -46,6 +46,7 @@ class MyUnpamSession extends ChangeNotifier {
   Completer<RefreshOutcome>? _pendingRefresh;
   PortalSessionStatus _status = PortalSessionStatus.unknown;
   (String, String)? _credentials;
+  final List<VoidCallback> _signOutListeners = [];
 
   MyUnpamSession(this._storage, {Dio? dio})
       : _dio = dio ??
@@ -61,6 +62,7 @@ class MyUnpamSession extends ChangeNotifier {
               },
             ));
 
+  StorageService get storage => _storage;
   PortalSessionStatus get status => _status;
   bool get hasToken => _storage.hasMyUnpamToken;
   bool get needsLogin => _status == PortalSessionStatus.expired;
@@ -208,9 +210,14 @@ class MyUnpamSession extends ChangeNotifier {
     }
   }
 
+  void addSignOutListener(VoidCallback listener) => _signOutListeners.add(listener);
+
   Future<void> signOut() async {
     _credentials = null;
     await _storage.clearPortalSessions();
+    for (final listener in List.of(_signOutListeners)) {
+      listener();
+    }
     _setStatus(PortalSessionStatus.expired);
   }
 

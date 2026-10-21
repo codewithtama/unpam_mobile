@@ -178,7 +178,7 @@ class _LectureScheduleScreenState extends State<LectureScheduleScreen> {
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(10),
-        border: Border.all(color: Colors.grey.shade200),
+        border: Border.all(color: AppTheme.cardBorder),
       ),
       child: Row(
         children: [
@@ -245,7 +245,7 @@ class _LectureScheduleScreenState extends State<LectureScheduleScreen> {
 
   Widget _buildScheduleCard(LectureScheduleItem item) {
     final isOnline = item.isOnline;
-    final modeColor = isOnline ? const Color(0xFF8B5CF6) : const Color(0xFF10B981);
+    final modeColor = isOnline ? AppTheme.primaryLight : AppTheme.successGreen;
     final modeLabel = isOnline ? 'Online (Daring)' : 'Tatap Muka (Luring)';
     final modeIcon = isOnline ? Icons.laptop_chromebook_rounded : Icons.person_pin_circle_rounded;
 
@@ -254,7 +254,7 @@ class _LectureScheduleScreenState extends State<LectureScheduleScreen> {
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: Colors.grey.shade200),
+        border: Border.all(color: AppTheme.cardBorder),
         boxShadow: [
           BoxShadow(
             color: Colors.black.withOpacity(0.02),
@@ -268,10 +268,10 @@ class _LectureScheduleScreenState extends State<LectureScheduleScreen> {
         children: [
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-            decoration: BoxDecoration(
-              color: Colors.grey.shade50,
-              borderRadius: const BorderRadius.vertical(top: Radius.circular(14)),
-              border: Border(bottom: BorderSide(color: Colors.grey.shade200)),
+            decoration: const BoxDecoration(
+              color: AppTheme.bgGrey,
+              borderRadius: BorderRadius.vertical(top: Radius.circular(14)),
+              border: Border(bottom: BorderSide(color: AppTheme.cardBorder)),
             ),
             child: Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -368,15 +368,15 @@ class _LectureScheduleScreenState extends State<LectureScheduleScreen> {
                     Container(
                       padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1),
                       decoration: BoxDecoration(
-                        color: Colors.blue.shade50,
+                        color: AppTheme.primaryLight.withOpacity(0.1),
                         borderRadius: BorderRadius.circular(4),
                       ),
                       child: Text(
                         'Periode ${item.idPeriode}',
-                        style: TextStyle(
+                        style: const TextStyle(
                           fontSize: 10,
                           fontWeight: FontWeight.bold,
-                          color: Colors.blue.shade800,
+                          color: AppTheme.primaryBlue,
                         ),
                       ),
                     ),
@@ -429,14 +429,14 @@ class _LectureScheduleScreenState extends State<LectureScheduleScreen> {
   }
 
   Widget _buildEmptySchedule() {
-    return Center(
+    return const Center(
       child: Padding(
-        padding: const EdgeInsets.symmetric(vertical: 40),
+        padding: EdgeInsets.symmetric(vertical: 40),
         child: Column(
           children: [
-            Icon(Icons.event_available_rounded, size: 48, color: Colors.grey.shade400),
-            const SizedBox(height: 12),
-            const Text(
+            Icon(Icons.event_available_rounded, size: 48, color: AppTheme.textMuted),
+            SizedBox(height: 12),
+            Text(
               'Tidak ada perkuliahan untuk filter ini',
               style: TextStyle(
                 fontSize: 14,
@@ -444,8 +444,8 @@ class _LectureScheduleScreenState extends State<LectureScheduleScreen> {
                 color: AppTheme.textDark,
               ),
             ),
-            const SizedBox(height: 4),
-            const Text(
+            SizedBox(height: 4),
+            Text(
               'Pilih hari atau periode lain untuk melihat jadwal',
               style: TextStyle(fontSize: 12, color: AppTheme.textMuted),
             ),

@@ -4,6 +4,7 @@ import 'package:permission_handler/permission_handler.dart';
 import '../core/services/permission_service.dart';
 import '../core/services/storage_service.dart';
 import '../theme/app_theme.dart';
+import 'account_onboarding_screen.dart';
 import 'portal_webview_screen.dart';
 
 class PermissionGateScreen extends StatefulWidget {
@@ -145,10 +146,16 @@ class _PermissionGateScreenState extends State<PermissionGateScreen>
     }
   }
 
-  void _proceedToApp() {
+  Future<void> _proceedToApp() async {
+    if (!mounted) return;
+    final needsOnboarding = await AccountOnboardingScreen.shouldShow(widget.storageService);
     if (!mounted) return;
     Navigator.of(context).pushReplacement(
-      MaterialPageRoute(builder: (_) => const PortalWebViewScreen()),
+      MaterialPageRoute(
+        builder: (_) => needsOnboarding
+            ? AccountOnboardingScreen(storageService: widget.storageService)
+            : const PortalWebViewScreen(),
+      ),
     );
   }
 

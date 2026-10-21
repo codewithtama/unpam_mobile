@@ -23,6 +23,7 @@ import '../widgets/mini_ai_overlay_panel.dart';
 import '../widgets/in_page_quick_action_pill.dart';
 import 'package:open_filex/open_filex.dart';
 import 'academic_hub_screen.dart';
+import 'account_onboarding_screen.dart';
 import '../core/constants/api_constants.dart';
 import '../core/constants/my_unpam_scripts.dart';
 import '../core/services/my_unpam_session.dart';
@@ -839,10 +840,18 @@ class _PortalWebViewScreenState extends State<PortalWebViewScreen> with WidgetsB
       await _controller.clearCache();
     } catch (_) {}
 
+    final myUnpam = _myUnpamController;
+    if (myUnpam != null) {
+      try {
+        await myUnpam.runJavaScript('try { localStorage.clear(); sessionStorage.clear(); } catch (e) {}');
+        await myUnpam.clearCache();
+      } catch (_) {}
+    }
+
     try {
       // 5. Bersihkan sesi Satu UNPAM, My UNPAM & cache akademik
       final storage = await StorageService.getInstance();
-      await storage.clearPortalCache();
+      await storage.clearSession();
       if (mounted) await context.read<MyUnpamSession>().signOut();
       if (mounted) {
         context.read<FinanceProvider>().clear();
@@ -865,7 +874,7 @@ class _PortalWebViewScreenState extends State<PortalWebViewScreen> with WidgetsB
                 Icon(Icons.check_circle_outline_rounded, color: Colors.white),
                 SizedBox(width: 10),
                 Expanded(
-                  child: Text('Cache, cookie, dan sesi Mentari berhasil direset.'),
+                  child: Text('Sesi Mentari, Satu UNPAM & My UNPAM berhasil direset.'),
                 ),
               ],
             ),
@@ -878,6 +887,10 @@ class _PortalWebViewScreenState extends State<PortalWebViewScreen> with WidgetsB
       }
     }
 
+    if (myUnpam != null && mounted) {
+      setState(() => _myUnpamHasError = false);
+      myUnpam.loadRequest(Uri.parse(myUnpamUrl));
+    }
     _navigateToUrl(mentariUrl);
   }
 
@@ -1819,7 +1832,8 @@ class _PortalWebViewScreenState extends State<PortalWebViewScreen> with WidgetsB
         }
 
         final bioProv = context.read<BiometricProvider>();
-        if (bioProv.hasSavedCredentials && bioProv.isAutoLoginEnabled) {
+        final hasRemembered = context.read<MyUnpamSession>().rememberedCredentials != null;
+        if (hasRemembered || (bioProv.hasSavedCredentials && bioProv.isAutoLoginEnabled)) {
           if (_pendingAutoLoginAfterLoad || (isLoginDetected && !_hasAutoLoggedInCurrentSession)) {
             _hasAutoLoggedInCurrentSession = true;
             _pendingAutoLoginAfterLoad = false;
@@ -2069,12 +2083,15 @@ class _PortalWebViewScreenState extends State<PortalWebViewScreen> with WidgetsB
 
   Future<void> _performBiometricLogin({int attempt = 1}) async {
     final bioProv = context.read<BiometricProvider>();
-    if (!bioProv.hasSavedCredentials) {
+    final remembered = context.read<MyUnpamSession>().rememberedCredentials;
+    if (remembered == null && !bioProv.hasSavedCredentials) {
       BiometricVaultSheet.show(context);
       return;
     }
 
-    final creds = await bioProv.getCredentialsForLogin();
+    final creds = remembered != null
+        ? {'nim': remembered.$1, 'password': remembered.$2}
+        : await bioProv.getCredentialsForLogin();
     if (creds == null) {
       return;
     }
@@ -5453,6 +5470,16 @@ class _PortalWebViewScreenState extends State<PortalWebViewScreen> with WidgetsB
               _ensureMyUnpamControllerInitialized();
               setState(() => _currentNavIndex = 1);
               _myUnpamController?.loadRequest(Uri.parse(myUnpamUrl));
+            } else if (val == 'connect_account') {
+              Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (_) => AccountOnboardingScreen(
+                    storageService: context.read<MyUnpamSession>().storage,
+                    allowSkip: false,
+                  ),
+                ),
+              );
             } else if (val == 'clear_cache') {
               _resetMentariSession();
             } else if (val == 'check_update') {
@@ -5505,6 +5532,16 @@ class _PortalWebViewScreenState extends State<PortalWebViewScreen> with WidgetsB
               ),
             ),
             const PopupMenuDivider(),
+            const PopupMenuItem(
+              value: 'connect_account',
+              child: Row(
+                children: [
+                  Icon(Icons.manage_accounts_rounded, size: 18, color: AppTheme.primaryBlue),
+                  SizedBox(width: 10),
+                  Text('Hubungkan Akun UNPAM'),
+                ],
+              ),
+            ),
             const PopupMenuItem(
               value: 'clear_cache',
               child: Row(

@@ -2,7 +2,7 @@
 
 Catatan teknis untuk fitur **Akademik** (data My UNPAM native) beserta perbaikan sesi/token, auto-isi login Satu UNPAM, dan The PAMs AI Tools di halaman Akademik.
 
-> Status: `flutter analyze` bersih, 47 test lulus. Alur WebView (SSO, refresh sesi, fetch lewat WebView) **belum diuji di perangkat** — lihat bagian [Pengujian manual](#pengujian-manual).
+> Status: `flutter analyze` bersih, 53 test lulus. Alur WebView (SSO, refresh sesi, fetch lewat WebView) **belum diuji di perangkat** — lihat bagian [Pengujian manual](#pengujian-manual).
 
 ---
 
@@ -10,6 +10,7 @@ Catatan teknis untuk fitur **Akademik** (data My UNPAM native) beserta perbaikan
 
 | Area | Yang baru |
 |---|---|
+| Onboarding | Layar **Hubungkan Akun UNPAM** sekali setelah izin aplikasi (bisa dilewati): NIM + password sekali → Mentari login otomatis, Satu UNPAM/My UNPAM terhubung, opsi sidik jari. |
 | Navigasi | Tab bottom nav **Akademik** (urutan: Mentari · MyUnpam · Akademik · The PAMs AI) membuka hub grid 6 layanan + status sesi. |
 | Halaman | Biodata, Keuangan, Nilai, Jadwal, Presensi, Sertifikat — native, dengan cache offline. |
 | Sesi | Token & cookie **Satu UNPAM** dan **My UNPAM** disimpan terpisah; refresh otomatis lewat Satu UNPAM → My UNPAM tanpa OTP selama sesi SSO masih hidup. |
@@ -58,6 +59,21 @@ Token Mentari **tidak** pernah disimpan sebagai token My UNPAM (bug lama yang me
 
 ---
 
+## Onboarding "Hubungkan Akun UNPAM"
+
+Alur gate: `Persetujuan → Izin → Onboarding (sekali) → Portal`. Login **tidak wajib** — app tetap bisa dipakai saat server UNPAM / OTP Telegram bermasalah.
+
+1. **Akun** — form NIM + password + checkbox "Aktifkan login sidik jari" (jika perangkat mendukung). Kredensial disimpan di memori (`rememberCredentials`); jika sidik jari dicentang, disimpan terenkripsi lewat `BiometricProvider.saveCredentials` dan auto-login diaktifkan.
+2. **Hubungkan My UNPAM** — membuka `SsoAuthModal` (isi otomatis + Masuk otomatis, user memasukkan OTP). Bisa **Lewati**.
+3. **Selesai** — ringkasan status Mentari, My UNPAM, dan sidik jari.
+
+- "Nanti saja" / selesai → flag `unpam_account_onboarding_done`.
+- User lama yang sudah punya token My UNPAM atau kredensial biometrik otomatis dianggap selesai (`AccountOnboardingScreen.shouldShow`).
+- Mentari memakai kredensial onboarding untuk auto-login (sekali per sesi, tanpa prompt sidik jari); tanpa itu tetap memakai alur biometrik lama.
+- Bisa dibuka ulang dari menu titik-tiga portal → **Hubungkan Akun UNPAM**.
+
+---
+
 ## Auto-isi login Satu UNPAM
 
 Prioritas sumber kredensial di `SsoAuthModal`:
@@ -102,6 +118,7 @@ Modal menutup otomatis begitu token My UNPAM yang belum kedaluwarsa (cek klaim `
 | `lib/widgets/portal_state_views.dart` | `PortalPageScaffold`, loading/error/banner sinkron, `reconnectPortal`. |
 | `lib/widgets/portal_ai_assist.dart` | Pill AI + Split-Screen untuk halaman native. |
 | `lib/widgets/sso_auth_modal.dart` | Modal login Satu UNPAM → My UNPAM. |
+| `lib/screens/account_onboarding_screen.dart` | Onboarding "Hubungkan Akun UNPAM" (3 langkah, bisa dilewati). |
 | `lib/models/*_model.dart` | Model Biodata, Nilai, Jadwal, Presensi, Sertifikat, Keuangan. |
 
 ### Diubah
@@ -111,7 +128,8 @@ Modal menutup otomatis begitu token My UNPAM yang belum kedaluwarsa (cek klaim `
 | `lib/main.dart` | Inisialisasi `MyUnpamSession`, refresher, web fetcher, provider; host WebView tersembunyi di `MaterialApp.builder`. |
 | `lib/screens/portal_webview_screen.dart` | Tab **Akademik**, sniffer token di tab MyUnpam, simpan kredensial login Mentari ke memori, reset sesi ikut membersihkan sesi & cache portal, UA dari konstanta. |
 | `lib/core/constants/api_constants.dart` | URL Satu/My UNPAM, `webViewUserAgent`, key storage sesi & cache. |
-| `lib/core/services/storage_service.dart` | Simpan/hapus token & cookie kedua sesi, cache JSON, `clearPortalSessions`, `clearPortalCache`. |
+| `lib/core/services/storage_service.dart` | Simpan/hapus token & cookie kedua sesi, cache JSON, `clearPortalSessions`, `clearPortalCache`, flag onboarding. |
+| `lib/widgets/app_gate.dart`, `lib/screens/permission_gate_screen.dart` | Arahkan ke onboarding setelah izin lengkap. |
 
 ### Storage (SharedPreferences)
 
@@ -131,11 +149,13 @@ flutter test
 ```
 
 - `test/my_unpam_session_test.dart` — 200, 401 → refresh → retry, Cloudflare 403 → wajib login, refresh single-flight, akun belum terhubung, pemisahan token Satu/My UNPAM, cek `exp`, token kedaluwarsa ditolak, kredensial hanya di memori.
+- `test/account_onboarding_test.dart` — kapan onboarding tampil/dilewati, validasi form, kredensial hanya di memori, "Nanti saja".
 - `test/portal_ai_assist_test.dart` — pill "Telaah Nilai" tampil, Split-Screen ter-dock lewat Tools sheet, ringkasan sertifikat.
 - `test/academic_portal_test.dart`, `test/finance_test.dart` — parsing model & storage.
 
 ### Pengujian manual
 
+0. Install bersih → Persetujuan → Izin → **Onboarding**: isi NIM + password (+ sidik jari) → Hubungkan My UNPAM (OTP) → Selesai → Mentari login otomatis → Akademik langsung tampil data. Coba juga "Nanti saja".
 1. Login Mentari → tab **Akademik** → **Hubungkan** → NIM & password terisi → Cloudflare centang → Masuk otomatis → OTP Telegram → My UNPAM → **modal menutup sendiri**.
 2. Tab **MyUnpam** sudah login → buka **Akademik → Nilai/Biodata** → data muncul dalam beberapa detik.
 3. Besoknya / setelah ganti jaringan → buka Nilai → data tetap muncul tanpa OTP.

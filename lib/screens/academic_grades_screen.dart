@@ -38,11 +38,11 @@ class _AcademicGradesScreenState extends State<AcademicGradesScreen> {
 
   Color _getGradeColor(String grade) {
     final g = grade.toUpperCase().trim();
-    if (g.startsWith('A')) return const Color(0xFF10B981);
-    if (g.startsWith('B')) return const Color(0xFF2563EB);
-    if (g.startsWith('C')) return const Color(0xFFF59E0B);
-    if (g.startsWith('D')) return const Color(0xFFEA580C);
-    if (g.startsWith('E')) return const Color(0xFFDC2626);
+    if (g.startsWith('A')) return AppTheme.successGreen;
+    if (g.startsWith('B')) return AppTheme.primaryLight;
+    if (g.startsWith('C')) return AppTheme.accentGold;
+    if (g.startsWith('D')) return AppTheme.dangerRed;
+    if (g.startsWith('E')) return AppTheme.dangerRed;
     return AppTheme.textMuted;
   }
 
@@ -254,7 +254,7 @@ class _AcademicGradesScreenState extends State<AcademicGradesScreen> {
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: Colors.grey.shade200),
+        border: Border.all(color: AppTheme.cardBorder),
         boxShadow: [
           BoxShadow(
             color: Colors.black.withOpacity(0.02),
@@ -422,7 +422,7 @@ class _AcademicGradesScreenState extends State<AcademicGradesScreen> {
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: Colors.grey.shade200),
+        border: Border.all(color: AppTheme.cardBorder),
         boxShadow: [
           BoxShadow(
             color: Colors.black.withOpacity(0.02),
@@ -544,14 +544,14 @@ class _AcademicGradesScreenState extends State<AcademicGradesScreen> {
   }
 
   Widget _buildEmptyResults() {
-    return Center(
+    return const Center(
       child: Padding(
-        padding: const EdgeInsets.symmetric(vertical: 40),
+        padding: EdgeInsets.symmetric(vertical: 40),
         child: Column(
           children: [
-            Icon(Icons.search_off_rounded, size: 48, color: Colors.grey.shade400),
-            const SizedBox(height: 12),
-            const Text(
+            Icon(Icons.search_off_rounded, size: 48, color: AppTheme.textMuted),
+            SizedBox(height: 12),
+            Text(
               'Tidak ada mata kuliah yang cocok',
               style: TextStyle(
                 fontSize: 14,
@@ -559,8 +559,8 @@ class _AcademicGradesScreenState extends State<AcademicGradesScreen> {
                 color: AppTheme.textDark,
               ),
             ),
-            const SizedBox(height: 4),
-            const Text(
+            SizedBox(height: 4),
+            Text(
               'Coba ubah kata kunci pencarian atau filter semester',
               style: TextStyle(fontSize: 12, color: AppTheme.textMuted),
             ),
