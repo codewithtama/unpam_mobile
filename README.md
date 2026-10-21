@@ -204,11 +204,11 @@ Pengguna dapat memilih mesin kecerdasan buatan favorit pada panel pengaturan The
 | Provider | Model Rekomendasi Terkini | Model ID API | Dukungan Vision OCR | Kemampuan Utama |
 | :--- | :--- | :--- | :---: | :--- |
 | **The PAMs Cloud AI** | Cloud Native Fast | `openai-fast` | Tidak | **Gratis tanpa kuota & tanpa API Key**. Cepat untuk tanya jawab umum & tugas perkuliahan. |
-| **Google Gemini** | Gemini 3.7 Flash, 3.5 Flash | `gemini-3.7-flash` | **Ya** | Multimodal Vision OCR foto lembar soal kuis, kecepatan inferensi ultra tinggi. |
+| **Google Gemini** | Gemini 3.8 Flash, 4 Argon | `gemini-3.8-flash` | **Ya** | Multimodal Vision OCR foto lembar soal kuis, jendela konteks 1 Juta token & kecepatan ultra tinggi. |
 | **DeepSeek** | DeepSeek V4 (Flash / Pro) | `deepseek-v4-flash` | Tidak | Jendela konteks 1 Juta token, penalaran logika matematika, analisis algoritma & pemrograman. |
 | **Anthropic Claude** | Claude Sonnet 5.5, Opus 5.5 | `claude-sonnet-5-5` | **Ya** | Penalaran akademis terstruktur, tata bahasa ilmiah elegan, analisis komprehensif jurnal. |
 | **Alibaba Qwen** | Qwen 3.8-Max, 3.7-Max | `qwen3.8-max` | Tidak | Flagship Alibaba Cloud Model Studio dengan kecakapan teknis komprehensif & multibahasa. |
-| **OpenAI** | GPT-4o, GPT-4o-mini | `gpt-4o-mini` | **Ya** | Pemahaman konteks multimodal teruji untuk beragam disiplin ilmu perkuliahan. |
+| **OpenAI** | GPT-5, GPT-4o | `gpt-5-mini` | **Ya** | Penalaran mutakhir dan pemahaman konteks multimodal teruji untuk beragam disiplin ilmu perkuliahan. |
 | **OpenRouter** | Hub Multi-Model Bebas | Format `provider/model` | **Ya** | Satu API Key untuk mengakses ratusan model open-source maupun komersial global. |
 
 ---

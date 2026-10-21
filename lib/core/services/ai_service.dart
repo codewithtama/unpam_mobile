@@ -67,26 +67,36 @@ class AiService {
             if (res.statusCode == 200) return true;
           } catch (_) {}
 
-          final resMsg = await _dio.post<Map<String, dynamic>>(
-            'https://api.anthropic.com/v1/messages',
-            data: {
-              'model': 'claude-haiku-5-5',
-              'max_tokens': 10,
-              'messages': [
-                {'role': 'user', 'content': 'hi'}
-              ],
-            },
-            options: Options(
-              headers: {
-                'x-api-key': cleanKey,
-                'anthropic-version': '2023-06-01',
-                'content-type': 'application/json',
-              },
-              sendTimeout: const Duration(seconds: 10),
-              receiveTimeout: const Duration(seconds: 15),
-            ),
-          );
-          return resMsg.statusCode == 200;
+          for (final testModel in [
+            'claude-sonnet-5-5',
+            'claude-haiku-5-5',
+            'claude-3-5-haiku-20241022',
+            'claude-3-haiku-20240307',
+          ]) {
+            try {
+              final resMsg = await _dio.post<Map<String, dynamic>>(
+                'https://api.anthropic.com/v1/messages',
+                data: {
+                  'model': testModel,
+                  'max_tokens': 10,
+                  'messages': [
+                    {'role': 'user', 'content': 'hi'}
+                  ],
+                },
+                options: Options(
+                  headers: {
+                    'x-api-key': cleanKey,
+                    'anthropic-version': '2023-06-01',
+                    'content-type': 'application/json',
+                  },
+                  sendTimeout: const Duration(seconds: 10),
+                  receiveTimeout: const Duration(seconds: 15),
+                ),
+              );
+              if (resMsg.statusCode == 200) return true;
+            } catch (_) {}
+          }
+          return false;
 
         case AiProviderType.openai:
           final res = await _dio.get<Map<String, dynamic>>(
@@ -201,7 +211,7 @@ class AiService {
             id: DateTime.now().millisecondsSinceEpoch.toString(),
             content:
                 'Model ${activeOption.name} berfokus pada penalaran teks murni dan belum mendukung input gambar screenshot secara langsung.\n\n'
-                '💡 Saran: Untuk menganalisis screenshot soal kuis dengan Vision OCR, pilih model **Google Gemini** atau **Anthropic Claude 3.5** melalui pemilih model di bagian atas.',
+                '💡 Saran: Untuk menganalisis screenshot soal kuis dengan Vision OCR, pilih model **Google Gemini (3.8 Flash)** atau **Anthropic Claude (5.5)** melalui pemilih model di bagian atas.',
             isUser: false,
             timestamp: DateTime.now(),
             relatedCourseName: courseName,
@@ -399,30 +409,62 @@ class AiService {
         throw Exception('Alibaba Qwen DashScope API tidak memberikan respons');
 
       case AiProviderType.openai:
-        return await _callOpenAiWithVision(
-          url: 'https://api.openai.com/v1/chat/completions',
-          apiKey: apiKey,
-          model: option.defaultModelId,
-          systemPrompt: systemPrompt,
-          userPrompt: prompt,
-          imageBytes: imageBytes,
-          mimeType: mimeType,
-        );
+        final openaiModelsToTry = [
+          option.defaultModelId,
+          ..._openaiCandidateModels.where((m) => m != option.defaultModelId),
+        ];
+        DioException? lastOpenAiErr;
+        for (final m in openaiModelsToTry) {
+          try {
+            return await _callOpenAiWithVision(
+              url: 'https://api.openai.com/v1/chat/completions',
+              apiKey: apiKey,
+              model: m,
+              systemPrompt: systemPrompt,
+              userPrompt: prompt,
+              imageBytes: imageBytes,
+              mimeType: mimeType,
+            );
+          } on DioException catch (e) {
+            lastOpenAiErr = e;
+            final code = e.response?.statusCode;
+            if (code == 401 || code == 403 || code == 429) rethrow;
+            continue;
+          }
+        }
+        if (lastOpenAiErr != null) throw lastOpenAiErr;
+        throw Exception('OpenAI API tidak memberikan respons');
 
       case AiProviderType.openrouter:
-        return await _callOpenAiWithVision(
-          url: 'https://openrouter.ai/api/v1/chat/completions',
-          apiKey: apiKey,
-          model: option.defaultModelId,
-          systemPrompt: systemPrompt,
-          userPrompt: prompt,
-          imageBytes: imageBytes,
-          mimeType: mimeType,
-          extraHeaders: {
-            'HTTP-Referer': 'https://mentari.unpam.ac.id',
-            'X-Title': 'The PAMs',
-          },
-        );
+        final openrouterModelsToTry = [
+          option.defaultModelId,
+          ..._openrouterCandidateModels.where((m) => m != option.defaultModelId),
+        ];
+        DioException? lastOpenRouterErr;
+        for (final m in openrouterModelsToTry) {
+          try {
+            return await _callOpenAiWithVision(
+              url: 'https://openrouter.ai/api/v1/chat/completions',
+              apiKey: apiKey,
+              model: m,
+              systemPrompt: systemPrompt,
+              userPrompt: prompt,
+              imageBytes: imageBytes,
+              mimeType: mimeType,
+              extraHeaders: {
+                'HTTP-Referer': 'https://mentari.unpam.ac.id',
+                'X-Title': 'The PAMs',
+              },
+            );
+          } on DioException catch (e) {
+            lastOpenRouterErr = e;
+            final code = e.response?.statusCode;
+            if (code == 401 || code == 403 || code == 429) rethrow;
+            continue;
+          }
+        }
+        if (lastOpenRouterErr != null) throw lastOpenRouterErr;
+        throw Exception('OpenRouter API tidak memberikan respons');
 
       case AiProviderType.freeCloud:
         final cloudMsg = await _askFreeCloudAi(
@@ -436,13 +478,14 @@ class AiService {
   // --- Implementasi Protokol Provider Khusus ---
 
   static const List<String> _geminiCandidateModels = [
+    'gemini-3.8-flash',
+    'gemini-4-argon',
     'gemini-3.7-flash',
+    'gemini-3.5-flash-lite',
     'gemini-3.5-flash',
     'gemini-flash-latest',
-    'gemini-3.1-pro-preview',
+    'gemini-3.1-flash-lite',
     'gemini-2.5-flash',
-    'gemini-2.0-flash',
-    'gemini-1.5-flash',
   ];
 
   static const List<String> _claudeCandidateModels = [
@@ -452,6 +495,7 @@ class AiService {
     'claude-fable-5-1',
     'claude-3-7-sonnet-20250219',
     'claude-3-5-sonnet-20241022',
+    'claude-3-5-haiku-20241022',
     'claude-3-haiku-20240307',
   ];
 
@@ -459,6 +503,7 @@ class AiService {
     'deepseek-v4-flash',
     'deepseek-v4-pro',
     'deepseek-chat',
+    'deepseek-reasoner',
   ];
 
   static const List<String> _qwenCandidateModels = [
@@ -467,6 +512,24 @@ class AiService {
     'qwen-max',
     'qwen-plus',
     'qwen-turbo',
+  ];
+
+  static const List<String> _openaiCandidateModels = [
+    'gpt-5-mini',
+    'gpt-5',
+    'gpt-4.5-turbo',
+    'gpt-4o-mini',
+    'gpt-4o',
+    'o3-mini',
+    'o1-mini',
+  ];
+
+  static const List<String> _openrouterCandidateModels = [
+    'google/gemini-3.8-flash',
+    'deepseek/deepseek-v4-flash',
+    'deepseek/deepseek-chat',
+    'anthropic/claude-sonnet-5-5',
+    'openai/gpt-4o-mini',
   ];
 
   /// Engine Google Gemini (Multimodal Vision OCR & Fast Text)
