@@ -1,6 +1,13 @@
 # Catatan Pembaruan Rilis The PAMs
 
-## Versi 1.0.33 (Terbaru)
+## Versi 1.0.34 (Terbaru)
+
+- **Pembaruan Stabilitas & Sinkronisasi Git**:
+  - Sinkronisasi basis kode lokal dengan remote repository (`origin/main`).
+  - Pembersihan ambiguitas refname tag dan pembaruan dependensi.
+  - Penyiapan rilis OTA otomatis (Over-The-Air) melalui pipeline CI/CD GitHub Actions.
+
+## Versi 1.0.33
 
 - **Pembaruan Konfigurasi Engine AI Mutakhir (Per 21 Oktober 2026)**:
   - **Google Gemini 3.8 Flash & 4 Argon**: Peningkatan default model ID ke `gemini-3.8-flash` dengan Vision OCR canggih untuk lembar soal kuis, jendela konteks 1 Juta token, serta fallback ke `gemini-4-argon` dan seri 3.x.
