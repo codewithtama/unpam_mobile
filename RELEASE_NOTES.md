@@ -1,6 +1,15 @@
 # Catatan Pembaruan Rilis The PAMs
 
-## Versi 1.0.34 (Terbaru)
+## Versi 1.0.35 (Terbaru)
+
+- **Migrasi Arsitektur Modular Feature-First (`lib/features/`)**:
+  - Penataan struktur kode modular per-domain bisnis: `features/ai_assistant`, `features/auth`, dan `features/portal`.
+  - Pemindahan modul `AiService`, `AiProvider`, dan model AI (`AiMessage`, `ParaphraseResult`, `AiModelConfig`) ke dalam domain & data layer yang terisolasi rapi.
+  - Pemindahan modul `BiometricAuthService` dan `BiometricProvider` ke fitur autentikasi terstruktur.
+  - Implementasi *backward compatibility* melalui berkas barrel re-export sehingga tidak menimbulkan regresi pada kode eksisting.
+  - Lulus audit statis `flutter analyze` dengan 0 peringatan/isu dan seluruh 24 uji otomatis lolos.
+
+## Versi 1.0.34
 
 - **Pembaruan Stabilitas & Sinkronisasi Git**:
   - Sinkronisasi basis kode lokal dengan remote repository (`origin/main`).
