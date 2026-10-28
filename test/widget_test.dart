@@ -17,6 +17,7 @@ import 'package:unpam_mobile/widgets/update_dialog.dart';
 import 'package:unpam_mobile/core/services/file_download_service.dart';
 import 'package:unpam_mobile/core/services/webview_download_bridge.dart';
 import 'package:unpam_mobile/models/app_update_info.dart';
+import 'package:unpam_mobile/features/schedule/domain/models/schedule_model.dart';
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
@@ -603,6 +604,75 @@ void main() {
       await tester.pump();
 
       expect(find.text('Pembaruan Tersedia!'), findsNothing);
+    });
+  });
+
+  group('MyUnpam Schedule API Parser Tests', () {
+    test('Parses raw MyUnpam /api/jadwal-kuliah payload correctly', () {
+      const rawApiJson = '''
+      {
+        "mahasiswa": {
+          "nama_mahasiswa": "DIMAS ALFA PRATAMA",
+          "nim": "241011750041"
+        },
+        "jadwal": [
+          {
+            "id_semester_registrasi": "20261",
+            "id_dosen": "02985",
+            "id_ruang": "V.906",
+            "id_kelas": "04SIFE001",
+            "id_periode": "1",
+            "id_waktu_kuliah": "E616",
+            "id_mata_kuliah": "22SIF0173",
+            "ruang": "V-V.906",
+            "nama_mata_kuliah": "JARINGAN KOMPUTER",
+            "waktu_kuliah": {
+              "ket_jam": "07.40 - 09.20",
+              "hari": {
+                "id_hari_waktu_kuliah": "6",
+                "nama_hari": "Sabtu"
+              }
+            },
+            "dosen": {
+              "nama_gelar_dosen": "GUSMAYENI, S.Kom., M.Kom."
+            }
+          },
+          {
+            "id_mata_kuliah": "22SIF0242",
+            "ruang": "V-V.906",
+            "nama_mata_kuliah": "MOBILE PROGRAMMING",
+            "waktu_kuliah": {
+              "ket_jam": "13.50 - 15.30",
+              "hari": {
+                "id_hari_waktu_kuliah": "6",
+                "nama_hari": "Sabtu"
+              }
+            },
+            "dosen": {
+              "nama_gelar_dosen": "SAMSO SUPRIYATNA, S.Kom., M.Kom."
+            }
+          }
+        ]
+      }
+      ''';
+
+      final schedules = CourseSchedule.listFromJson(rawApiJson);
+      expect(schedules.length, equals(2));
+
+      final first = schedules[0];
+      expect(first.namaMataKuliah, equals('JARINGAN KOMPUTER'));
+      expect(first.kode, equals('22SIF0173'));
+      expect(first.hari, equals('Sabtu'));
+      expect(first.hariIndex, equals(6));
+      expect(first.jamMulai, equals('07:40'));
+      expect(first.jamSelesai, equals('09:20'));
+      expect(first.ruang, equals('V-V.906'));
+      expect(first.dosen, equals('GUSMAYENI, S.Kom., M.Kom.'));
+
+      final second = schedules[1];
+      expect(second.namaMataKuliah, equals('MOBILE PROGRAMMING'));
+      expect(second.jamMulai, equals('13:50'));
+      expect(second.jamSelesai, equals('15:30'));
     });
   });
 }

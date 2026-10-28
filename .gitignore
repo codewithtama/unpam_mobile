@@ -58,3 +58,5 @@ app.*.map.json
 # Kotlin daemon & caches
 .kotlin/
 *.salive
+
+api-network-records.json

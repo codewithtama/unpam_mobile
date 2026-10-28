@@ -1,6 +1,17 @@
 # Catatan Pembaruan Rilis The PAMs
 
-## Versi 1.0.40 (Terbaru)
+## Versi 1.0.41 (Terbaru)
+
+- **Penyempurnaan Integrasi REST API Jadwal Kuliah MyUnpam**:
+  - **Native REST API Payload Adapter**: Menyesuaikan parser `CourseSchedule` agar mengenali struktur JSON asli `https://my.unpam.ac.id/api/jadwal-kuliah` (objek `jadwal` dengan relasi nested `mata_kuliah`, `waktu_kuliah`, `dosen`, dan `ruang`).
+  - **Proactive In-WebView Fetch**: Script ekstraksi secara otomatis memanggil endpoint API jadwal menggunakan sesi autentikasi dan cookie aktif dari WebView MyUnpam.
+  - **Network Request Sniffer (XHR & Fetch Hook)**: Mengintersep pemanggilan API oleh Single Page Application MyUnpam secara real-time dan meneruskannya ke Flutter via `ScheduleChannel`.
+  - **Perbaikan Format Jam Kuliah Unpam**: Mendukung parsing format jam bertitik institusional Unpam (`07.40 - 09.20`) dan menormalkannya ke standar jam `07:40 - 09:20`.
+  - **Koreksi Tautan Navigasi MyUnpam**: Memperbaiki routing deep-link ke `/data-akademik/jadwal-kuliah` (sebelumnya `/jadwal-kuliah` yang teredireksi).
+  - **Tombol Sinkronisasi Manual**: Menambahkan tombol refresh langsung pada AppBar layar Jadwal dengan indikator proses dan notifikasi SnackBar konfirmasi jumlah mata kuliah tersinkron.
+  - **Pengujian Otomatis**: Menambahkan unit test parser API MyUnpam (26/26 unit & widget tests lulus, 0 analyzer issues).
+
+## Versi 1.0.40
 
 - **Fitur Baru: Jadwal Kuliah & Deadline Tracker**:
   - **Tab Jadwal Native**: Menambahkan tab keempat "Jadwal" (ikon `calendar_month`) pada bottom navigation bar tanpa mengganggu tab Mentari dan MyUnpam yang sudah ada.

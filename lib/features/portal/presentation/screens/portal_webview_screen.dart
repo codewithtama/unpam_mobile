@@ -1135,6 +1135,13 @@ class _PortalWebViewScreenState extends State<PortalWebViewScreen>
       final provider = context.read<ScheduleProvider>();
       provider.onScheduleExtracted(schedules);
       debugPrint('[ScheduleSync] ${schedules.length} jadwal berhasil di-scrape.');
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('✓ ${schedules.length} jadwal kuliah berhasil disinkronkan!'),
+          duration: const Duration(seconds: 2),
+          backgroundColor: AppTheme.successGreen,
+        ),
+      );
     } catch (e) {
       debugPrint('[ScheduleSync] Error parse schedule: $e');
     }
@@ -2446,7 +2453,7 @@ class _PortalWebViewScreenState extends State<PortalWebViewScreen>
                           Future.delayed(const Duration(milliseconds: 400), () {
                             if (mounted && _myUnpamController != null) {
                               _myUnpamController!.loadRequest(
-                                  Uri.parse('https://my.unpam.ac.id/jadwal-kuliah'));
+                                  Uri.parse('https://my.unpam.ac.id/data-akademik/jadwal-kuliah'));
                             }
                           });
                         },
@@ -2459,6 +2466,16 @@ class _PortalWebViewScreenState extends State<PortalWebViewScreen>
                                   Uri.parse('https://mentari.unpam.ac.id/my/'));
                             }
                           });
+                        },
+                        onSyncSchedule: () async {
+                          _ensureMyUnpamControllerInitialized();
+                          if (_myUnpamController != null) {
+                            try {
+                              await _myUnpamController!.runJavaScript(PortalJsScripts.scheduleExtractor);
+                            } catch (e) {
+                              debugPrint('[ManualScheduleSync] Error: $e');
+                            }
+                          }
                         },
                       ),
                     ),

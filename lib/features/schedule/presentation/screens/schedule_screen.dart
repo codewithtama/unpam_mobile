@@ -21,10 +21,14 @@ class ScheduleScreen extends StatefulWidget {
   /// Callback untuk membuka portal Mentari di tab deadline/tugas.
   final VoidCallback? onOpenMentariDeadline;
 
+  /// Callback untuk memicu sinkronisasi jadwal dari MyUnpam secara langsung.
+  final Future<void> Function()? onSyncSchedule;
+
   const ScheduleScreen({
     super.key,
     this.onOpenMyUnpamJadwal,
     this.onOpenMentariDeadline,
+    this.onSyncSchedule,
   });
 
   @override
@@ -82,13 +86,27 @@ class _ScheduleScreenState extends State<ScheduleScreen>
           ],
         ),
         actions: [
+          if (widget.onSyncSchedule != null)
+            IconButton(
+              icon: const Icon(Icons.sync_rounded, color: AppTheme.accentGold, size: 22),
+              tooltip: 'Sinkronkan jadwal dari MyUnpam',
+              onPressed: () async {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(
+                    content: Text('Menghubungi portal MyUnpam untuk sinkronisasi jadwal...'),
+                    duration: Duration(seconds: 2),
+                  ),
+                );
+                await widget.onSyncSchedule?.call();
+              },
+            ),
           Consumer<ScheduleProvider>(
             builder: (_, provider, __) {
               final lastSync = provider.lastScheduleSync;
               return Tooltip(
                 message: lastSync != null
-                    ? 'Terakhir sync: ${DateFormat('HH:mm, dd MMM', 'id_ID').format(lastSync)}\n\nBuka halaman Jadwal Kuliah di MyUnpam untuk sync ulang.'
-                    : 'Belum pernah sync.\nBuka halaman Jadwal di MyUnpam.',
+                    ? 'Terakhir sync: ${DateFormat('HH:mm, dd MMM', 'id_ID').format(lastSync)}\n\nTekan tombol sync atau buka halaman Jadwal Kuliah di MyUnpam.'
+                    : 'Belum pernah sync.\nTekan tombol sync atau buka halaman Jadwal di MyUnpam.',
                 child: Padding(
                   padding: const EdgeInsets.only(right: 16),
                   child: Icon(

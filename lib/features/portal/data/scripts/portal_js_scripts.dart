@@ -10,14 +10,104 @@ class PortalJsScripts {
   // Jadwal Kuliah & Deadline Scraper
   // ──────────────────────────────────────────────────────────────────────────
 
-  /// Skrip ekstraksi jadwal kuliah dari halaman Jadwal Kuliah di MyUnpam.
+  /// Skrip ekstraksi jadwal kuliah dari MyUnpam.
   ///
-  /// Mendeteksi tabel jadwal secara generik berdasarkan kolom-kolom umum
-  /// (hari, jam, kode MK, nama MK, ruang, dosen). Output: JSON array.
+  /// Menggunakan 3 mekanisme:
+  /// 1. Proactive Fetch ke REST API `/api/jadwal-kuliah` menggunakan sesi aktif.
+  /// 2. Sniffer/Hook pada XHR & Fetch untuk menangkap data respons SPA MyUnpam.
+  /// 3. Fallback DOM table scraper dengan dukungan format jam titik & titik dua.
   static const String scheduleExtractor = r'''
     (function() {
-      var results = [];
+      // ─── 1. Hook Network Requests (XHR & Fetch) ──────────────────────
+      if (!window.__pamsScheduleHookInstalled) {
+        window.__pamsScheduleHookInstalled = true;
 
+        // Hook Fetch
+        var origFetch = window.fetch;
+        if (origFetch) {
+          window.fetch = function() {
+            var args = arguments;
+            return origFetch.apply(this, args).then(function(response) {
+              try {
+                var url = (args[0] && (typeof args[0] === 'string' ? args[0] : args[0].url)) || '';
+                if (url.indexOf('jadwal-kuliah') !== -1) {
+                  response.clone().text().then(function(text) {
+                    if (text && window.ScheduleChannel) {
+                      window.ScheduleChannel.postMessage(text);
+                    }
+                  }).catch(function() {});
+                }
+              } catch(e) {}
+              return response;
+            });
+          };
+        }
+
+        // Hook XMLHttpRequest
+        var origOpen = XMLHttpRequest.prototype.open;
+        var origSend = XMLHttpRequest.prototype.send;
+        XMLHttpRequest.prototype.open = function(method, url) {
+          this.__pamsUrl = url;
+          return origOpen.apply(this, arguments);
+        };
+        XMLHttpRequest.prototype.send = function() {
+          var xhr = this;
+          xhr.addEventListener('load', function() {
+            try {
+              if (xhr.__pamsUrl && xhr.__pamsUrl.indexOf('jadwal-kuliah') !== -1) {
+                if (xhr.responseText && window.ScheduleChannel) {
+                  window.ScheduleChannel.postMessage(xhr.responseText);
+                }
+              }
+            } catch(e) {}
+          });
+          return origSend.apply(this, arguments);
+        };
+      }
+
+      // ─── 2. Proactive Fetch ke API /api/jadwal-kuliah ────────────────
+      try {
+        var token = null;
+        for (var k in localStorage) {
+          if (k.toLowerCase().indexOf('token') !== -1) {
+            try {
+              var val = localStorage.getItem(k);
+              if (val && val.indexOf('{') !== -1) {
+                var obj = JSON.parse(val);
+                token = obj.token || obj.access_token || obj.accessToken || token;
+              } else if (val && val.length > 20) {
+                token = val;
+              }
+            } catch(e) {}
+          }
+        }
+        if (!token && window.axios && window.axios.defaults && window.axios.defaults.headers && window.axios.defaults.headers.common) {
+          token = window.axios.defaults.headers.common['Authorization'];
+        }
+
+        var headers = {
+          'Accept': 'application/json, text/plain, */*'
+        };
+        if (token) {
+          headers['Authorization'] = token.startsWith('Bearer ') ? token : ('Bearer ' + token);
+        }
+
+        fetch('/api/jadwal-kuliah', {
+          method: 'GET',
+          headers: headers,
+          credentials: 'include'
+        }).then(function(r) {
+          if (r.ok) return r.text();
+          return null;
+        }).then(function(text) {
+          if (text && window.ScheduleChannel) {
+            window.ScheduleChannel.postMessage(text);
+          }
+        }).catch(function() {});
+      } catch(e) {}
+
+      // ─── 3. Fallback: Parse HTML Table DOM ──────────────────────────
+      var results = [];
       var dayMap = {
         'senin': 1, 'monday': 1,
         'selasa': 2, 'tuesday': 2,
@@ -33,13 +123,11 @@ class PortalJsScripts {
         return dayMap[lower] || 0;
       }
 
-      // Cari semua tabel di halaman
       var tables = document.querySelectorAll('table');
       for (var t = 0; t < tables.length; t++) {
         var rows = tables[t].querySelectorAll('tr');
         if (rows.length < 2) continue;
 
-        // Baca header untuk menentukan posisi kolom
         var headers = [];
         var headerRow = rows[0];
         var headerCells = headerRow.querySelectorAll('th, td');
@@ -47,7 +135,6 @@ class PortalJsScripts {
           headers.push((headerCells[h].innerText || '').toLowerCase().trim());
         }
 
-        // Cek apakah tabel ini adalah tabel jadwal
         var hasHari = headers.some(function(h) { return h.indexOf('hari') !== -1; });
         var hasJam  = headers.some(function(h) { return h.indexOf('jam') !== -1 || h.indexOf('waktu') !== -1; });
         var hasMk   = headers.some(function(h) {
@@ -56,7 +143,6 @@ class PortalJsScripts {
 
         if (!hasHari && !hasJam && !hasMk) continue;
 
-        // Hitung index kolom
         var colHari = -1, colJam = -1, colJamMulai = -1, colJamSelesai = -1;
         var colKode = -1, colNama = -1, colRuang = -1, colDosen = -1, colKelas = -1;
 
@@ -75,7 +161,6 @@ class PortalJsScripts {
 
         if (colNama < 0 && colKode < 0) continue;
 
-        // Parse baris data
         for (var r = 1; r < rows.length; r++) {
           var cells = rows[r].querySelectorAll('td');
           if (cells.length === 0) continue;
@@ -94,19 +179,19 @@ class PortalJsScripts {
           var jamMulai = colJamMulai >= 0 ? cellText(colJamMulai) : '';
           var jamSelesai = colJamSelesai >= 0 ? cellText(colJamSelesai) : '';
 
-          // Parse jam dari format "HH:MM - HH:MM" atau "HH:MM s.d. HH:MM"
+          // Dukung format HH:MM dan format Unpam HH.MM (contoh: 07.40 - 09.20)
           if (rawJam && !jamMulai) {
-            var jamMatch = rawJam.match(/(\d{1,2}:\d{2})\s*[-–—]\s*(\d{1,2}:\d{2})/);
+            var jamMatch = rawJam.match(/(\d{1,2}[:.]\d{2})\s*[-–—]\s*(\d{1,2}[:.]\d{2})/);
             if (jamMatch) {
-              jamMulai = jamMatch[1];
-              jamSelesai = jamMatch[2];
+              jamMulai = jamMatch[1].replace('.', ':');
+              jamSelesai = jamMatch[2].replace('.', ':');
             } else {
               var jamParts = rawJam.split(/\s+s\.d\.?\s+|\s+-\s+/i);
               if (jamParts.length >= 2) {
-                jamMulai = jamParts[0].trim();
-                jamSelesai = jamParts[1].trim();
+                jamMulai = jamParts[0].trim().replace('.', ':');
+                jamSelesai = jamParts[1].trim().replace('.', ':');
               } else {
-                jamMulai = rawJam;
+                jamMulai = rawJam.replace('.', ':');
               }
             }
           }
@@ -128,7 +213,11 @@ class PortalJsScripts {
           });
         }
 
-        if (results.length > 0) break; // Sudah dapat tabel yang valid
+        if (results.length > 0) break;
+      }
+
+      if (results.length > 0 && window.ScheduleChannel) {
+        window.ScheduleChannel.postMessage(JSON.stringify(results));
       }
 
       return JSON.stringify(results);
