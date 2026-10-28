@@ -1,6 +1,16 @@
 # Catatan Pembaruan Rilis The PAMs
 
-## Versi 1.0.41 (Terbaru)
+## Versi 1.0.42 (Terbaru)
+
+- **Penyempurnaan Ekstraksi Deadline & Tugas Mentari LMS**:
+  - **Dukungan Halaman Kursus `/u-courses/*`**: Mengekstrak tugas, kuis, dan diskusi langsung dari halaman mata kuliah dan pertemuan Mentari LMS Unpam.
+  - **Parser Tanggal Lokal Indonesia Universal**: Mengenali ragam format tanggal Indonesia (`30 Oktober 2026, 23:59`, `30 Okt 2026 23.59`, `30/10/2026 23:59`, dsb.) dengan pemisah jam titik maupun titik dua.
+  - **Sinkronisasi Akumulatif (Smart Merge)**: Membuka beberapa mata kuliah berbeda kini mengumpulkan seluruh tugas secara akumulatif tanpa menimpa data yang telah tersimpan sebelumnya.
+  - **SPA Soft-Navigation & Network Sniffer**: Menangkap respons API dan memonitor perubahan rute client-side Mentari secara otomatis via `DeadlineChannel`.
+  - **Tombol Sinkronisasi Manual Tab Deadline**: Pengguna dapat memicu pemindaian tenggat tugas secara langsung lewat tombol sync di AppBar pada sub-tab Deadline.
+  - **Pengujian Otomatis**: 28/28 unit & widget tests lulus, 0 analyzer issues.
+
+## Versi 1.0.41
 
 - **Penyempurnaan Integrasi REST API Jadwal Kuliah MyUnpam**:
   - **Native REST API Payload Adapter**: Menyesuaikan parser `CourseSchedule` agar mengenali struktur JSON asli `https://my.unpam.ac.id/api/jadwal-kuliah` (objek `jadwal` dengan relasi nested `mata_kuliah`, `waktu_kuliah`, `dosen`, dan `ruang`).

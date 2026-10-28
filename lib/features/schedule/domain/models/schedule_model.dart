@@ -317,32 +317,80 @@ class CourseDeadline {
 
   factory CourseDeadline.fromJson(Map<String, dynamic> json) {
     DeadlineType tipe;
-    final tipeStr = (json['tipe'] as String? ?? 'lainnya').toLowerCase();
+    final tipeStr = (json['tipe'] as String? ??
+            json['eventtype'] as String? ??
+            json['modname'] as String? ??
+            'lainnya')
+        .toLowerCase();
     switch (tipeStr) {
       case 'tugas':
+      case 'assign':
+      case 'assignment':
         tipe = DeadlineType.tugas;
         break;
       case 'kuis':
+      case 'quiz':
         tipe = DeadlineType.kuis;
         break;
       case 'ujian':
+      case 'exam':
+      case 'uts':
+      case 'uas':
         tipe = DeadlineType.ujian;
         break;
       case 'presensi':
+      case 'attendance':
+      case 'absen':
         tipe = DeadlineType.presensi;
         break;
       default:
         tipe = DeadlineType.lainnya;
     }
 
+    String namaTugas = '';
+    if (json['namaTugas'] is String) {
+      namaTugas = json['namaTugas'] as String;
+    } else if (json['name'] is String) {
+      namaTugas = json['name'] as String;
+    } else if (json['title'] is String) {
+      namaTugas = json['title'] as String;
+    } else if (json['activityname'] is String) {
+      namaTugas = json['activityname'] as String;
+    }
+    namaTugas = namaTugas.trim();
+
+    String namaMk = '';
+    if (json['namaMataKuliah'] is String) {
+      namaMk = json['namaMataKuliah'] as String;
+    } else if (json['course'] is Map) {
+      final cMap = json['course'] as Map;
+      namaMk = (cMap['fullname'] ?? cMap['shortname'] ?? cMap['name'] ?? '').toString();
+    } else if (json['course'] is String) {
+      namaMk = json['course'] as String;
+    } else if (json['coursename'] is String) {
+      namaMk = json['coursename'] as String;
+    }
+    namaMk = namaMk.trim();
+
+    DateTime parsedDate;
+    if (json['timesort'] is int) {
+      parsedDate = DateTime.fromMillisecondsSinceEpoch((json['timesort'] as int) * 1000);
+    } else if (json['timestart'] is int) {
+      parsedDate = DateTime.fromMillisecondsSinceEpoch((json['timestart'] as int) * 1000);
+    } else if (json['dueDate'] != null) {
+      final rawDueDate = json['dueDate'].toString();
+      parsedDate = DateTime.tryParse(rawDueDate) ?? DateTime.now().add(const Duration(days: 7));
+    } else {
+      parsedDate = DateTime.now().add(const Duration(days: 7));
+    }
+
     return CourseDeadline(
-      id: (json['id'] as String? ?? '').trim(),
-      namaTugas: (json['namaTugas'] as String? ?? '').trim(),
-      namaMataKuliah: (json['namaMataKuliah'] as String? ?? '').trim(),
-      dueDate: DateTime.tryParse(json['dueDate'] as String? ?? '') ??
-          DateTime.now().add(const Duration(days: 7)),
+      id: (json['id']?.toString() ?? '').trim(),
+      namaTugas: namaTugas,
+      namaMataKuliah: namaMk,
+      dueDate: parsedDate,
       tipe: tipe,
-      url: (json['url'] as String? ?? '').trim(),
+      url: (json['url']?.toString() ?? '').trim(),
     );
   }
 
@@ -357,11 +405,36 @@ class CourseDeadline {
 
   static List<CourseDeadline> listFromJson(String jsonStr) {
     try {
-      final decoded = jsonDecode(jsonStr);
-      if (decoded is! List) return [];
-      return decoded
+      var raw = jsonStr.trim();
+      if (raw.startsWith('"') && raw.endsWith('"')) {
+        try {
+          raw = jsonDecode(raw) as String;
+        } catch (_) {}
+      }
+
+      final decoded = jsonDecode(raw);
+      List<dynamic> list;
+
+      if (decoded is List) {
+        list = decoded;
+      } else if (decoded is Map<String, dynamic>) {
+        if (decoded['events'] is List) {
+          list = decoded['events'] as List;
+        } else if (decoded['data'] is List) {
+          list = decoded['data'] as List;
+        } else if (decoded['deadlines'] is List) {
+          list = decoded['deadlines'] as List;
+        } else {
+          return [];
+        }
+      } else {
+        return [];
+      }
+
+      return list
           .whereType<Map<String, dynamic>>()
           .map(CourseDeadline.fromJson)
+          .where((d) => d.namaTugas.isNotEmpty)
           .toList()
         ..sort((a, b) => a.dueDate.compareTo(b.dueDate));
     } catch (_) {

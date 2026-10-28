@@ -224,167 +224,283 @@ class PortalJsScripts {
     })();
   ''';
 
-  /// Skrip ekstraksi deadline/tugas dari dashboard Mentari LMS.
+  /// Skrip ekstraksi deadline/tugas dari Mentari LMS.
   ///
-  /// Membaca blok "Upcoming events" / "Timeline" / blok tugas yang belum
-  /// dikumpulkan dari halaman dashboard atau daftar aktivitas Moodle.
+  /// Mendeteksi tugas, kuis, ujian, dan forum diskusi baik dari dashboard
+  /// timeline, kalender Moodle, maupun halaman kursus `/u-courses/*`.
+  /// Dilengkapi Network Hook, SPA Navigation Observer, dan parser tanggal lokal Indonesia.
   static const String deadlineExtractor = r'''
     (function() {
-      var results = [];
-      var seen = {};
+      // ─── 1. Hook Network Requests (XHR & Fetch) untuk Mentari ─────────
+      if (!window.__pamsMentariHookInstalled) {
+        window.__pamsMentariHookInstalled = true;
 
-      function addDeadline(id, namaTugas, namaMataKuliah, dueDateStr, tipe, url) {
-        var key = id || (namaTugas + '|' + dueDateStr);
-        if (seen[key]) return;
-        seen[key] = true;
-        results.push({
-          id: id || key,
-          namaTugas: namaTugas,
-          namaMataKuliah: namaMataKuliah,
-          dueDate: dueDateStr,
-          tipe: tipe,
-          url: url || ''
-        });
+        var origFetch = window.fetch;
+        if (origFetch) {
+          window.fetch = function() {
+            var args = arguments;
+            return origFetch.apply(this, args).then(function(response) {
+              try {
+                var url = (args[0] && (typeof args[0] === 'string' ? args[0] : args[0].url)) || '';
+                var low = url.toLowerCase();
+                if (low.indexOf('calendar') !== -1 || low.indexOf('timeline') !== -1 ||
+                    low.indexOf('event') !== -1 || low.indexOf('action_events') !== -1 ||
+                    low.indexOf('deadline') !== -1 || low.indexOf('service.php') !== -1) {
+                  response.clone().text().then(function(text) {
+                    if (text && text.length > 10 && window.DeadlineChannel) {
+                      window.DeadlineChannel.postMessage(text);
+                    }
+                  }).catch(function() {});
+                }
+              } catch(e) {}
+              return response;
+            });
+          };
+        }
+
+        var origOpen = XMLHttpRequest.prototype.open;
+        var origSend = XMLHttpRequest.prototype.send;
+        XMLHttpRequest.prototype.open = function(method, url) {
+          this.__pamsMentariUrl = url;
+          return origOpen.apply(this, arguments);
+        };
+        XMLHttpRequest.prototype.send = function() {
+          var xhr = this;
+          xhr.addEventListener('load', function() {
+            try {
+              var u = (xhr.__pamsMentariUrl || '').toLowerCase();
+              if (u.indexOf('calendar') !== -1 || u.indexOf('timeline') !== -1 ||
+                  u.indexOf('event') !== -1 || u.indexOf('action_events') !== -1 ||
+                  u.indexOf('deadline') !== -1 || u.indexOf('service.php') !== -1) {
+                if (xhr.responseText && xhr.responseText.length > 10 && window.DeadlineChannel) {
+                  window.DeadlineChannel.postMessage(xhr.responseText);
+                }
+              }
+            } catch(e) {}
+          });
+          return origSend.apply(this, arguments);
+        };
+
+        // Pasang listener navigasi SPA Mentari
+        var triggerScan = function() {
+          setTimeout(function() {
+            try {
+              var res = scanDomDeadlines();
+              if (res && res.length > 0 && window.DeadlineChannel) {
+                window.DeadlineChannel.postMessage(JSON.stringify(res));
+              }
+            } catch(e) {}
+          }, 800);
+        };
+
+        window.addEventListener('popstate', triggerScan);
+        var origPush = history.pushState;
+        if (origPush) {
+          history.pushState = function() {
+            origPush.apply(this, arguments);
+            triggerScan();
+          };
+        }
+        var origReplace = history.replaceState;
+        if (origReplace) {
+          history.replaceState = function() {
+            origReplace.apply(this, arguments);
+            triggerScan();
+          };
+        }
+      }
+
+      // ─── 2. Parsing Tanggal Multiformat Indonesia ─────────────────────
+      var months = {
+        'jan': 1, 'januari': 1, 'january': 1,
+        'feb': 2, 'februari': 2, 'february': 2,
+        'mar': 3, 'maret': 3, 'march': 3,
+        'apr': 4, 'april': 4,
+        'mei': 5, 'may': 5,
+        'jun': 6, 'juni': 6, 'june': 6,
+        'jul': 7, 'juli': 7, 'july': 7,
+        'agu': 8, 'agustus': 8, 'aug': 8, 'august': 8,
+        'sep': 9, 'september': 9,
+        'okt': 10, 'oktober': 10, 'oct': 10, 'october': 10,
+        'nov': 11, 'november': 11,
+        'des': 12, 'desember': 12, 'dec': 12, 'december': 12
+      };
+
+      function parseDate(str) {
+        if (!str) return null;
+        var s = str.trim();
+
+        // 1. ISO 8601 standar
+        if (/^\d{4}-\d{2}-\d{2}/.test(s)) {
+          var d = new Date(s);
+          if (!isNaN(d.getTime())) return d.toISOString();
+        }
+
+        // 2. Format: "30 Oktober 2026, 23:59" atau "Jumat, 30 Okt 2026 23.59"
+        var mText = s.match(/(?:[a-zA-Z]+,\s*)?(\d{1,2})\s+([a-zA-Z]{3,10})\s+(\d{4})(?:[,\s]+(\d{1,2})[:.](\d{2}))?/i);
+        if (mText) {
+          var mKey = (mText[2] || '').toLowerCase();
+          var monthNum = months[mKey] || 1;
+          var hr = mText[4] ? parseInt(mText[4]) : 23;
+          var mn = mText[5] ? parseInt(mText[5]) : 59;
+          var dt = new Date(parseInt(mText[3]), monthNum - 1, parseInt(mText[1]), hr, mn);
+          if (!isNaN(dt.getTime())) return dt.toISOString();
+        }
+
+        // 3. Format angka: "30/10/2026 23:59" atau "30-10-2026 23.59"
+        var mNum = s.match(/(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{4})(?:[,\s]+(\d{1,2})[:.](\d{2}))?/);
+        if (mNum) {
+          var day = parseInt(mNum[1]);
+          var month = parseInt(mNum[2]) - 1;
+          var year = parseInt(mNum[3]);
+          var h = mNum[4] ? parseInt(mNum[4]) : 23;
+          var m = mNum[5] ? parseInt(mNum[5]) : 59;
+          var dtNum = new Date(year, month, day, h, m);
+          if (!isNaN(dtNum.getTime())) return dtNum.toISOString();
+        }
+
+        var fallback = new Date(s);
+        if (!isNaN(fallback.getTime())) return fallback.toISOString();
+        return null;
       }
 
       function guessType(text) {
         var lower = (text || '').toLowerCase();
         if (lower.indexOf('quiz') !== -1 || lower.indexOf('kuis') !== -1) return 'kuis';
         if (lower.indexOf('ujian') !== -1 || lower.indexOf('exam') !== -1 || lower.indexOf('uts') !== -1 || lower.indexOf('uas') !== -1) return 'ujian';
-        if (lower.indexOf('presensi') !== -1 || lower.indexOf('absen') !== -1) return 'presensi';
-        if (lower.indexOf('tugas') !== -1 || lower.indexOf('assignment') !== -1 || lower.indexOf('submit') !== -1) return 'tugas';
+        if (lower.indexOf('presensi') !== -1 || lower.indexOf('absen') !== -1 || lower.indexOf('kehadiran') !== -1) return 'presensi';
+        if (lower.indexOf('tugas') !== -1 || lower.indexOf('assignment') !== -1 || lower.indexOf('upload') !== -1 || lower.indexOf('latihan') !== -1) return 'tugas';
         return 'lainnya';
       }
 
-      // Normalisasi tanggal ke ISO8601 (best effort)
-      function parseDate(str) {
-        if (!str) return null;
-        str = str.trim();
-        // ISO8601 langsung
-        if (/^\d{4}-\d{2}-\d{2}/.test(str)) return str;
+      // ─── 3. DOM Extractor Universal Mentari ──────────────────────────
+      function scanDomDeadlines() {
+        var results = [];
+        var seen = {};
 
-        var months = { 'jan': 1, 'feb': 2, 'mar': 3, 'apr': 4, 'mei': 5, 'may': 5,
-          'jun': 6, 'jul': 7, 'agu': 8, 'aug': 8, 'sep': 9, 'okt': 10, 'oct': 10,
-          'nov': 11, 'des': 12, 'dec': 12 };
-
-        // "DD Mon YYYY HH:MM" atau "DD Mon YYYY"
-        var m1 = str.match(/(\d{1,2})\s+([a-z]{3})[a-z]*\s+(\d{4})(?:\s+(\d{1,2}:\d{2}))?/i);
-        if (m1) {
-          var mo = months[(m1[2] || '').toLowerCase()] || 1;
-          var dt = new Date(parseInt(m1[3]), mo - 1, parseInt(m1[1]),
-            m1[4] ? parseInt(m1[4].split(':')[0]) : 23,
-            m1[4] ? parseInt(m1[4].split(':')[1]) : 59);
-          if (!isNaN(dt.getTime())) return dt.toISOString();
+        function addDeadline(id, namaTugas, namaMataKuliah, dueDateStr, tipe, url) {
+          if (!dueDateStr) return;
+          var key = (namaTugas + '|' + dueDateStr).toLowerCase();
+          if (seen[key]) return;
+          seen[key] = true;
+          results.push({
+            id: id || key,
+            namaTugas: namaTugas,
+            namaMataKuliah: namaMataKuliah || 'Mata Kuliah',
+            dueDate: dueDateStr,
+            tipe: tipe,
+            url: url || ''
+          });
         }
 
-        // Coba Date.parse fallback
-        var d = new Date(str);
-        if (!isNaN(d.getTime())) return d.toISOString();
-        return null;
+        // Ambil nama kursus aktif di halaman jika berada di /u-courses/*
+        var activeCourse = '';
+        var headEl = document.querySelector('h1, h2, .page-header-headings h1, .breadcrumb .active, [data-course-title]');
+        if (headEl) activeCourse = headEl.innerText.trim();
+        if (!activeCourse) {
+          var titleMatch = document.title.match(/^([^|•-]+)/);
+          if (titleMatch) activeCourse = titleMatch[1].trim();
+        }
+
+        // Pola A: Moodle Timeline & Upcoming Events Widget
+        var eventItems = document.querySelectorAll(
+          '.event a[href*="/calendar/"], [data-region="event-item"], [data-region="event-list-item"], .calendar_event_user, .block-myoverview .card, .timeline-event'
+        );
+        eventItems.forEach(function(item) {
+          var titleEl = item.querySelector('[data-region="event-name"], .card-title, .event-name, a') || item;
+          var courseEl = item.querySelector('[data-region="event-course-name"], [data-region="course-name"], .course-name, .card-text');
+          var dateEl = item.querySelector('time, [datetime], [data-region="event-date"], .date, .card-footer');
+
+          var title = (titleEl && titleEl.innerText ? titleEl.innerText : '').trim();
+          if (!title) return;
+
+          var rawDate = (dateEl && dateEl.getAttribute('datetime')) || (dateEl && dateEl.innerText) || '';
+          if (!rawDate) {
+            var fullTxt = item.innerText || '';
+            var dMatch = fullTxt.match(/(?:tenggat|due|batas|jatuh tempo|sampai|s\.d\.)?:?\s*(\d{1,2}\s+[a-zA-Z]{3,10}\s+\d{4}(?:[,\s]+\d{1,2}[:.]\d{2})?)/i);
+            if (dMatch) rawDate = dMatch[1];
+          }
+
+          var dueIso = parseDate(rawDate);
+          if (!dueIso) return;
+
+          var courseName = (courseEl ? courseEl.innerText.trim() : '') || activeCourse;
+          var link = item.querySelector('a[href]');
+          var href = link ? link.href : window.location.href;
+
+          addDeadline(href, title, courseName, dueIso, guessType(title), href);
+        });
+
+        // Pola B: Mentari Course Activities (Tugas/Kuis di setiap Pertemuan)
+        var activityNodes = document.querySelectorAll(
+          '.activity, .activity-item, .modtype_assign, .modtype_quiz, .section-item, .list-group-item, .card'
+        );
+        activityNodes.forEach(function(node) {
+          var nodeText = (node.innerText || '');
+          var lowText = nodeText.toLowerCase();
+
+          var isActivity = lowText.indexOf('tugas') !== -1 ||
+                           lowText.indexOf('kuis') !== -1 ||
+                           lowText.indexOf('quiz') !== -1 ||
+                           lowText.indexOf('penugasan') !== -1 ||
+                           lowText.indexOf('assignment') !== -1 ||
+                           lowText.indexOf('ujian') !== -1;
+          if (!isActivity) return;
+
+          // Cari tanggal tenggat dalam teks kartu
+          var dateMatch = nodeText.match(/(?:tenggat|batas|due|jatuh tempo|waktu|terakhir|sampai|s\.d\.)[:\s]+([^\n\r]+)/i);
+          var rawDateStr = dateMatch ? dateMatch[1] : nodeText;
+          var dueIso = parseDate(rawDateStr);
+          if (!dueIso) return;
+
+          var titleEl = node.querySelector('.activityname, .instancename, .card-title, h4, h5, a') || node;
+          var title = (titleEl && titleEl.innerText ? titleEl.innerText : 'Tugas').trim();
+          title = title.replace(/\n.*/g, '').replace(/tugas|penugasan/i, function(m) { return m; });
+
+          var linkEl = node.querySelector('a[href]');
+          var linkUrl = linkEl ? linkEl.href : window.location.href;
+
+          addDeadline(linkUrl, title, activeCourse, dueIso, guessType(title), linkUrl);
+        });
+
+        // Pola C: Tabel Assignment Mentari
+        var tableRows = document.querySelectorAll('table tr');
+        tableRows.forEach(function(row) {
+          var cells = row.querySelectorAll('td');
+          if (cells.length < 2) return;
+
+          var rowText = row.innerText || '';
+          var lowRow = rowText.toLowerCase();
+          if (lowRow.indexOf('tugas') === -1 && lowRow.indexOf('kuis') === -1 && lowRow.indexOf('quiz') === -1 && lowRow.indexOf('assign') === -1) return;
+
+          var rawDate = '';
+          for (var c = 0; c < cells.length; c++) {
+            var txt = cells[c].innerText.trim();
+            if (/\d{1,2}\s+[a-zA-Z]{3}/i.test(txt) || /\d{1,2}[\/\-]\d{1,2}[\/\-]\d{4}/.test(txt) || /\d{4}-\d{2}-\d{2}/.test(txt)) {
+              rawDate = txt;
+              break;
+            }
+          }
+
+          var dueIso = parseDate(rawDate);
+          if (!dueIso) return;
+
+          var link = row.querySelector('a[href]');
+          var title = link ? link.innerText.trim() : cells[0].innerText.trim();
+          var href = link ? link.href : window.location.href;
+
+          addDeadline(href, title, activeCourse, dueIso, guessType(title), href);
+        });
+
+        return results;
       }
 
-      // ── 1. Moodle "Upcoming events" blok ──
-      var eventLinks = document.querySelectorAll('.event a[href*="/calendar/"], .calendar_event_user a, .event-name a, [data-region="event-item"] a');
-      eventLinks.forEach(function(a) {
-        var titleEl = a.closest('[data-region="event-item"]') ||
-                      a.closest('.event') ||
-                      a.closest('li');
-        var fullText = titleEl ? titleEl.innerText : a.innerText;
+      var currentResults = scanDomDeadlines();
+      if (currentResults && currentResults.length > 0 && window.DeadlineChannel) {
+        window.DeadlineChannel.postMessage(JSON.stringify(currentResults));
+      }
 
-        // Cari tanggal di teks sekitar
-        var dateEl = titleEl ? titleEl.querySelector('.date, time, [datetime]') : null;
-        var rawDate = (dateEl && dateEl.getAttribute('datetime')) ||
-                      (dateEl && dateEl.innerText) || '';
-
-        if (!rawDate) {
-          // Cari pola tanggal di teks penuh
-          var dMatch = fullText.match(/(\d{1,2}\s+[a-z]{3}[a-z]*\s+\d{4}(?:\s+\d{1,2}:\d{2})?)/i);
-          if (dMatch) rawDate = dMatch[1];
-        }
-
-        var dueDate = parseDate(rawDate);
-        if (!dueDate) return;
-
-        var namaTugas = a.innerText.trim() || a.title || 'Tugas';
-        // Cari nama kursus
-        var courseEl = titleEl ? titleEl.querySelector('.course-name, .eventcourse, [data-region="course-name"]') : null;
-        var namaMataKuliah = courseEl ? courseEl.innerText.trim() : '';
-
-        addDeadline(
-          a.href || '',
-          namaTugas,
-          namaMataKuliah,
-          dueDate,
-          guessType(namaTugas),
-          a.href || ''
-        );
-      });
-
-      // ── 2. Timeline block (Moodle 3.7+) ──
-      var timelineItems = document.querySelectorAll('[data-region="event-list-item"], .block-myoverview .card');
-      timelineItems.forEach(function(item) {
-        var titleEl = item.querySelector('[data-region="event-name"], .card-title, h5, h4');
-        var courseEl = item.querySelector('[data-region="event-course-name"], .card-text');
-        var dateEl   = item.querySelector('time, [datetime], .card-footer, [data-region="event-date"]');
-
-        if (!titleEl) return;
-        var namaTugas = titleEl.innerText.trim();
-        var namaMataKuliah = courseEl ? courseEl.innerText.trim() : '';
-        var rawDate = (dateEl && dateEl.getAttribute('datetime')) ||
-                      (dateEl && dateEl.innerText) || '';
-
-        var dueDate = parseDate(rawDate);
-        if (!dueDate) return;
-
-        var linkEl = item.querySelector('a[href]');
-        addDeadline(
-          (linkEl && linkEl.href) || namaTugas,
-          namaTugas,
-          namaMataKuliah,
-          dueDate,
-          guessType(namaTugas),
-          (linkEl && linkEl.href) || ''
-        );
-      });
-
-      // ── 3. Daftar assignment "to submit" ──
-      var assignRows = document.querySelectorAll('table tr');
-      assignRows.forEach(function(row) {
-        var cells = row.querySelectorAll('td');
-        if (cells.length < 2) return;
-        var linkEl = row.querySelector('a[href*="/mod/assign/"], a[href*="/mod/quiz/"]');
-        if (!linkEl) return;
-        var namaTugas = linkEl.innerText.trim();
-        if (!namaTugas) return;
-
-        // Cari kolom dengan pola tanggal
-        var rawDate = '';
-        for (var c = 0; c < cells.length; c++) {
-          var txt = cells[c].innerText.trim();
-          if (/\d{1,2}\s+[a-z]{3}/i.test(txt) || /\d{4}-\d{2}-\d{2}/.test(txt)) {
-            rawDate = txt;
-            break;
-          }
-        }
-
-        var dueDate = parseDate(rawDate);
-        if (!dueDate) return;
-
-        // Nama kursus dari breadcrumb atau heading
-        var heading = document.querySelector('h1, .page-header-headings h1, .breadcrumb .active');
-        var namaMataKuliah = heading ? heading.innerText.trim() : '';
-
-        addDeadline(
-          linkEl.href,
-          namaTugas,
-          namaMataKuliah,
-          dueDate,
-          guessType(linkEl.href),
-          linkEl.href
-        );
-      });
-
-      return JSON.stringify(results);
+      return JSON.stringify(currentResults);
     })();
   ''';
 

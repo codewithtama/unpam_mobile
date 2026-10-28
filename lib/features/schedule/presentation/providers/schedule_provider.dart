@@ -72,15 +72,31 @@ class ScheduleProvider extends ChangeNotifier {
     notifyListeners();
   }
 
-  /// Terima dan simpan deadline yang di-scrape dari Mentari WebView.
+  /// Terima dan simpan deadline yang di-scrape dari Mentari WebView (dengan merge akumulatif).
   Future<void> onDeadlinesExtracted(List<CourseDeadline> extracted) async {
-    _deadlines = extracted;
+    if (extracted.isEmpty) return;
+
+    final map = <String, CourseDeadline>{};
+    for (final d in _deadlines) {
+      final key = d.id.isNotEmpty ? d.id : '${d.namaMataKuliah}_${d.namaTugas}';
+      map[key] = d;
+    }
+    for (final d in extracted) {
+      final key = d.id.isNotEmpty ? d.id : '${d.namaMataKuliah}_${d.namaTugas}';
+      map[key] = d;
+    }
+
+    final merged = map.values.toList()
+      ..sort((a, b) => a.dueDate.compareTo(b.dueDate));
+
+    _deadlines = merged;
     _deadlineState = ScheduleLoadState.loaded;
     _deadlineError = '';
-    await _service.saveDeadlines(extracted);
-    // Jadwalkan notifikasi reminder
+    await _service.saveDeadlines(merged);
+
+    // Jadwalkan notifikasi reminder untuk daftar terbaru
     await DeadlineReminderService()
-        .scheduleRemindersForDeadlines(extracted, _prefs);
+        .scheduleRemindersForDeadlines(merged, _prefs);
     notifyListeners();
   }
 

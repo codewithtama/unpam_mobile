@@ -24,11 +24,15 @@ class ScheduleScreen extends StatefulWidget {
   /// Callback untuk memicu sinkronisasi jadwal dari MyUnpam secara langsung.
   final Future<void> Function()? onSyncSchedule;
 
+  /// Callback untuk memicu sinkronisasi deadline dari Mentari secara langsung.
+  final Future<void> Function()? onSyncDeadline;
+
   const ScheduleScreen({
     super.key,
     this.onOpenMyUnpamJadwal,
     this.onOpenMentariDeadline,
     this.onSyncSchedule,
+    this.onSyncDeadline,
   });
 
   @override
@@ -86,18 +90,25 @@ class _ScheduleScreenState extends State<ScheduleScreen>
           ],
         ),
         actions: [
-          if (widget.onSyncSchedule != null)
+          if (widget.onSyncSchedule != null || widget.onSyncDeadline != null)
             IconButton(
               icon: const Icon(Icons.sync_rounded, color: AppTheme.accentGold, size: 22),
-              tooltip: 'Sinkronkan jadwal dari MyUnpam',
+              tooltip: 'Sinkronkan data dari portal',
               onPressed: () async {
+                final isDeadlineTab = _tabController.index == 2;
                 ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(
-                    content: Text('Menghubungi portal MyUnpam untuk sinkronisasi jadwal...'),
-                    duration: Duration(seconds: 2),
+                  SnackBar(
+                    content: Text(isDeadlineTab
+                        ? 'Menyinkronkan deadline dari Mentari LMS...'
+                        : 'Menyinkronkan jadwal kuliah dari MyUnpam...'),
+                    duration: const Duration(seconds: 2),
                   ),
                 );
-                await widget.onSyncSchedule?.call();
+                if (isDeadlineTab) {
+                  await widget.onSyncDeadline?.call();
+                } else {
+                  await widget.onSyncSchedule?.call();
+                }
               },
             ),
           Consumer<ScheduleProvider>(
@@ -143,7 +154,10 @@ class _ScheduleScreenState extends State<ScheduleScreen>
         children: [
           _TodayTab(onOpenMyUnpam: widget.onOpenMyUnpamJadwal),
           _WeeklyTab(onOpenMyUnpam: widget.onOpenMyUnpamJadwal),
-          _DeadlineTab(onOpenMentari: widget.onOpenMentariDeadline),
+          _DeadlineTab(
+            onOpenMentari: widget.onOpenMentariDeadline,
+            onSyncDeadline: widget.onSyncDeadline,
+          ),
         ],
       ),
     );
@@ -323,7 +337,8 @@ class _WeeklyTab extends StatelessWidget {
 
 class _DeadlineTab extends StatelessWidget {
   final VoidCallback? onOpenMentari;
-  const _DeadlineTab({this.onOpenMentari});
+  final Future<void> Function()? onSyncDeadline;
+  const _DeadlineTab({this.onOpenMentari, this.onSyncDeadline});
 
   @override
   Widget build(BuildContext context) {
@@ -341,7 +356,7 @@ class _DeadlineTab extends StatelessWidget {
             icon: Icons.assignment_outlined,
             title: 'Deadline belum tersedia',
             subtitle:
-                'Buka Mentari LMS dan navigasikan ke dashboard atau daftar tugas untuk sinkronisasi otomatis.',
+                'Buka Mentari LMS dan buka salah satu mata kuliah atau tugas untuk sinkronisasi otomatis.',
             buttonLabel: 'Buka Mentari LMS',
             onButtonTap: onOpenMentari,
           );

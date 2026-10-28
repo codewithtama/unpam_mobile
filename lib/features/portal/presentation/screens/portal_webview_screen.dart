@@ -1151,10 +1151,17 @@ class _PortalWebViewScreenState extends State<PortalWebViewScreen>
   void _handleExtractedDeadlines(String jsonStr) {
     try {
       final deadlines = CourseDeadline.listFromJson(jsonStr);
-      if (!mounted) return;
+      if (!mounted || deadlines.isEmpty) return;
       final provider = context.read<ScheduleProvider>();
       provider.onDeadlinesExtracted(deadlines);
       debugPrint('[DeadlineSync] ${deadlines.length} deadline berhasil di-scrape.');
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('✓ ${deadlines.length} deadline/tugas berhasil diperbarui!'),
+          duration: const Duration(seconds: 2),
+          backgroundColor: AppTheme.successGreen,
+        ),
+      );
     } catch (e) {
       debugPrint('[DeadlineSync] Error parse deadline: $e');
     }
@@ -2463,7 +2470,7 @@ class _PortalWebViewScreenState extends State<PortalWebViewScreen>
                           Future.delayed(const Duration(milliseconds: 400), () {
                             if (mounted) {
                               _controller.loadRequest(
-                                  Uri.parse('https://mentari.unpam.ac.id/my/'));
+                                  Uri.parse('https://mentari.unpam.ac.id/'));
                             }
                           });
                         },
@@ -2475,6 +2482,13 @@ class _PortalWebViewScreenState extends State<PortalWebViewScreen>
                             } catch (e) {
                               debugPrint('[ManualScheduleSync] Error: $e');
                             }
+                          }
+                        },
+                        onSyncDeadline: () async {
+                          try {
+                            await _controller.runJavaScript(PortalJsScripts.deadlineExtractor);
+                          } catch (e) {
+                            debugPrint('[ManualDeadlineSync] Error: $e');
                           }
                         },
                       ),

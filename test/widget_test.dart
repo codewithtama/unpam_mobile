@@ -675,5 +675,62 @@ void main() {
       expect(second.jamSelesai, equals('15:30'));
     });
   });
+
+  group('Mentari Deadline Model & Scraper Tests', () {
+    test('Parses DOM scraped deadlines with ISO and Indonesian dates correctly', () {
+      const jsonStr = '''
+      [
+        {
+          "id": "tugas-1",
+          "namaTugas": "Tugas 1: Analisis Algoritma",
+          "namaMataKuliah": "JARINGAN KOMPUTER",
+          "dueDate": "2026-11-05T23:59:00.000Z",
+          "tipe": "tugas",
+          "url": "https://mentari.unpam.ac.id/u-courses/22SIF0173/tugas1"
+        },
+        {
+          "id": "kuis-1",
+          "namaTugas": "Kuis Tengah Semester",
+          "namaMataKuliah": "MOBILE PROGRAMMING",
+          "dueDate": "2026-11-02T10:00:00.000Z",
+          "tipe": "kuis",
+          "url": "https://mentari.unpam.ac.id/u-courses/22SIF0242/kuis"
+        }
+      ]
+      ''';
+
+      final deadlines = CourseDeadline.listFromJson(jsonStr);
+      expect(deadlines.length, equals(2));
+
+      // Harus terurut berdasarkan tanggal terdekat (kuis duluan)
+      expect(deadlines[0].namaTugas, equals('Kuis Tengah Semester'));
+      expect(deadlines[0].tipe, equals(DeadlineType.kuis));
+      expect(deadlines[1].namaTugas, equals('Tugas 1: Analisis Algoritma'));
+      expect(deadlines[1].tipe, equals(DeadlineType.tugas));
+    });
+
+    test('Parses Moodle core_calendar action events payload with unix timestamps', () {
+      const moodleJson = '''
+      {
+        "events": [
+          {
+            "id": 9981,
+            "name": "Pengumpulan Makalah",
+            "course": { "fullname": "REKAYASA PERANGKAT LUNAK" },
+            "timesort": 1793202280,
+            "eventtype": "assign",
+            "url": "https://mentari.unpam.ac.id/mod/assign/view.php?id=9981"
+          }
+        ]
+      }
+      ''';
+
+      final deadlines = CourseDeadline.listFromJson(moodleJson);
+      expect(deadlines.length, equals(1));
+      expect(deadlines[0].namaTugas, equals('Pengumpulan Makalah'));
+      expect(deadlines[0].namaMataKuliah, equals('REKAYASA PERANGKAT LUNAK'));
+      expect(deadlines[0].tipe, equals(DeadlineType.tugas));
+    });
+  });
 }
 
