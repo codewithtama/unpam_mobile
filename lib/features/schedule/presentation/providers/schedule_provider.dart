@@ -113,7 +113,17 @@ class ScheduleProvider extends ChangeNotifier {
   }
 
   String _resolveCourseName(String rawCourse, String url) {
-    final clean = rawCourse.trim();
+    var clean = rawCourse.trim();
+    // Bersihkan format Mentari LMS: "[3] JARINGAN KOMPUTER # 04SIFE001 (Sabtu) [E-1]" -> "JARINGAN KOMPUTER"
+    final bracketMatch =
+        RegExp(r'^\[\d+\]\s*(.*?)(?:\s*#.*)?$').firstMatch(clean);
+    if (bracketMatch != null) {
+      final extracted = bracketMatch.group(1)?.trim();
+      if (extracted != null && extracted.isNotEmpty) {
+        clean = extracted;
+      }
+    }
+
     if (clean.isNotEmpty &&
         clean != 'Mata Kuliah' &&
         clean != 'Mata Kuliah Mentari' &&

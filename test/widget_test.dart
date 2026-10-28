@@ -809,6 +809,41 @@ void main() {
       expect(provider.deadlines[0].namaMataKuliah, equals('PEMROGRAMAN MOBILE'));
       expect(provider.deadlines[0].namaTugas, equals('Tugas 1: Stateful Widget'));
     });
+
+    test('ScheduleProvider cleans bracketed Mentari course header to clean course name', () async {
+      SharedPreferences.setMockInitialValues({});
+      await DeadlineReminderService().initialize();
+      final storage = await StorageService.getInstance();
+      await storage.rawPreferences.clear();
+      final scheduleService = ScheduleService(storage.rawPreferences);
+      final provider = ScheduleProvider(scheduleService, storage.rawPreferences);
+
+      // Mentari header mentah: "[3] JARINGAN KOMPUTER # 04SIFE001 (Sabtu) [E-1]"
+      await provider.onDeadlinesExtracted([
+        CourseDeadline(
+          id: 'mentari_jarkom_p1_pretest',
+          namaTugas: 'Pretest - Pertemuan 1: PENGENALAN INTRANET DAN INTERNET',
+          namaMataKuliah: '[3] JARINGAN KOMPUTER # 04SIFE001 (Sabtu) [E-1]',
+          dueDate: DateTime.now().add(const Duration(days: 3)),
+          tipe: DeadlineType.kuis,
+          url: 'https://mentari.unpam.ac.id/u-courses/20261-04SIFE001-22SIF0173?accord_pertemuan=PERTEMUAN_1',
+        ),
+        CourseDeadline(
+          id: 'mentari_jarkom_p1_posttest',
+          namaTugas: 'Posttest - Pertemuan 1: PENGENALAN INTRANET DAN INTERNET',
+          namaMataKuliah: '[3] JARINGAN KOMPUTER # 04SIFE001 (Sabtu) [E-1]',
+          dueDate: DateTime.now().add(const Duration(days: 3)),
+          tipe: DeadlineType.kuis,
+          url: 'https://mentari.unpam.ac.id/u-courses/20261-04SIFE001-22SIF0173?accord_pertemuan=PERTEMUAN_1',
+        ),
+      ]);
+
+      expect(provider.deadlines.length, equals(2));
+      expect(provider.deadlines[0].namaMataKuliah, equals('JARINGAN KOMPUTER'));
+      expect(provider.deadlines[1].namaMataKuliah, equals('JARINGAN KOMPUTER'));
+      expect(provider.deadlines[0].tipe, equals(DeadlineType.kuis));
+      expect(provider.deadlines[1].tipe, equals(DeadlineType.kuis));
+    });
   });
 }
 

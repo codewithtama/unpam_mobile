@@ -1,6 +1,22 @@
 # Catatan Pembaruan Rilis The PAMs
 
-## Versi 1.0.44 (Terbaru)
+## Versi 1.0.45 (Terbaru)
+
+- **Ekstraksi Sempurna Accordion Pertemuan Mentari LMS & Proactive Multi-Course Sync**:
+  - **Dukungan Struktur Asli Accordion Pertemuan Mentari**: Mengatasi perbedaan arsitektur Mentari LMS (non-standard Moodle layout) dengan parser khusus yang memindai slot aktivitas wajib mahasiswa di setiap pertemuan (`Pertemuan 1` s.d. `Pertemuan 21`):
+    - `Pretest`: Terdeteksi otomatis sebagai Kuis ketika berstatus aktif (`QUIZ`).
+    - `Posttest`: Terdeteksi otomatis sebagai Kuis ketika berstatus aktif (`QUIZ`).
+    - `Penugasan Terstruktur`: Terdeteksi otomatis sebagai Tugas saat dosen mengunggah instruksi/soal (mengabaikan slot berstatus `No content`).
+    - `Forum Diskusi`: Terdeteksi otomatis sebagai Tugas diskusi saat topik tersedia (mengabaikan status belum tersedia / `No content`).
+  - **Proactive Background Sync dari Dashboard Mentari (`https://mentari.unpam.ac.id/`)**:
+    - Saat mahasiswa membuka dashboard Mentari, aplikasi secara otomatis memindai seluruh kartu mata kuliah yang diambil (`a[href*="/u-courses/"]`) dan melakukan background fetch terotentikasi untuk mengekstrak tugas dan kuis dari semua mata kuliah tanpa harus membuka satu per satu.
+  - **Kalkulasi Cerdas Jatuh Tempo Mingguan (Smart Due Date Engine)**:
+    - Membaca hari jadwal kuliah dari header kursus (contoh: `(Sabtu)` dari `[3] JARINGAN KOMPUTER # 04SIFE001 (Sabtu) [E-1]`) dan menghitung tenggat waktu pengumpulan ke akhir pekan (Minggu 23:59 WIB) atau jadwal kuliah terdekat agar seluruh kuis dan tugas langsung muncul rapi di sub-tab "Mendatang" dengan alarm pengingat aktif.
+  - **Pembersihan Nama Mata Kuliah Otomatis**:
+    - Menghilangkan noise kode kelas dan bracket (seperti `[3] JARINGAN KOMPUTER # 04SIFE001 (Sabtu) [E-1]` menjadi `JARINGAN KOMPUTER`) untuk tampilan antarmuka dan notifikasi yang bersih dan elegan.
+  - **Pengujian Otomatis**: 31/31 unit & widget tests lulus, 0 analyzer issues.
+
+## Versi 1.0.44
 
 - **Penyempurnaan Total Ekstraksi Tugas & Deadline Mentari LMS**:
   - **Perbaikan Root Cause Parser Tanggal Tanpa Tahun & Relatif**: Mengatasi kegagalan scraper akibat format tanggal standar Moodle/Mentari yang tidak mencantumkan tahun (30 Oktober, 23:59, Jumat, 30 Okt, 23:59, Besok, 23:59, Hari ini, 23:59). Semua format tanggal lokal kini 100% terbaca.

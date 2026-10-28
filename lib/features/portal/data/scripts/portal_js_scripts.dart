@@ -383,20 +383,191 @@ class PortalJsScripts {
 
       function guessType(text) {
         var lower = (text || '').toLowerCase();
-        if (lower.indexOf('quiz') !== -1 || lower.indexOf('kuis') !== -1) return 'kuis';
+        if (lower.indexOf('quiz') !== -1 || lower.indexOf('kuis') !== -1 || lower.indexOf('pretest') !== -1 || lower.indexOf('posttest') !== -1) return 'kuis';
         if (lower.indexOf('ujian') !== -1 || lower.indexOf('exam') !== -1 || lower.indexOf('uts') !== -1 || lower.indexOf('uas') !== -1) return 'ujian';
         if (lower.indexOf('presensi') !== -1 || lower.indexOf('absen') !== -1 || lower.indexOf('kehadiran') !== -1) return 'presensi';
-        if (lower.indexOf('tugas') !== -1 || lower.indexOf('assignment') !== -1 || lower.indexOf('upload') !== -1 || lower.indexOf('latihan') !== -1 || lower.indexOf('penugasan') !== -1) return 'tugas';
+        if (lower.indexOf('tugas') !== -1 || lower.indexOf('assignment') !== -1 || lower.indexOf('upload') !== -1 || lower.indexOf('latihan') !== -1 || lower.indexOf('penugasan') !== -1 || lower.indexOf('forum') !== -1) return 'tugas';
         return 'lainnya';
       }
 
-      // ─── 3. DOM Extractor Universal Mentari ──────────────────────────
+      // Hitung jatuh tempo pintar berdasarkan jadwal hari kuliah Unpam
+      function getUpcomingDueDateForDay(dayName) {
+        var now = new Date();
+        var dLower = (dayName || '').toLowerCase();
+        var targetDayIndex = 6;
+        if (dLower.indexOf('sen') !== -1) targetDayIndex = 1;
+        else if (dLower.indexOf('sel') !== -1) targetDayIndex = 2;
+        else if (dLower.indexOf('rab') !== -1) targetDayIndex = 3;
+        else if (dLower.indexOf('kam') !== -1) targetDayIndex = 4;
+        else if (dLower.indexOf('jum') !== -1) targetDayIndex = 5;
+        else if (dLower.indexOf('sab') !== -1) targetDayIndex = 6;
+        else if (dLower.indexOf('min') !== -1) targetDayIndex = 0;
+
+        var currentDayIndex = now.getDay();
+        var daysToAdd = (targetDayIndex - currentDayIndex + 7) % 7;
+        if (daysToAdd === 0) {
+          daysToAdd = 7;
+        }
+        var targetDate = new Date(now.getTime() + daysToAdd * 86400000);
+        targetDate.setHours(23, 59, 59, 0);
+        return targetDate.toISOString();
+      }
+
+      // ─── 3. Parser Kursus & Accordion Pertemuan Mentari LMS ───────────
+      function parseMentariCourseTextOrDom(rawText, pageUrl) {
+        var results = [];
+        var seen = {};
+
+        function add(id, title, course, dueDate, type, url) {
+          if (!dueDate || !title) return;
+          var key = (title + '|' + dueDate).toLowerCase();
+          if (seen[key]) return;
+          seen[key] = true;
+          results.push({
+            id: id || key,
+            namaTugas: title,
+            namaMataKuliah: course || 'Mata Kuliah',
+            dueDate: dueDate,
+            tipe: type,
+            url: url || pageUrl
+          });
+        }
+
+        // Ambil header mata kuliah: "[3] JARINGAN KOMPUTER # 04SIFE001 (Sabtu) [E-1]"
+        var courseName = '';
+        var courseDay = 'Sabtu';
+        var classCode = '';
+
+        var headerMatch = rawText.match(/\[?\d+\]?\s*([A-Z0-9\s().,\/-]+?)\s*#\s*([0-9a-zA-Z]+)\s*\(([^)]+)\)/);
+        if (headerMatch) {
+          courseName = headerMatch[1].trim();
+          classCode = headerMatch[2].trim();
+          courseDay = headerMatch[3].trim();
+        } else {
+          var fb = rawText.match(/\[?\d+\]?\s*([A-Z\s()]+?)\s*#/);
+          if (fb) courseName = fb[1].trim();
+        }
+
+        if (!courseName) {
+          var hEl = document.querySelector('h1, h2, h3, .page-header-headings h1, [data-course-title]');
+          if (hEl) courseName = hEl.innerText.trim();
+        }
+        if (!courseName) {
+          var tMatch = document.title.match(/^([^|•-]+)/);
+          if (tMatch) courseName = tMatch[1].replace(/Mentari/i, '').trim();
+        }
+        if (!courseName) courseName = 'Mata Kuliah Mentari';
+
+        var defaultDueDate = getUpcomingDueDateForDay(courseDay);
+        var baseUrl = pageUrl.split('#')[0];
+        var courseIdParam = '';
+        var cIdMatch = pageUrl.match(/\/u-courses\/([^?#]+)/);
+        if (cIdMatch) courseIdParam = cIdMatch[1];
+
+        // Ekstraksi Pertemuan via pemecahan section teks terstruktur
+        var pRegex = /Pertemuan\s+(\d+)[\s\n\r]+([^\n\r]+)?/gi;
+        var pMatches = [];
+        var match;
+        while ((match = pRegex.exec(rawText)) !== null) {
+          pMatches.push({
+            index: match.index,
+            number: parseInt(match[1]),
+            topic: (match[2] || '').replace(/Section/i, '').trim()
+          });
+        }
+
+        if (pMatches.length === 0) {
+          var pElements = document.querySelectorAll('[id*="pertemuan"], [class*="pertemuan"], .accordion-item');
+          pElements.forEach(function(pel) {
+            var elText = pel.innerText || '';
+            var m = elText.match(/Pertemuan\s+(\d+)/i);
+            if (m) {
+              pMatches.push({
+                index: 0,
+                number: parseInt(m[1]),
+                topic: '',
+                element: pel
+              });
+            }
+          });
+        }
+
+        for (var i = 0; i < pMatches.length; i++) {
+          var currentP = pMatches[i];
+          var pNum = currentP.number;
+          var topic = currentP.topic;
+
+          var nextIdx = (i + 1 < pMatches.length) ? pMatches[i + 1].index : rawText.length;
+          var blockText = rawText.substring(currentP.index, nextIdx);
+
+          if (!topic || topic.toLowerCase() === 'section') {
+            var lines = blockText.split('\n').map(function(l) { return l.trim(); }).filter(Boolean);
+            if (lines.length > 1 && lines[1].toLowerCase() !== 'section' && lines[1].toLowerCase() !== 'pretest') {
+              topic = lines[1];
+            } else if (lines.length > 2 && lines[2].toLowerCase() !== 'section') {
+              topic = lines[2];
+            }
+          }
+          var cleanTopic = topic ? ': ' + topic : '';
+          var meetingUrl = baseUrl + (baseUrl.indexOf('?') !== -1 ? '&' : '?') + 'accord_pertemuan=PERTEMUAN_' + pNum;
+
+          // 1. Pretest
+          if (blockText.indexOf('Pretest') !== -1) {
+            var preIdx = blockText.indexOf('Pretest');
+            var preAfter = blockText.substring(preIdx, preIdx + 300);
+            if (preAfter.indexOf('QUIZ') !== -1 && preAfter.indexOf('No content') === -1) {
+              var preDate = parseDate(preAfter) || defaultDueDate;
+              var preId = 'mentari_' + (courseIdParam || courseName) + '_p' + pNum + '_pretest';
+              add(preId, 'Pretest - Pertemuan ' + pNum + cleanTopic, courseName, preDate, 'kuis', meetingUrl);
+            }
+          }
+
+          // 2. Posttest
+          if (blockText.indexOf('Posttest') !== -1) {
+            var postIdx = blockText.indexOf('Posttest');
+            var postAfter = blockText.substring(postIdx, postIdx + 300);
+            if (postAfter.indexOf('QUIZ') !== -1 && postAfter.indexOf('No content') === -1) {
+              var postDate = parseDate(postAfter) || defaultDueDate;
+              var postId = 'mentari_' + (courseIdParam || courseName) + '_p' + pNum + '_posttest';
+              add(postId, 'Posttest - Pertemuan ' + pNum + cleanTopic, courseName, postDate, 'kuis', meetingUrl);
+            }
+          }
+
+          // 3. Penugasan Terstruktur
+          if (blockText.indexOf('Penugasan Terstruktur') !== -1) {
+            var tugasIdx = blockText.indexOf('Penugasan Terstruktur');
+            var tugasAfter = blockText.substring(tugasIdx + 21, tugasIdx + 600);
+            var tugasClean = tugasAfter.replace(/LINK VCON.*/s, '').trim();
+            if (tugasClean.indexOf('No content') === -1 && tugasClean.length > 5) {
+              var tugasDate = parseDate(tugasClean) || defaultDueDate;
+              var tugasId = 'mentari_' + (courseIdParam || courseName) + '_p' + pNum + '_tugas';
+              add(tugasId, 'Tugas: Penugasan Terstruktur - Pertemuan ' + pNum + cleanTopic, courseName, tugasDate, 'tugas', meetingUrl);
+            }
+          }
+
+          // 4. Forum Diskusi
+          if (blockText.indexOf('Forum Diskusi') !== -1) {
+            var forumIdx = blockText.indexOf('Forum Diskusi');
+            var forumAfter = blockText.substring(forumIdx + 13, forumIdx + 600);
+            var forumClean = forumAfter.replace(/Posttest.*/s, '').trim();
+            if (forumClean.indexOf('belum tersedia') === -1 && forumClean.indexOf('No content') === -1 && forumClean.length > 5) {
+              var forumDate = parseDate(forumClean) || defaultDueDate;
+              var forumId = 'mentari_' + (courseIdParam || courseName) + '_p' + pNum + '_forum';
+              add(forumId, 'Forum Diskusi - Pertemuan ' + pNum + cleanTopic, courseName, forumDate, 'tugas', meetingUrl);
+            }
+          }
+        }
+
+        return results;
+      }
+
+      // ─── 4. DOM Extractor Universal Mentari ──────────────────────────
       function scanDomDeadlines() {
         var results = [];
         var seen = {};
 
         function addDeadline(id, namaTugas, namaMataKuliah, dueDateStr, tipe, url) {
-          if (!dueDateStr) return;
+          if (!dueDateStr || !namaTugas) return;
           var key = (namaTugas + '|' + dueDateStr).toLowerCase();
           if (seen[key]) return;
           seen[key] = true;
@@ -410,16 +581,77 @@ class PortalJsScripts {
           });
         }
 
-        // Ambil nama kursus aktif di halaman jika berada di /u-courses/*
-        var activeCourse = '';
-        var headEl = document.querySelector('h1, h2, .page-header-headings h1, .breadcrumb .active, [data-course-title]');
-        if (headEl) activeCourse = headEl.innerText.trim();
-        if (!activeCourse) {
-          var titleMatch = document.title.match(/^([^|•-]+)/);
-          if (titleMatch) activeCourse = titleMatch[1].trim();
+        var pageBodyText = document.body ? document.body.innerText : '';
+        var currentUrl = window.location.href;
+
+        // ─── STRATEGI 1: Mentari LMS Course Page (Accordion Pertemuan) ───
+        if (currentUrl.indexOf('/u-courses/') !== -1 || pageBodyText.indexOf('Pertemuan') !== -1) {
+          var mentariItems = parseMentariCourseTextOrDom(pageBodyText, currentUrl);
+          for (var m = 0; m < mentariItems.length; m++) {
+            var itm = mentariItems[m];
+            addDeadline(itm.id, itm.namaTugas, itm.namaMataKuliah, itm.dueDate, itm.tipe, itm.url);
+          }
         }
 
-        // Pola A: Moodle Timeline, Upcoming Events Widget & Dashboard Cards
+        // ─── STRATEGI 2: Mentari LMS Dashboard (Background Multi-Course Sync)
+        var courseLinks = [];
+        var courseAnchors = document.querySelectorAll('a[href*="/u-courses/"]');
+        courseAnchors.forEach(function(a) {
+          var h = a.href;
+          if (h && courseLinks.indexOf(h) === -1) {
+            courseLinks.push(h);
+          }
+        });
+
+        if (courseLinks.length > 0 && !window.__pamsDashboardCoursesFetched) {
+          window.__pamsDashboardCoursesFetched = true;
+          courseLinks.slice(0, 10).forEach(function(cUrl, idx) {
+            setTimeout(function() {
+              fetch(cUrl, { credentials: 'same-origin' })
+                .then(function(r) { return r.text(); })
+                .then(function(html) {
+                  var tempDiv = document.createElement('div');
+                  tempDiv.innerHTML = html;
+                  var cItems = parseMentariCourseTextOrDom(tempDiv.innerText, cUrl);
+                  if (cItems && cItems.length > 0 && window.DeadlineChannel) {
+                    window.DeadlineChannel.postMessage(JSON.stringify(cItems));
+                  }
+                }).catch(function() {});
+            }, idx * 400);
+          });
+        }
+
+        // ─── STRATEGI 3: Halaman Rincian Kuis / Tugas (/mod/quiz/*, /mod/assign/*)
+        var submissionTables = document.querySelectorAll('.submissionstatustable, table.generaltable, table, .quizinfo');
+        submissionTables.forEach(function(tbl) {
+          var rows = tbl.querySelectorAll('tr, .row, p, div');
+          var foundDate = '';
+          rows.forEach(function(r) {
+            var rTxt = (r.innerText || '').toLowerCase();
+            if (rTxt.indexOf('batas waktu') !== -1 || rTxt.indexOf('due date') !== -1 ||
+                rTxt.indexOf('jatuh tempo') !== -1 || rTxt.indexOf('tenggat') !== -1 ||
+                rTxt.indexOf('ditutup') !== -1 || rTxt.indexOf('deadline') !== -1) {
+              var cells = r.querySelectorAll('td, th, span');
+              if (cells.length >= 2) {
+                foundDate = (cells[1].innerText || '').trim();
+              } else {
+                foundDate = r.innerText.trim();
+              }
+            }
+          });
+
+          if (foundDate) {
+            var dueIso = parseDate(foundDate);
+            if (dueIso) {
+              var pageH = document.querySelector('h1, h2, .page-header-headings h1') || document.title;
+              var tTitle = (typeof pageH === 'string' ? pageH : (pageH.innerText || '')).trim();
+              tTitle = tTitle.replace(/[-|•].*/g, '').trim();
+              addDeadline(currentUrl, tTitle || 'Tugas Kuliah', 'Mata Kuliah', dueIso, guessType(tTitle), currentUrl);
+            }
+          }
+        });
+
+        // ─── STRATEGI 4: Moodle Events & Timeline Widget (Pola Universal) ─
         var eventItems = document.querySelectorAll(
           '.event a[href*="/calendar/"], [data-region="event-item"], [data-region="event-list-item"], .timeline-event-list-item, .calendar_event_user, .calendar_event_course, .block-myoverview .card, .timeline-event'
         );
@@ -434,128 +666,28 @@ class PortalJsScripts {
           var rawDate = (dateEl && dateEl.getAttribute('datetime')) || (dateEl && dateEl.innerText) || '';
           if (!rawDate) {
             var fullTxt = item.innerText || '';
-            var dMatch = fullTxt.match(/(?:deadline|tenggat|due|batas|jatuh tempo|ditutup|tutup|sampai|s\\.d\\.)?:?\\s*([^\\n\\r]+)/i);
+            var dMatch = fullTxt.match(/(?:deadline|tenggat|due|batas|jatuh tempo|ditutup|tutup|sampai|s\.d\.)?:?\s*([^\n\r]+)/i);
             if (dMatch) rawDate = dMatch[1];
           }
 
           var dueIso = parseDate(rawDate);
           if (!dueIso) {
-            var txtMatch = (item.innerText || '').match(/(?:\\d{1,2}\\s+[a-zA-Z]{3,10}(?:\\s+\\d{4})?|\\d{1,2}[\\/\\-]\\d{1,2}|hari ini|besok|lusa)[,\\s]+(?:\\d{1,2}[:.]\\d{2})?/i);
+            var txtMatch = (item.innerText || '').match(/(?:\d{1,2}\s+[a-zA-Z]{3,10}(?:\s+\d{4})?|\d{1,2}[\/\-]\d{1,2}|hari ini|besok|lusa)[,\s]+(?:\d{1,2}[:.]\d{2})?/i);
             if (txtMatch) dueIso = parseDate(txtMatch[0]);
           }
           if (!dueIso) return;
 
-          var courseName = (courseEl ? courseEl.innerText.trim() : '') || activeCourse;
+          var courseName = (courseEl ? courseEl.innerText.trim() : '');
           var link = item.querySelector('a[href]');
-          var href = link ? link.href : window.location.href;
+          var href = link ? link.href : currentUrl;
 
           addDeadline(href, title, courseName, dueIso, guessType(title), href);
-        });
-
-        // Pola B: Mentari Course Activities (Tugas/Kuis di setiap Pertemuan /u-courses/*)
-        var activityNodes = document.querySelectorAll(
-          '.activity, .activity-item, .modtype_assign, .modtype_quiz, .section-item, .list-group-item, .card, [data-region="activity-card"]'
-        );
-        activityNodes.forEach(function(node) {
-          var nodeText = (node.innerText || '');
-          var lowText = nodeText.toLowerCase();
-
-          var isActivity = lowText.indexOf('tugas') !== -1 ||
-                           lowText.indexOf('kuis') !== -1 ||
-                           lowText.indexOf('quiz') !== -1 ||
-                           lowText.indexOf('penugasan') !== -1 ||
-                           lowText.indexOf('assignment') !== -1 ||
-                           lowText.indexOf('ujian') !== -1 ||
-                           lowText.indexOf('uts') !== -1 ||
-                           lowText.indexOf('uas') !== -1;
-          if (!isActivity) return;
-
-          // Cari tanggal tenggat dalam teks kartu
-          var dateMatch = nodeText.match(/(?:deadline|tenggat|batas|due|jatuh tempo|ditutup|tutup|waktu|terakhir|sampai|s\\.d\\.)[:\\s]+([^\\n\\r]+)/i);
-          var rawDateStr = dateMatch ? dateMatch[1] : nodeText;
-          var dueIso = parseDate(rawDateStr);
-          if (!dueIso) {
-            var txtM = nodeText.match(/(?:\\d{1,2}\\s+[a-zA-Z]{3,10}(?:\\s+\\d{4})?|\\d{1,2}[\\/\\-]\\d{1,2}|hari ini|besok|lusa)[,\\s]+(?:\\d{1,2}[:.]\\d{2})?/i);
-            if (txtM) dueIso = parseDate(txtM[0]);
-          }
-
-          // Fallback: jika tanggal tidak tertulis pada kartu tetapi merupakan link tugas aktif,
-          // berikan estimasi jatuh tempo 7 hari mendatang agar tugas tetap terdaftar di tracker
-          if (!dueIso) {
-            dueIso = new Date(Date.now() + 7 * 86400000).toISOString();
-          }
-
-          var titleEl = node.querySelector('.activityname, .instancename, .card-title, h4, h5, a') || node;
-          var title = (titleEl && titleEl.innerText ? titleEl.innerText : 'Tugas').trim();
-          title = title.replace(/\\n.*/g, '');
-
-          var linkEl = node.querySelector('a[href]');
-          var linkUrl = linkEl ? linkEl.href : window.location.href;
-
-          addDeadline(linkUrl, title, activeCourse, dueIso, guessType(title), linkUrl);
-        });
-
-        // Pola C: Halaman Rincian Pengajuan Tugas (/mod/assign/view.php atau tabel pengumpulan)
-        var submissionTables = document.querySelectorAll('.submissionstatustable, table.generaltable, table');
-        submissionTables.forEach(function(tbl) {
-          var rows = tbl.querySelectorAll('tr');
-          var foundDate = '';
-          rows.forEach(function(r) {
-            var rTxt = (r.innerText || '').toLowerCase();
-            if (rTxt.indexOf('batas waktu') !== -1 || rTxt.indexOf('due date') !== -1 ||
-                rTxt.indexOf('jatuh tempo') !== -1 || rTxt.indexOf('tenggat') !== -1 ||
-                rTxt.indexOf('deadline') !== -1) {
-              var cells = r.querySelectorAll('td, th');
-              if (cells.length >= 2) {
-                foundDate = (cells[1].innerText || '').trim();
-              }
-            }
-          });
-
-          if (foundDate) {
-            var dueIso = parseDate(foundDate);
-            if (dueIso) {
-              var pageH = document.querySelector('h1, h2, .page-header-headings h1') || document.title;
-              var tTitle = (typeof pageH === 'string' ? pageH : (pageH.innerText || '')).trim();
-              tTitle = tTitle.replace(/[-|•].*/g, '').trim();
-              addDeadline(window.location.href, tTitle || 'Tugas Kuliah', activeCourse, dueIso, guessType(tTitle), window.location.href);
-            }
-          }
-        });
-
-        // Pola D: Tabel Umum Berisi Tugas / Kuis
-        var generalRows = document.querySelectorAll('table tr');
-        generalRows.forEach(function(row) {
-          var cells = row.querySelectorAll('td');
-          if (cells.length < 2) return;
-
-          var rowText = row.innerText || '';
-          var lowRow = rowText.toLowerCase();
-          if (lowRow.indexOf('tugas') === -1 && lowRow.indexOf('kuis') === -1 && lowRow.indexOf('quiz') === -1 && lowRow.indexOf('assign') === -1) return;
-
-          var rawDate = '';
-          for (var c = 0; c < cells.length; c++) {
-            var txt = cells[c].innerText.trim();
-            if (/\\d{1,2}\\s+[a-zA-Z]{3}/i.test(txt) || /\\d{1,2}[\\/\\-]\\d{1,2}/.test(txt) || /\\d{4}-\\d{2}-\\d{2}/.test(txt) || /hari ini|besok|lusa/i.test(txt)) {
-              rawDate = txt;
-              break;
-            }
-          }
-
-          var dueIso = parseDate(rawDate);
-          if (!dueIso) return;
-
-          var link = row.querySelector('a[href]');
-          var title = link ? link.innerText.trim() : cells[0].innerText.trim();
-          var href = link ? link.href : window.location.href;
-
-          addDeadline(href, title, activeCourse, dueIso, guessType(title), href);
         });
 
         return results;
       }
 
-      // ─── 4. Eksekusi & Observasi Otomatis ─────────────────────────────
+      // ─── 5. Eksekusi & Observasi Otomatis ─────────────────────────────
       function runScan() {
         try {
           var results = scanDomDeadlines();
@@ -566,8 +698,8 @@ class PortalJsScripts {
       }
 
       runScan();
-      setTimeout(runScan, 600);
-      setTimeout(runScan, 1600);
+      setTimeout(runScan, 500);
+      setTimeout(runScan, 1500);
 
       if (!window.__pamsDeadlineObserverInstalled && window.MutationObserver) {
         window.__pamsDeadlineObserverInstalled = true;
