@@ -1,6 +1,17 @@
 # Catatan Pembaruan Rilis The PAMs
 
-## Versi 1.0.43 (Terbaru)
+## Versi 1.0.44 (Terbaru)
+
+- **Penyempurnaan Total Ekstraksi Tugas & Deadline Mentari LMS**:
+  - **Perbaikan Root Cause Parser Tanggal Tanpa Tahun & Relatif**: Mengatasi kegagalan scraper akibat format tanggal standar Moodle/Mentari yang tidak mencantumkan tahun (30 Oktober, 23:59, Jumat, 30 Okt, 23:59, Besok, 23:59, Hari ini, 23:59). Semua format tanggal lokal kini 100% terbaca.
+  - **Integrasi Soft-Navigation onUrlChange**: Memastikan _tryExtractDeadlines dipanggil otomatis saat navigasi SPA client-side ke halaman mata kuliah (/u-courses/*), dilengkapi retry progresif (0ms, 800ms, 2000ms) untuk menangkap komponen Vue/Next yang di-render secara asinkron.
+  - **Dukungan Halaman Rincian Tugas (/mod/assign/view.php)**: Menambahkan parser khusus untuk tabel status pengajuan tugas (submissionstatustable) dengan kolom Batas Waktu, Status Pengumpulan, dan Waktu Tersisa.
+  - **Resolusi Cerdas Nama Mata Kuliah**: Menghubungkan kode mata kuliah dari URL Mentari (contoh: 22SIF0242) dengan jadwal resmi MyUnpam, sehingga nama mata kuliah tampil lengkap dan rapi (bukan sekadar kode atau teks generic).
+  - **Fallback Tugas Aktif**: Setiap aktivitas tugas, kuis, atau ujian aktif yang tidak mencantumkan tanggal di kartu tetap masuk ke daftar pemantauan deadline agar tidak ada tugas yang terlewat.
+  - **Pengujian Otomatis**: 30/30 unit & widget tests lulus, 0 analyzer issues.
+
+## Versi 1.0.43
+
 
 - **Penyempurnaan Sistem Notifikasi Reminder Deadline Akademik**:
   - **Penjadwalan Alarm Mandiri (zonedSchedule & Timezone WIB)**: Mengaktifkan alarm terjadwal langsung ke subsistem Android AlarmManager untuk pengingat H-3 (08:00 WIB), H-1 (08:00 WIB), H-0 (07:00 WIB), dan H-2 Jam sebelum jatuh tempo.

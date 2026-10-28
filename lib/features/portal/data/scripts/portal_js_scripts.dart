@@ -310,52 +310,69 @@ class PortalJsScripts {
         }
       }
 
-      // ─── 2. Parsing Tanggal Multiformat Indonesia ─────────────────────
+      // ─── 2. Parsing Tanggal Multiformat Indonesia & Relatif ────────────
       var months = {
-        'jan': 1, 'januari': 1, 'january': 1,
-        'feb': 2, 'februari': 2, 'february': 2,
-        'mar': 3, 'maret': 3, 'march': 3,
-        'apr': 4, 'april': 4,
-        'mei': 5, 'may': 5,
-        'jun': 6, 'juni': 6, 'june': 6,
-        'jul': 7, 'juli': 7, 'july': 7,
-        'agu': 8, 'agustus': 8, 'aug': 8, 'august': 8,
-        'sep': 9, 'september': 9,
-        'okt': 10, 'oktober': 10, 'oct': 10, 'october': 10,
-        'nov': 11, 'november': 11,
-        'des': 12, 'desember': 12, 'dec': 12, 'december': 12
+        'jan': 1, 'feb': 2, 'mar': 3, 'apr': 4,
+        'mei': 5, 'may': 5, 'jun': 6, 'jul': 7,
+        'agu': 8, 'aug': 8, 'sep': 9, 'okt': 10,
+        'oct': 10, 'nov': 11, 'des': 12, 'dec': 12
       };
 
       function parseDate(str) {
         if (!str) return null;
-        var s = str.trim();
+        var s = str.trim().toLowerCase();
+        var now = new Date();
 
-        // 1. ISO 8601 standar
-        if (/^\d{4}-\d{2}-\d{2}/.test(s)) {
-          var d = new Date(s);
-          if (!isNaN(d.getTime())) return d.toISOString();
+        // Ambil jam HH:MM atau HH.MM
+        var timeMatch = s.match(/(\\d{1,2})[:.](\\d{2})/);
+        var hr = timeMatch ? parseInt(timeMatch[1]) : 23;
+        var mn = timeMatch ? parseInt(timeMatch[2]) : 59;
+
+        // 1. Relatif: Hari ini, Besok, Lusa
+        if (s.indexOf('hari ini') !== -1) {
+          return new Date(now.getFullYear(), now.getMonth(), now.getDate(), hr, mn).toISOString();
+        }
+        if (s.indexOf('besok') !== -1) {
+          var dTom = new Date(now.getTime() + 86400000);
+          return new Date(dTom.getFullYear(), dTom.getMonth(), dTom.getDate(), hr, mn).toISOString();
+        }
+        if (s.indexOf('lusa') !== -1) {
+          var dLusa = new Date(now.getTime() + 172800000);
+          return new Date(dLusa.getFullYear(), dLusa.getMonth(), dLusa.getDate(), hr, mn).toISOString();
         }
 
-        // 2. Format: "30 Oktober 2026, 23:59" atau "Jumat, 30 Okt 2026 23.59"
-        var mText = s.match(/(?:[a-zA-Z]+,\s*)?(\d{1,2})\s+([a-zA-Z]{3,10})\s+(\d{4})(?:[,\s]+(\d{1,2})[:.](\d{2}))?/i);
+        // 2. ISO 8601 standar
+        if (/^\\d{4}-\\d{2}-\\d{2}/.test(s)) {
+          var dIso = new Date(s);
+          if (!isNaN(dIso.getTime())) return dIso.toISOString();
+        }
+
+        // 3. Format teks dengan/tanpa tahun: "30 Oktober 2026, 23:59", "30 Okt, 23:59", "Jumat, 30 Okt 23.59"
+        var mText = s.match(/(?:[a-zA-Z]+,\\s*)?(\\d{1,2})\\s+([a-zA-Z]{3,10})(?:\\s+(\\d{4}))?(?:[,\\s]+(\\d{1,2})[:.](\\d{2}))?/);
         if (mText) {
-          var mKey = (mText[2] || '').toLowerCase();
-          var monthNum = months[mKey] || 1;
-          var hr = mText[4] ? parseInt(mText[4]) : 23;
-          var mn = mText[5] ? parseInt(mText[5]) : 59;
-          var dt = new Date(parseInt(mText[3]), monthNum - 1, parseInt(mText[1]), hr, mn);
-          if (!isNaN(dt.getTime())) return dt.toISOString();
+          var day = parseInt(mText[1]);
+          var mKey = (mText[2] || '').substring(0, 3);
+          if (months[mKey]) {
+            var month = months[mKey] - 1;
+            var year = mText[3] ? parseInt(mText[3]) : now.getFullYear();
+            if (!mText[3] && month < now.getMonth() - 2) year += 1;
+            var hVal = mText[4] ? parseInt(mText[4]) : hr;
+            var mVal = mText[5] ? parseInt(mText[5]) : mn;
+            var dt = new Date(year, month, day, hVal, mVal);
+            if (!isNaN(dt.getTime())) return dt.toISOString();
+          }
         }
 
-        // 3. Format angka: "30/10/2026 23:59" atau "30-10-2026 23.59"
-        var mNum = s.match(/(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{4})(?:[,\s]+(\d{1,2})[:.](\d{2}))?/);
+        // 4. Format angka: "30/10/2026 23:59", "30-10-2026 23.59", "30/10 23:59"
+        var mNum = s.match(/(\\d{1,2})[\\/\\-](\\d{1,2})(?:[\\/\\-](\\d{4}))?(?:[,\\s]+(\\d{1,2})[:.](\\d{2}))?/);
         if (mNum) {
-          var day = parseInt(mNum[1]);
-          var month = parseInt(mNum[2]) - 1;
-          var year = parseInt(mNum[3]);
-          var h = mNum[4] ? parseInt(mNum[4]) : 23;
-          var m = mNum[5] ? parseInt(mNum[5]) : 59;
-          var dtNum = new Date(year, month, day, h, m);
+          var dayN = parseInt(mNum[1]);
+          var monthN = parseInt(mNum[2]) - 1;
+          var yearN = mNum[3] ? parseInt(mNum[3]) : now.getFullYear();
+          if (!mNum[3] && monthN < now.getMonth() - 2) yearN += 1;
+          var hNum = mNum[4] ? parseInt(mNum[4]) : hr;
+          var mNumVal = mNum[5] ? parseInt(mNum[5]) : mn;
+          var dtNum = new Date(yearN, monthN, dayN, hNum, mNumVal);
           if (!isNaN(dtNum.getTime())) return dtNum.toISOString();
         }
 
@@ -369,7 +386,7 @@ class PortalJsScripts {
         if (lower.indexOf('quiz') !== -1 || lower.indexOf('kuis') !== -1) return 'kuis';
         if (lower.indexOf('ujian') !== -1 || lower.indexOf('exam') !== -1 || lower.indexOf('uts') !== -1 || lower.indexOf('uas') !== -1) return 'ujian';
         if (lower.indexOf('presensi') !== -1 || lower.indexOf('absen') !== -1 || lower.indexOf('kehadiran') !== -1) return 'presensi';
-        if (lower.indexOf('tugas') !== -1 || lower.indexOf('assignment') !== -1 || lower.indexOf('upload') !== -1 || lower.indexOf('latihan') !== -1) return 'tugas';
+        if (lower.indexOf('tugas') !== -1 || lower.indexOf('assignment') !== -1 || lower.indexOf('upload') !== -1 || lower.indexOf('latihan') !== -1 || lower.indexOf('penugasan') !== -1) return 'tugas';
         return 'lainnya';
       }
 
@@ -402,14 +419,14 @@ class PortalJsScripts {
           if (titleMatch) activeCourse = titleMatch[1].trim();
         }
 
-        // Pola A: Moodle Timeline & Upcoming Events Widget
+        // Pola A: Moodle Timeline, Upcoming Events Widget & Dashboard Cards
         var eventItems = document.querySelectorAll(
-          '.event a[href*="/calendar/"], [data-region="event-item"], [data-region="event-list-item"], .calendar_event_user, .block-myoverview .card, .timeline-event'
+          '.event a[href*="/calendar/"], [data-region="event-item"], [data-region="event-list-item"], .timeline-event-list-item, .calendar_event_user, .calendar_event_course, .block-myoverview .card, .timeline-event'
         );
         eventItems.forEach(function(item) {
           var titleEl = item.querySelector('[data-region="event-name"], .card-title, .event-name, a') || item;
           var courseEl = item.querySelector('[data-region="event-course-name"], [data-region="course-name"], .course-name, .card-text');
-          var dateEl = item.querySelector('time, [datetime], [data-region="event-date"], .date, .card-footer');
+          var dateEl = item.querySelector('time, [datetime], [data-region="event-date"], .date, .card-footer, .text-muted');
 
           var title = (titleEl && titleEl.innerText ? titleEl.innerText : '').trim();
           if (!title) return;
@@ -417,11 +434,15 @@ class PortalJsScripts {
           var rawDate = (dateEl && dateEl.getAttribute('datetime')) || (dateEl && dateEl.innerText) || '';
           if (!rawDate) {
             var fullTxt = item.innerText || '';
-            var dMatch = fullTxt.match(/(?:tenggat|due|batas|jatuh tempo|sampai|s\.d\.)?:?\s*(\d{1,2}\s+[a-zA-Z]{3,10}\s+\d{4}(?:[,\s]+\d{1,2}[:.]\d{2})?)/i);
+            var dMatch = fullTxt.match(/(?:deadline|tenggat|due|batas|jatuh tempo|ditutup|tutup|sampai|s\\.d\\.)?:?\\s*([^\\n\\r]+)/i);
             if (dMatch) rawDate = dMatch[1];
           }
 
           var dueIso = parseDate(rawDate);
+          if (!dueIso) {
+            var txtMatch = (item.innerText || '').match(/(?:\\d{1,2}\\s+[a-zA-Z]{3,10}(?:\\s+\\d{4})?|\\d{1,2}[\\/\\-]\\d{1,2}|hari ini|besok|lusa)[,\\s]+(?:\\d{1,2}[:.]\\d{2})?/i);
+            if (txtMatch) dueIso = parseDate(txtMatch[0]);
+          }
           if (!dueIso) return;
 
           var courseName = (courseEl ? courseEl.innerText.trim() : '') || activeCourse;
@@ -431,9 +452,9 @@ class PortalJsScripts {
           addDeadline(href, title, courseName, dueIso, guessType(title), href);
         });
 
-        // Pola B: Mentari Course Activities (Tugas/Kuis di setiap Pertemuan)
+        // Pola B: Mentari Course Activities (Tugas/Kuis di setiap Pertemuan /u-courses/*)
         var activityNodes = document.querySelectorAll(
-          '.activity, .activity-item, .modtype_assign, .modtype_quiz, .section-item, .list-group-item, .card'
+          '.activity, .activity-item, .modtype_assign, .modtype_quiz, .section-item, .list-group-item, .card, [data-region="activity-card"]'
         );
         activityNodes.forEach(function(node) {
           var nodeText = (node.innerText || '');
@@ -444,18 +465,29 @@ class PortalJsScripts {
                            lowText.indexOf('quiz') !== -1 ||
                            lowText.indexOf('penugasan') !== -1 ||
                            lowText.indexOf('assignment') !== -1 ||
-                           lowText.indexOf('ujian') !== -1;
+                           lowText.indexOf('ujian') !== -1 ||
+                           lowText.indexOf('uts') !== -1 ||
+                           lowText.indexOf('uas') !== -1;
           if (!isActivity) return;
 
           // Cari tanggal tenggat dalam teks kartu
-          var dateMatch = nodeText.match(/(?:tenggat|batas|due|jatuh tempo|waktu|terakhir|sampai|s\.d\.)[:\s]+([^\n\r]+)/i);
+          var dateMatch = nodeText.match(/(?:deadline|tenggat|batas|due|jatuh tempo|ditutup|tutup|waktu|terakhir|sampai|s\\.d\\.)[:\\s]+([^\\n\\r]+)/i);
           var rawDateStr = dateMatch ? dateMatch[1] : nodeText;
           var dueIso = parseDate(rawDateStr);
-          if (!dueIso) return;
+          if (!dueIso) {
+            var txtM = nodeText.match(/(?:\\d{1,2}\\s+[a-zA-Z]{3,10}(?:\\s+\\d{4})?|\\d{1,2}[\\/\\-]\\d{1,2}|hari ini|besok|lusa)[,\\s]+(?:\\d{1,2}[:.]\\d{2})?/i);
+            if (txtM) dueIso = parseDate(txtM[0]);
+          }
+
+          // Fallback: jika tanggal tidak tertulis pada kartu tetapi merupakan link tugas aktif,
+          // berikan estimasi jatuh tempo 7 hari mendatang agar tugas tetap terdaftar di tracker
+          if (!dueIso) {
+            dueIso = new Date(Date.now() + 7 * 86400000).toISOString();
+          }
 
           var titleEl = node.querySelector('.activityname, .instancename, .card-title, h4, h5, a') || node;
           var title = (titleEl && titleEl.innerText ? titleEl.innerText : 'Tugas').trim();
-          title = title.replace(/\n.*/g, '').replace(/tugas|penugasan/i, function(m) { return m; });
+          title = title.replace(/\\n.*/g, '');
 
           var linkEl = node.querySelector('a[href]');
           var linkUrl = linkEl ? linkEl.href : window.location.href;
@@ -463,9 +495,37 @@ class PortalJsScripts {
           addDeadline(linkUrl, title, activeCourse, dueIso, guessType(title), linkUrl);
         });
 
-        // Pola C: Tabel Assignment Mentari
-        var tableRows = document.querySelectorAll('table tr');
-        tableRows.forEach(function(row) {
+        // Pola C: Halaman Rincian Pengajuan Tugas (/mod/assign/view.php atau tabel pengumpulan)
+        var submissionTables = document.querySelectorAll('.submissionstatustable, table.generaltable, table');
+        submissionTables.forEach(function(tbl) {
+          var rows = tbl.querySelectorAll('tr');
+          var foundDate = '';
+          rows.forEach(function(r) {
+            var rTxt = (r.innerText || '').toLowerCase();
+            if (rTxt.indexOf('batas waktu') !== -1 || rTxt.indexOf('due date') !== -1 ||
+                rTxt.indexOf('jatuh tempo') !== -1 || rTxt.indexOf('tenggat') !== -1 ||
+                rTxt.indexOf('deadline') !== -1) {
+              var cells = r.querySelectorAll('td, th');
+              if (cells.length >= 2) {
+                foundDate = (cells[1].innerText || '').trim();
+              }
+            }
+          });
+
+          if (foundDate) {
+            var dueIso = parseDate(foundDate);
+            if (dueIso) {
+              var pageH = document.querySelector('h1, h2, .page-header-headings h1') || document.title;
+              var tTitle = (typeof pageH === 'string' ? pageH : (pageH.innerText || '')).trim();
+              tTitle = tTitle.replace(/[-|•].*/g, '').trim();
+              addDeadline(window.location.href, tTitle || 'Tugas Kuliah', activeCourse, dueIso, guessType(tTitle), window.location.href);
+            }
+          }
+        });
+
+        // Pola D: Tabel Umum Berisi Tugas / Kuis
+        var generalRows = document.querySelectorAll('table tr');
+        generalRows.forEach(function(row) {
           var cells = row.querySelectorAll('td');
           if (cells.length < 2) return;
 
@@ -476,7 +536,7 @@ class PortalJsScripts {
           var rawDate = '';
           for (var c = 0; c < cells.length; c++) {
             var txt = cells[c].innerText.trim();
-            if (/\d{1,2}\s+[a-zA-Z]{3}/i.test(txt) || /\d{1,2}[\/\-]\d{1,2}[\/\-]\d{4}/.test(txt) || /\d{4}-\d{2}-\d{2}/.test(txt)) {
+            if (/\\d{1,2}\\s+[a-zA-Z]{3}/i.test(txt) || /\\d{1,2}[\\/\\-]\\d{1,2}/.test(txt) || /\\d{4}-\\d{2}-\\d{2}/.test(txt) || /hari ini|besok|lusa/i.test(txt)) {
               rawDate = txt;
               break;
             }
@@ -495,16 +555,71 @@ class PortalJsScripts {
         return results;
       }
 
-      var currentResults = scanDomDeadlines();
-      if (currentResults && currentResults.length > 0 && window.DeadlineChannel) {
-        window.DeadlineChannel.postMessage(JSON.stringify(currentResults));
+      // ─── 4. Eksekusi & Observasi Otomatis ─────────────────────────────
+      function runScan() {
+        try {
+          var results = scanDomDeadlines();
+          if (results && results.length > 0 && window.DeadlineChannel) {
+            window.DeadlineChannel.postMessage(JSON.stringify(results));
+          }
+        } catch(e) {}
       }
 
-      return JSON.stringify(currentResults);
+      runScan();
+      setTimeout(runScan, 600);
+      setTimeout(runScan, 1600);
+
+      if (!window.__pamsDeadlineObserverInstalled && window.MutationObserver) {
+        window.__pamsDeadlineObserverInstalled = true;
+        var debounceTimer = null;
+        var observer = new MutationObserver(function() {
+          if (debounceTimer) clearTimeout(debounceTimer);
+          debounceTimer = setTimeout(runScan, 800);
+        });
+        if (document.body) {
+          observer.observe(document.body, { childList: true, subtree: true });
+        }
+      }
+
+      // Proactive Moodle AJAX Service Call
+      try {
+        if (window.M && window.M.cfg && window.M.cfg.sesskey) {
+          fetch('/lib/ajax/service.php?sesskey=' + window.M.cfg.sesskey + '&info=core_calendar_get_action_events_by_timesort', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify([{
+              index: 0,
+              methodname: 'core_calendar_get_action_events_by_timesort',
+              args: { limitnum: 50, timesortfrom: Math.floor(Date.now() / 1000) - 86400 }
+            }])
+          }).then(function(r) { return r.json(); }).then(function(data) {
+            if (data && data[0] && data[0].data && data[0].data.events) {
+              var evList = data[0].data.events;
+              var parsed = evList.map(function(ev) {
+                var cName = (ev.course && (ev.course.fullname || ev.course.shortname)) || '';
+                return {
+                  id: String(ev.id || ''),
+                  namaTugas: ev.name || '',
+                  namaMataKuliah: cName,
+                  dueDate: new Date((ev.timesort || ev.timestart) * 1000).toISOString(),
+                  tipe: ev.eventtype || 'tugas',
+                  url: ev.url || ''
+                };
+              });
+              if (parsed.length > 0 && window.DeadlineChannel) {
+                window.DeadlineChannel.postMessage(JSON.stringify(parsed));
+              }
+            }
+          }).catch(function() {});
+        }
+      } catch(e) {}
+
+      var immediateResults = scanDomDeadlines();
+      return JSON.stringify(immediateResults);
     })();
   ''';
 
-  /// Skrip optimasi scrolling 120 FPS dan penghapusan tap highlight di Android.
+
   static const String fpsOptimization = r'''
     (function() {
       try {

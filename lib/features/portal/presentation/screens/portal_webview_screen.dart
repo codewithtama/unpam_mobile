@@ -296,6 +296,8 @@ class _PortalWebViewScreenState extends State<PortalWebViewScreen>
               });
               _detectLoginForm();
               _injectContextualPageDetectorScript(_controller);
+              // Pemicu ekstraksi otomatis saat soft-navigation SPA Mentari
+              _tryExtractDeadlines(_controller, nextUrl);
             }
           },
           onPageStarted: (url) {
@@ -541,6 +543,7 @@ class _PortalWebViewScreenState extends State<PortalWebViewScreen>
               _detectLoginForm();
               if (_myUnpamController != null) {
                 _injectContextualPageDetectorScript(_myUnpamController!);
+                _tryExtractSchedule(_myUnpamController!, nextUrl);
               }
             }
           },
@@ -1202,16 +1205,27 @@ class _PortalWebViewScreenState extends State<PortalWebViewScreen>
         !lower.contains('pluginfile') &&
         !lower.contains('theme/');
     if (!isRelevant) return;
-    try {
-      final result = await controller
-          .runJavaScriptReturningResult(PortalJsScripts.deadlineExtractor);
-      final jsonStr = result.toString();
-      if (jsonStr.isNotEmpty && jsonStr != 'null' && jsonStr != '[]') {
-        _handleExtractedDeadlines(jsonStr);
+
+    Future<void> extract() async {
+      try {
+        final result = await controller
+            .runJavaScriptReturningResult(PortalJsScripts.deadlineExtractor);
+        final jsonStr = result.toString();
+        if (jsonStr.isNotEmpty && jsonStr != 'null' && jsonStr != '[]') {
+          _handleExtractedDeadlines(jsonStr);
+        }
+      } catch (e) {
+        debugPrint('[DeadlineExtractor] Error: $e');
       }
-    } catch (e) {
-      debugPrint('[DeadlineExtractor] Error: $e');
     }
+
+    await extract();
+    Future.delayed(const Duration(milliseconds: 800), () {
+      if (mounted) extract();
+    });
+    Future.delayed(const Duration(milliseconds: 2000), () {
+      if (mounted) extract();
+    });
   }
 
   Future<void> _checkAppUpdateSilently() async {
@@ -1893,7 +1907,12 @@ class _PortalWebViewScreenState extends State<PortalWebViewScreen>
           },
           onSyncDeadline: () async {
             try {
-              await _controller.runJavaScript(PortalJsScripts.deadlineExtractor);
+              final res = await _controller
+                  .runJavaScriptReturningResult(PortalJsScripts.deadlineExtractor);
+              final str = res.toString();
+              if (str.isNotEmpty && str != 'null' && str != '[]') {
+                _handleExtractedDeadlines(str);
+              }
             } catch (e) {
               debugPrint('[ManualDeadlineSync] Error: $e');
             }

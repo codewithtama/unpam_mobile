@@ -19,6 +19,9 @@ import 'package:unpam_mobile/core/services/file_download_service.dart';
 import 'package:unpam_mobile/core/services/webview_download_bridge.dart';
 import 'package:unpam_mobile/models/app_update_info.dart';
 import 'package:unpam_mobile/features/schedule/domain/models/schedule_model.dart';
+import 'package:unpam_mobile/features/schedule/data/schedule_service.dart';
+import 'package:unpam_mobile/features/schedule/data/deadline_reminder_service.dart';
+import 'package:unpam_mobile/features/schedule/presentation/providers/schedule_provider.dart';
 import 'package:unpam_mobile/core/services/notification_service.dart';
 
 void main() {
@@ -765,6 +768,46 @@ void main() {
 
       notifService.onDeadlineNotificationTap?.call(payload);
       expect(tappedPayload, equals(payload));
+    });
+
+    test('ScheduleProvider resolves course name from MyUnpam schedule based on course code in URL', () async {
+      SharedPreferences.setMockInitialValues({});
+      await DeadlineReminderService().initialize();
+      final storage = await StorageService.getInstance();
+      final scheduleService = ScheduleService(storage.rawPreferences);
+      final provider = ScheduleProvider(scheduleService, storage.rawPreferences);
+
+      // Simulasikan jadwal MyUnpam yang sudah tersimpan
+      await provider.onScheduleExtracted([
+        const CourseSchedule(
+          kode: '22SIF0242',
+          namaMataKuliah: 'PEMROGRAMAN MOBILE',
+          hari: 'Kamis',
+          jamMulai: '07:40',
+          jamSelesai: '09:20',
+          ruang: 'V.401',
+          dosen: 'Dosen Pengampu',
+          kelas: '04SIFE001',
+          hariIndex: 4,
+        ),
+      ]);
+
+      // Ekstrak deadline dari Mentari dengan URL yang mengandung kode '22SIF0242'
+      await provider.onDeadlinesExtracted([
+        CourseDeadline(
+          id: 'dl-mobile-1',
+          namaTugas: 'Tugas 1: Stateful Widget',
+          namaMataKuliah: 'Mata Kuliah', // Nama default dari scraper sebelum di-resolve
+          dueDate: DateTime.now().add(const Duration(days: 3)),
+          tipe: DeadlineType.tugas,
+          url: 'https://mentari.unpam.ac.id/u-courses/20261-04SIFE001-22SIF0242',
+        ),
+      ]);
+
+      expect(provider.deadlines.length, equals(1));
+      // Harus berhasil di-resolve ke nama mata kuliah asli dari jadwal
+      expect(provider.deadlines[0].namaMataKuliah, equals('PEMROGRAMAN MOBILE'));
+      expect(provider.deadlines[0].namaTugas, equals('Tugas 1: Stateful Widget'));
     });
   });
 }

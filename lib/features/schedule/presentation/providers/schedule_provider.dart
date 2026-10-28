@@ -85,8 +85,17 @@ class ScheduleProvider extends ChangeNotifier {
       map[key] = d;
     }
     for (final d in extracted) {
-      final key = d.id.isNotEmpty ? d.id : '${d.namaMataKuliah}_${d.namaTugas}';
-      map[key] = d;
+      final courseName = _resolveCourseName(d.namaMataKuliah, d.url);
+      final item = CourseDeadline(
+        id: d.id,
+        namaTugas: d.namaTugas,
+        namaMataKuliah: courseName,
+        dueDate: d.dueDate,
+        tipe: d.tipe,
+        url: d.url,
+      );
+      final key = item.id.isNotEmpty ? item.id : '${item.namaMataKuliah}_${item.namaTugas}';
+      map[key] = item;
     }
 
     final merged = map.values.toList()
@@ -101,6 +110,22 @@ class ScheduleProvider extends ChangeNotifier {
     await DeadlineReminderService()
         .scheduleRemindersForDeadlines(merged, _prefs);
     notifyListeners();
+  }
+
+  String _resolveCourseName(String rawCourse, String url) {
+    final clean = rawCourse.trim();
+    if (clean.isNotEmpty &&
+        clean != 'Mata Kuliah' &&
+        clean != 'Mata Kuliah Mentari' &&
+        !clean.startsWith('http')) {
+      return clean;
+    }
+    for (final s in _schedules) {
+      if (s.kode.isNotEmpty && url.contains(s.kode)) return s.namaMataKuliah;
+      if (s.kelas.isNotEmpty && url.contains(s.kelas)) return s.namaMataKuliah;
+      if (s.ruang.isNotEmpty && url.contains(s.ruang)) return s.namaMataKuliah;
+    }
+    return clean.isNotEmpty ? clean : 'Mata Kuliah';
   }
 
   /// Tandai bahwa scraping sedang berjalan.
