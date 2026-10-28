@@ -17,11 +17,12 @@ class UpdateDialog extends StatefulWidget {
     required this.updateService,
   });
 
-  static Future<void> show({
+  static Future<void>? show({
     required BuildContext context,
     required AppUpdateInfo updateInfo,
     required UpdateCheckerService updateService,
   }) {
+    if (!updateInfo.hasUpdate) return null;
     return showDialog(
       context: context,
       barrierDismissible: true,

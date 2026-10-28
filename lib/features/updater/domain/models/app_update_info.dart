@@ -54,6 +54,9 @@ class AppUpdateInfo {
     final cleanRemote = _cleanVersion(remote);
     final cleanCurrent = _cleanVersion(current);
 
+    if (cleanRemote.isEmpty || cleanCurrent.isEmpty) return false;
+    if (cleanRemote == cleanCurrent) return false;
+
     final remoteParts = cleanRemote.split('.').map((e) => int.tryParse(e) ?? 0).toList();
     final currentParts = cleanCurrent.split('.').map((e) => int.tryParse(e) ?? 0).toList();
 
@@ -76,6 +79,10 @@ class AppUpdateInfo {
     final plusIndex = clean.indexOf('+');
     if (plusIndex != -1) {
       clean = clean.substring(0, plusIndex);
+    }
+    final dashIndex = clean.indexOf('-');
+    if (dashIndex != -1) {
+      clean = clean.substring(0, dashIndex);
     }
     return clean;
   }

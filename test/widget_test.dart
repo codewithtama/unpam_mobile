@@ -13,6 +13,7 @@ import 'package:unpam_mobile/widgets/app_gate.dart';
 import 'package:unpam_mobile/models/github_release.dart';
 import 'package:unpam_mobile/core/services/update_checker_service.dart';
 import 'package:unpam_mobile/widgets/release_history_dialog.dart';
+import 'package:unpam_mobile/widgets/update_dialog.dart';
 import 'package:unpam_mobile/core/services/file_download_service.dart';
 import 'package:unpam_mobile/core/services/webview_download_bridge.dart';
 import 'package:unpam_mobile/models/app_update_info.dart';
@@ -558,10 +559,50 @@ void main() {
       expect(AppUpdateInfo.isNewerVersion('v1.0.18', '1.0.18'), isFalse);
       expect(AppUpdateInfo.isNewerVersion('1.0.18+19', '1.0.18'), isFalse);
       expect(AppUpdateInfo.isNewerVersion('1.0.18', '1.0.18'), isFalse);
+      expect(AppUpdateInfo.isNewerVersion('v1.0.37', '1.0.37+37'), isFalse);
+      expect(AppUpdateInfo.isNewerVersion('v1.0.37-release', '1.0.37'), isFalse);
 
       // Versi lama lebih rendah
       expect(AppUpdateInfo.isNewerVersion('v1.0.9', '1.0.10'), isFalse);
       expect(AppUpdateInfo.isNewerVersion('v1.0.17', '1.0.18'), isFalse);
+      expect(AppUpdateInfo.isNewerVersion('v1.0.36', '1.0.37'), isFalse);
+    });
+
+    testWidgets('UpdateDialog.show does not launch when hasUpdate is false', (WidgetTester tester) async {
+      const info = AppUpdateInfo(
+        currentVersion: '1.0.37',
+        latestVersion: 'v1.0.37',
+        releaseTitle: 'Release v1.0.37',
+        changelog: 'None',
+        apkDownloadUrl: '',
+        apkSizeBytes: 0,
+        hasUpdate: false,
+      );
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: Builder(
+              builder: (context) => ElevatedButton(
+                onPressed: () {
+                  final result = UpdateDialog.show(
+                    context: context,
+                    updateInfo: info,
+                    updateService: UpdateCheckerService(),
+                  );
+                  expect(result, isNull);
+                },
+                child: const Text('Check'),
+              ),
+            ),
+          ),
+        ),
+      );
+
+      await tester.tap(find.text('Check'));
+      await tester.pump();
+
+      expect(find.text('Pembaruan Tersedia!'), findsNothing);
     });
   });
 }

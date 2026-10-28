@@ -133,6 +133,7 @@ class NotificationService {
 
   /// Menampilkan notifikasi banner melayang (heads-up) di status bar HP
   Future<void> showUpdateNotification(AppUpdateInfo updateInfo) async {
+    if (!updateInfo.hasUpdate) return;
     try {
       if (!_isInitialized) {
         await initialize();

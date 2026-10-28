@@ -148,13 +148,13 @@ class _PortalWebViewScreenState extends State<PortalWebViewScreen>
 
     NotificationService().initialize(
       onUpdateTap: (info) {
-        if (mounted && !_isUpdateDialogShowing) {
+        if (mounted && info.hasUpdate && !_isUpdateDialogShowing) {
           _isUpdateDialogShowing = true;
           UpdateDialog.show(
             context: context,
             updateInfo: info,
             updateService: _updateChecker,
-          ).then((_) {
+          )?.then((_) {
             _isUpdateDialogShowing = false;
           });
         }
@@ -1097,7 +1097,7 @@ class _PortalWebViewScreenState extends State<PortalWebViewScreen>
     _isCheckingUpdate = true;
     try {
       final updateInfo = await _updateChecker.checkForUpdate();
-      if (updateInfo != null && mounted && !_isUpdateDialogShowing) {
+      if (updateInfo != null && updateInfo.hasUpdate && mounted && !_isUpdateDialogShowing) {
         _isUpdateDialogShowing = true;
         await UpdateDialog.show(
           context: context,

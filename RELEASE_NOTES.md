@@ -1,6 +1,15 @@
 # Catatan Pembaruan Rilis The PAMs
 
-## Versi 1.0.37 (Terbaru)
+## Versi 1.0.38 (Terbaru)
+
+- **Perbaikan Validasi Pembaruan Aplikasi (Strict Update Guard)**:
+  - **Pencegahan Dialog Update False-Positive**: Memperbaiki `_checkAppUpdateSilently()` pada portal web agar memvalidasi `updateInfo.hasUpdate == true` sebelum memicu `UpdateDialog.show()`. Menghilangkan popup notifikasi pembaruan saat pengguna sudah berada di versi terbaru.
+  - **Guard Berlapis pada UpdateDialog**: Menambahkan proteksi guard internal pada `UpdateDialog.show()`, otomatis mengembalikan `null` jika tidak ada rilis baru yang valid (`!updateInfo.hasUpdate`).
+  - **Proteksi Notifikasi Sistem Heads-up**: Mencegah penayangan banner notifikasi status bar Android di `NotificationService.showUpdateNotification()` jika `hasUpdate == false`.
+  - **Peningkatan Presisi Parser Versi Semver**: Memperbarui algoritma sanitasi `_cleanVersion` di `AppUpdateInfo` untuk menghapus sufiks pre-release/build number (`-release`, `-beta`, `+build`) secara bersih sebelum perbandingan semver.
+  - **Uji Otomatis Baru**: Menambahkan unit test widget khusus untuk menjamin `UpdateDialog.show` tidak pernah muncul jika `hasUpdate` bernilai `false` (25/25 uji otomatis lulus).
+
+## Versi 1.0.37
 
 - **Finalisasi Migrasi Arsitektur Feature-First Menyeluruh (`lib/features/`)**:
   - **Fitur Onboarding (`lib/features/onboarding/`)**: Memindahkan `UserAgreementScreen` dan `PermissionGateScreen` ke `features/onboarding/presentation/screens/`.
