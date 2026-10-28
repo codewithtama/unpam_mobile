@@ -1,6 +1,15 @@
 # Catatan Pembaruan Rilis The PAMs
 
-## Versi 1.0.36 (Terbaru)
+## Versi 1.0.37 (Terbaru)
+
+- **Finalisasi Migrasi Arsitektur Feature-First Menyeluruh (`lib/features/`)**:
+  - **Fitur Onboarding (`lib/features/onboarding/`)**: Memindahkan `UserAgreementScreen` dan `PermissionGateScreen` ke `features/onboarding/presentation/screens/`.
+  - **Fitur Asisten AI (`lib/features/ai_assistant/`)**: Memindahkan `AiAssistantScreen`, `AiParaphraseScreen`, dan `MiniAiOverlayPanel` ke presentation layer `features/ai_assistant/`.
+  - **Fitur Autentikasi Biometrik (`lib/features/auth/`)**: Memindahkan modal sheet `BiometricVaultSheet` dan `BiometricQuickPromptSheet` ke `features/auth/presentation/widgets/`.
+  - **Fitur Pembaruan Sistem & OTA (`lib/features/updater/`)**: Mengelompokkan `AppUpdateInfo`, `GitHubRelease`, `UpdateCheckerService`, `UpdateDialog`, dan `ReleaseHistoryDialog` ke domain, data, dan presentation layer `features/updater/`.
+  - **Kompatibilitas Penuh (Zero Breaking Changes)**: Seluruh berkas lama dipertahankan sebagai berkas *barrel re-export*, memastikan import lama tetap valid dan seluruh 24 unit test lulus dengan 0 peringatan analyzer.
+
+## Versi 1.0.36
 
 - **Optimasi Performa & Modularisasi WebView Screen**:
   - **Dekomposisi Berkas Raksasa (229KB, 5.562 baris)**: Memecah berkas monolitik `portal_webview_screen.dart` menjadi modul-modul independen berarsitektur *feature-first* (`lib/features/portal/`), menurunkan bobot layar utama menjadi <95KB.

@@ -1,10 +1,10 @@
 import 'package:flutter/material.dart';
-import '../core/services/permission_service.dart';
-import '../core/services/storage_service.dart';
-import '../screens/permission_gate_screen.dart';
-import '../screens/portal_webview_screen.dart';
-import '../screens/user_agreement_screen.dart';
-import '../theme/app_theme.dart';
+import 'package:unpam_mobile/core/services/permission_service.dart';
+import 'package:unpam_mobile/core/services/storage_service.dart';
+import 'package:unpam_mobile/features/onboarding/presentation/screens/permission_gate_screen.dart';
+import 'package:unpam_mobile/features/portal/presentation/screens/portal_webview_screen.dart';
+import 'package:unpam_mobile/features/onboarding/presentation/screens/user_agreement_screen.dart';
+import 'package:unpam_mobile/theme/app_theme.dart';
 
 enum GateDestination {
   checking,

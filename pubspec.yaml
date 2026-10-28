@@ -1,7 +1,7 @@
 name: unpam_mobile
 description: "The PAMs - Portal Perkuliahan & Akademik Terpadu"
 publish_to: 'none'
-version: 1.0.36+36
+version: 1.0.37+37
 
 environment:
   sdk: '>=3.0.0 <4.0.0'
