@@ -17,4 +17,11 @@ class ApiConstants {
   static const String qwenApiKey = 'unpam_qwen_api_key';
   static const String openaiApiKey = 'unpam_openai_api_key';
   static const String openrouterApiKey = 'unpam_openrouter_api_key';
+
+  // Schedule & Deadline Tracker Keys
+  static const String scheduleCacheKey = 'unpam_schedule_cache_v1';
+  static const String deadlineCacheKey = 'unpam_deadline_cache_v1';
+  static const String scheduleLastSyncKey = 'unpam_schedule_last_sync';
+  static const String deadlineLastSyncKey = 'unpam_deadline_last_sync';
+  static const String scheduledReminderIdsKey = 'unpam_scheduled_reminder_ids';
 }

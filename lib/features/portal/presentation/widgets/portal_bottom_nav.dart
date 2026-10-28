@@ -1,7 +1,8 @@
 import 'package:flutter/material.dart';
 import '../../../../theme/app_theme.dart';
 
-/// Bilah navigasi bawah untuk berpindah antar portal Mentari, MyUnpam, dan Asisten AI.
+/// Bilah navigasi bawah untuk berpindah antar portal Mentari, MyUnpam,
+/// Asisten AI, dan Jadwal & Deadline.
 class PortalBottomNav extends StatelessWidget {
   final int currentIndex;
   final ValueChanged<int> onDestinationSelected;
@@ -15,7 +16,7 @@ class PortalBottomNav extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return NavigationBar(
-      selectedIndex: currentIndex,
+      selectedIndex: currentIndex.clamp(0, 3),
       backgroundColor: Colors.white,
       elevation: 3,
       indicatorColor: AppTheme.primaryLight.withOpacity(0.15),
@@ -35,6 +36,12 @@ class PortalBottomNav extends StatelessWidget {
           icon: Icon(Icons.auto_awesome_outlined),
           selectedIcon: Icon(Icons.auto_awesome, color: AppTheme.accentGold),
           label: 'The PAMs AI',
+        ),
+        NavigationDestination(
+          icon: Icon(Icons.calendar_month_outlined),
+          selectedIcon:
+              Icon(Icons.calendar_month_rounded, color: AppTheme.primaryBlue),
+          label: 'Jadwal',
         ),
       ],
     );

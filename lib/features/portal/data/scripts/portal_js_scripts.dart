@@ -6,6 +6,299 @@ import 'dart:convert';
 class PortalJsScripts {
   PortalJsScripts._();
 
+  // ──────────────────────────────────────────────────────────────────────────
+  // Jadwal Kuliah & Deadline Scraper
+  // ──────────────────────────────────────────────────────────────────────────
+
+  /// Skrip ekstraksi jadwal kuliah dari halaman Jadwal Kuliah di MyUnpam.
+  ///
+  /// Mendeteksi tabel jadwal secara generik berdasarkan kolom-kolom umum
+  /// (hari, jam, kode MK, nama MK, ruang, dosen). Output: JSON array.
+  static const String scheduleExtractor = r'''
+    (function() {
+      var results = [];
+
+      var dayMap = {
+        'senin': 1, 'monday': 1,
+        'selasa': 2, 'tuesday': 2,
+        'rabu': 3, 'wednesday': 3,
+        'kamis': 4, 'thursday': 4,
+        "jum'at": 5, 'jumat': 5, 'friday': 5,
+        'sabtu': 6, 'saturday': 6,
+        'minggu': 7, 'sunday': 7
+      };
+
+      function dayIndex(dayStr) {
+        var lower = (dayStr || '').toLowerCase().trim();
+        return dayMap[lower] || 0;
+      }
+
+      // Cari semua tabel di halaman
+      var tables = document.querySelectorAll('table');
+      for (var t = 0; t < tables.length; t++) {
+        var rows = tables[t].querySelectorAll('tr');
+        if (rows.length < 2) continue;
+
+        // Baca header untuk menentukan posisi kolom
+        var headers = [];
+        var headerRow = rows[0];
+        var headerCells = headerRow.querySelectorAll('th, td');
+        for (var h = 0; h < headerCells.length; h++) {
+          headers.push((headerCells[h].innerText || '').toLowerCase().trim());
+        }
+
+        // Cek apakah tabel ini adalah tabel jadwal
+        var hasHari = headers.some(function(h) { return h.indexOf('hari') !== -1; });
+        var hasJam  = headers.some(function(h) { return h.indexOf('jam') !== -1 || h.indexOf('waktu') !== -1; });
+        var hasMk   = headers.some(function(h) {
+          return h.indexOf('mata kuliah') !== -1 || h.indexOf('matakuliah') !== -1 || h.indexOf('mk') !== -1 || h.indexOf('nama') !== -1;
+        });
+
+        if (!hasHari && !hasJam && !hasMk) continue;
+
+        // Hitung index kolom
+        var colHari = -1, colJam = -1, colJamMulai = -1, colJamSelesai = -1;
+        var colKode = -1, colNama = -1, colRuang = -1, colDosen = -1, colKelas = -1;
+
+        for (var i = 0; i < headers.length; i++) {
+          var h = headers[i];
+          if (colHari < 0 && h.indexOf('hari') !== -1) colHari = i;
+          if (colJam < 0 && (h === 'jam' || h === 'waktu' || h.indexOf('jam') !== -1 || h.indexOf('waktu') !== -1)) colJam = i;
+          if (colJamMulai < 0 && (h.indexOf('mulai') !== -1 || h.indexOf('start') !== -1)) colJamMulai = i;
+          if (colJamSelesai < 0 && (h.indexOf('selesai') !== -1 || h.indexOf('end') !== -1 || h.indexOf('akhir') !== -1)) colJamSelesai = i;
+          if (colKode < 0 && (h.indexOf('kode') !== -1 || h === 'mk')) colKode = i;
+          if (colNama < 0 && (h.indexOf('mata kuliah') !== -1 || h.indexOf('matakuliah') !== -1 || (h.indexOf('nama') !== -1 && h.indexOf('dosen') === -1))) colNama = i;
+          if (colRuang < 0 && (h.indexOf('ruang') !== -1 || h.indexOf('room') !== -1 || h.indexOf('kelas') !== -1 && h.indexOf('nama kelas') === -1)) colRuang = i;
+          if (colDosen < 0 && (h.indexOf('dosen') !== -1 || h.indexOf('pengajar') !== -1)) colDosen = i;
+          if (colKelas < 0 && (h.indexOf('kelas') !== -1 || h.indexOf('kls') !== -1)) colKelas = i;
+        }
+
+        if (colNama < 0 && colKode < 0) continue;
+
+        // Parse baris data
+        for (var r = 1; r < rows.length; r++) {
+          var cells = rows[r].querySelectorAll('td');
+          if (cells.length === 0) continue;
+
+          function cellText(idx) {
+            if (idx < 0 || idx >= cells.length) return '';
+            return (cells[idx].innerText || '').trim();
+          }
+
+          var nama = cellText(colNama);
+          var kode = cellText(colKode);
+          if (!nama && !kode) continue;
+
+          var hari = cellText(colHari);
+          var rawJam = cellText(colJam);
+          var jamMulai = colJamMulai >= 0 ? cellText(colJamMulai) : '';
+          var jamSelesai = colJamSelesai >= 0 ? cellText(colJamSelesai) : '';
+
+          // Parse jam dari format "HH:MM - HH:MM" atau "HH:MM s.d. HH:MM"
+          if (rawJam && !jamMulai) {
+            var jamMatch = rawJam.match(/(\d{1,2}:\d{2})\s*[-–—]\s*(\d{1,2}:\d{2})/);
+            if (jamMatch) {
+              jamMulai = jamMatch[1];
+              jamSelesai = jamMatch[2];
+            } else {
+              var jamParts = rawJam.split(/\s+s\.d\.?\s+|\s+-\s+/i);
+              if (jamParts.length >= 2) {
+                jamMulai = jamParts[0].trim();
+                jamSelesai = jamParts[1].trim();
+              } else {
+                jamMulai = rawJam;
+              }
+            }
+          }
+
+          var ruang = cellText(colRuang);
+          var dosen = cellText(colDosen);
+          var kelas = cellText(colKelas);
+
+          results.push({
+            kode: kode,
+            namaMataKuliah: nama || kode,
+            hari: hari,
+            jamMulai: jamMulai,
+            jamSelesai: jamSelesai,
+            ruang: ruang,
+            dosen: dosen,
+            kelas: kelas,
+            hariIndex: dayIndex(hari)
+          });
+        }
+
+        if (results.length > 0) break; // Sudah dapat tabel yang valid
+      }
+
+      return JSON.stringify(results);
+    })();
+  ''';
+
+  /// Skrip ekstraksi deadline/tugas dari dashboard Mentari LMS.
+  ///
+  /// Membaca blok "Upcoming events" / "Timeline" / blok tugas yang belum
+  /// dikumpulkan dari halaman dashboard atau daftar aktivitas Moodle.
+  static const String deadlineExtractor = r'''
+    (function() {
+      var results = [];
+      var seen = {};
+
+      function addDeadline(id, namaTugas, namaMataKuliah, dueDateStr, tipe, url) {
+        var key = id || (namaTugas + '|' + dueDateStr);
+        if (seen[key]) return;
+        seen[key] = true;
+        results.push({
+          id: id || key,
+          namaTugas: namaTugas,
+          namaMataKuliah: namaMataKuliah,
+          dueDate: dueDateStr,
+          tipe: tipe,
+          url: url || ''
+        });
+      }
+
+      function guessType(text) {
+        var lower = (text || '').toLowerCase();
+        if (lower.indexOf('quiz') !== -1 || lower.indexOf('kuis') !== -1) return 'kuis';
+        if (lower.indexOf('ujian') !== -1 || lower.indexOf('exam') !== -1 || lower.indexOf('uts') !== -1 || lower.indexOf('uas') !== -1) return 'ujian';
+        if (lower.indexOf('presensi') !== -1 || lower.indexOf('absen') !== -1) return 'presensi';
+        if (lower.indexOf('tugas') !== -1 || lower.indexOf('assignment') !== -1 || lower.indexOf('submit') !== -1) return 'tugas';
+        return 'lainnya';
+      }
+
+      // Normalisasi tanggal ke ISO8601 (best effort)
+      function parseDate(str) {
+        if (!str) return null;
+        str = str.trim();
+        // ISO8601 langsung
+        if (/^\d{4}-\d{2}-\d{2}/.test(str)) return str;
+
+        var months = { 'jan': 1, 'feb': 2, 'mar': 3, 'apr': 4, 'mei': 5, 'may': 5,
+          'jun': 6, 'jul': 7, 'agu': 8, 'aug': 8, 'sep': 9, 'okt': 10, 'oct': 10,
+          'nov': 11, 'des': 12, 'dec': 12 };
+
+        // "DD Mon YYYY HH:MM" atau "DD Mon YYYY"
+        var m1 = str.match(/(\d{1,2})\s+([a-z]{3})[a-z]*\s+(\d{4})(?:\s+(\d{1,2}:\d{2}))?/i);
+        if (m1) {
+          var mo = months[(m1[2] || '').toLowerCase()] || 1;
+          var dt = new Date(parseInt(m1[3]), mo - 1, parseInt(m1[1]),
+            m1[4] ? parseInt(m1[4].split(':')[0]) : 23,
+            m1[4] ? parseInt(m1[4].split(':')[1]) : 59);
+          if (!isNaN(dt.getTime())) return dt.toISOString();
+        }
+
+        // Coba Date.parse fallback
+        var d = new Date(str);
+        if (!isNaN(d.getTime())) return d.toISOString();
+        return null;
+      }
+
+      // ── 1. Moodle "Upcoming events" blok ──
+      var eventLinks = document.querySelectorAll('.event a[href*="/calendar/"], .calendar_event_user a, .event-name a, [data-region="event-item"] a');
+      eventLinks.forEach(function(a) {
+        var titleEl = a.closest('[data-region="event-item"]') ||
+                      a.closest('.event') ||
+                      a.closest('li');
+        var fullText = titleEl ? titleEl.innerText : a.innerText;
+
+        // Cari tanggal di teks sekitar
+        var dateEl = titleEl ? titleEl.querySelector('.date, time, [datetime]') : null;
+        var rawDate = (dateEl && dateEl.getAttribute('datetime')) ||
+                      (dateEl && dateEl.innerText) || '';
+
+        if (!rawDate) {
+          // Cari pola tanggal di teks penuh
+          var dMatch = fullText.match(/(\d{1,2}\s+[a-z]{3}[a-z]*\s+\d{4}(?:\s+\d{1,2}:\d{2})?)/i);
+          if (dMatch) rawDate = dMatch[1];
+        }
+
+        var dueDate = parseDate(rawDate);
+        if (!dueDate) return;
+
+        var namaTugas = a.innerText.trim() || a.title || 'Tugas';
+        // Cari nama kursus
+        var courseEl = titleEl ? titleEl.querySelector('.course-name, .eventcourse, [data-region="course-name"]') : null;
+        var namaMataKuliah = courseEl ? courseEl.innerText.trim() : '';
+
+        addDeadline(
+          a.href || '',
+          namaTugas,
+          namaMataKuliah,
+          dueDate,
+          guessType(namaTugas),
+          a.href || ''
+        );
+      });
+
+      // ── 2. Timeline block (Moodle 3.7+) ──
+      var timelineItems = document.querySelectorAll('[data-region="event-list-item"], .block-myoverview .card');
+      timelineItems.forEach(function(item) {
+        var titleEl = item.querySelector('[data-region="event-name"], .card-title, h5, h4');
+        var courseEl = item.querySelector('[data-region="event-course-name"], .card-text');
+        var dateEl   = item.querySelector('time, [datetime], .card-footer, [data-region="event-date"]');
+
+        if (!titleEl) return;
+        var namaTugas = titleEl.innerText.trim();
+        var namaMataKuliah = courseEl ? courseEl.innerText.trim() : '';
+        var rawDate = (dateEl && dateEl.getAttribute('datetime')) ||
+                      (dateEl && dateEl.innerText) || '';
+
+        var dueDate = parseDate(rawDate);
+        if (!dueDate) return;
+
+        var linkEl = item.querySelector('a[href]');
+        addDeadline(
+          (linkEl && linkEl.href) || namaTugas,
+          namaTugas,
+          namaMataKuliah,
+          dueDate,
+          guessType(namaTugas),
+          (linkEl && linkEl.href) || ''
+        );
+      });
+
+      // ── 3. Daftar assignment "to submit" ──
+      var assignRows = document.querySelectorAll('table tr');
+      assignRows.forEach(function(row) {
+        var cells = row.querySelectorAll('td');
+        if (cells.length < 2) return;
+        var linkEl = row.querySelector('a[href*="/mod/assign/"], a[href*="/mod/quiz/"]');
+        if (!linkEl) return;
+        var namaTugas = linkEl.innerText.trim();
+        if (!namaTugas) return;
+
+        // Cari kolom dengan pola tanggal
+        var rawDate = '';
+        for (var c = 0; c < cells.length; c++) {
+          var txt = cells[c].innerText.trim();
+          if (/\d{1,2}\s+[a-z]{3}/i.test(txt) || /\d{4}-\d{2}-\d{2}/.test(txt)) {
+            rawDate = txt;
+            break;
+          }
+        }
+
+        var dueDate = parseDate(rawDate);
+        if (!dueDate) return;
+
+        // Nama kursus dari breadcrumb atau heading
+        var heading = document.querySelector('h1, .page-header-headings h1, .breadcrumb .active');
+        var namaMataKuliah = heading ? heading.innerText.trim() : '';
+
+        addDeadline(
+          linkEl.href,
+          namaTugas,
+          namaMataKuliah,
+          dueDate,
+          guessType(linkEl.href),
+          linkEl.href
+        );
+      });
+
+      return JSON.stringify(results);
+    })();
+  ''';
+
   /// Skrip optimasi scrolling 120 FPS dan penghapusan tap highlight di Android.
   static const String fpsOptimization = r'''
     (function() {

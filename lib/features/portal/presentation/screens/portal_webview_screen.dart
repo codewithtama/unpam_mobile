@@ -23,6 +23,9 @@ import 'package:unpam_mobile/features/updater/data/update_checker_service.dart';
 import 'package:unpam_mobile/core/services/notification_service.dart';
 import 'package:unpam_mobile/core/services/file_download_service.dart';
 import 'package:unpam_mobile/core/services/webview_download_bridge.dart';
+import 'package:unpam_mobile/features/schedule/domain/models/schedule_model.dart';
+import 'package:unpam_mobile/features/schedule/presentation/providers/schedule_provider.dart';
+import 'package:unpam_mobile/features/schedule/presentation/screens/schedule_screen.dart';
 
 import '../../data/scripts/portal_js_scripts.dart';
 import '../dialogs/forum_draft_dialog.dart';
@@ -254,6 +257,18 @@ class _PortalWebViewScreenState extends State<PortalWebViewScreen>
           _handleDetectedPageContext(message.message, isMyUnpam: false);
         },
       )
+      ..addJavaScriptChannel(
+        'ScheduleChannel',
+        onMessageReceived: (message) {
+          _handleExtractedSchedule(message.message);
+        },
+      )
+      ..addJavaScriptChannel(
+        'DeadlineChannel',
+        onMessageReceived: (message) {
+          _handleExtractedDeadlines(message.message);
+        },
+      )
       ..setNavigationDelegate(
         NavigationDelegate(
           onProgress: (progress) {
@@ -323,6 +338,8 @@ class _PortalWebViewScreenState extends State<PortalWebViewScreen>
             _inject120FpsOptimizationScript(_controller);
             _injectDownloadInterceptorScript(_controller);
             _detectAndInterceptRawPdfInWebView(_controller);
+            // Ekstrak deadline dari Mentari secara otomatis
+            _tryExtractDeadlines(_controller, url);
           },
           onWebResourceError: (error) {
             if (_isRefreshing && mounted) {
@@ -483,6 +500,18 @@ class _PortalWebViewScreenState extends State<PortalWebViewScreen>
           _handleDetectedPageContext(message.message, isMyUnpam: true);
         },
       )
+      ..addJavaScriptChannel(
+        'ScheduleChannel',
+        onMessageReceived: (message) {
+          _handleExtractedSchedule(message.message);
+        },
+      )
+      ..addJavaScriptChannel(
+        'DeadlineChannel',
+        onMessageReceived: (message) {
+          _handleExtractedDeadlines(message.message);
+        },
+      )
       ..setNavigationDelegate(
         NavigationDelegate(
           onProgress: (progress) {
@@ -546,6 +575,8 @@ class _PortalWebViewScreenState extends State<PortalWebViewScreen>
               _inject120FpsOptimizationScript(_myUnpamController!);
               _injectDownloadInterceptorScript(_myUnpamController!);
               _detectAndInterceptRawPdfInWebView(_myUnpamController!);
+              // Ekstrak jadwal dari MyUnpam secara otomatis
+              _tryExtractSchedule(_myUnpamController!, url);
             }
             final lowerUrl = url.toLowerCase();
             if (_isLoggingOutMyUnpam ||
@@ -1090,6 +1121,78 @@ class _PortalWebViewScreenState extends State<PortalWebViewScreen>
         builder: (_) => AiParaphraseScreen(courseName: activeTitle),
       ),
     );
+  }
+
+  // ──────────────────────────────────────────────────────────────────────────
+  // Jadwal & Deadline Extractor
+  // ──────────────────────────────────────────────────────────────────────────
+
+  /// Dipanggil saat JS scheduleExtractor mengirim hasil scraping dari MyUnpam.
+  void _handleExtractedSchedule(String jsonStr) {
+    try {
+      final schedules = CourseSchedule.listFromJson(jsonStr);
+      if (!mounted || schedules.isEmpty) return;
+      final provider = context.read<ScheduleProvider>();
+      provider.onScheduleExtracted(schedules);
+      debugPrint('[ScheduleSync] ${schedules.length} jadwal berhasil di-scrape.');
+    } catch (e) {
+      debugPrint('[ScheduleSync] Error parse schedule: $e');
+    }
+  }
+
+  /// Dipanggil saat JS deadlineExtractor mengirim hasil scraping dari Mentari.
+  void _handleExtractedDeadlines(String jsonStr) {
+    try {
+      final deadlines = CourseDeadline.listFromJson(jsonStr);
+      if (!mounted) return;
+      final provider = context.read<ScheduleProvider>();
+      provider.onDeadlinesExtracted(deadlines);
+      debugPrint('[DeadlineSync] ${deadlines.length} deadline berhasil di-scrape.');
+    } catch (e) {
+      debugPrint('[DeadlineSync] Error parse deadline: $e');
+    }
+  }
+
+  /// Ekstrak jadwal dari halaman MyUnpam jika URL relevan.
+  Future<void> _tryExtractSchedule(WebViewController controller, String url) async {
+    final lower = url.toLowerCase();
+    final isSchedulePage = lower.contains('jadwal') ||
+        lower.contains('schedule') ||
+        lower.contains('krs') ||
+        (lower.contains('my.unpam.ac.id') &&
+            !lower.contains('login') &&
+            !lower.contains('sso'));
+    if (!isSchedulePage) return;
+    try {
+      final result = await controller
+          .runJavaScriptReturningResult(PortalJsScripts.scheduleExtractor);
+      final jsonStr = result.toString();
+      if (jsonStr.isNotEmpty && jsonStr != 'null' && jsonStr != '[]') {
+        _handleExtractedSchedule(jsonStr);
+      }
+    } catch (e) {
+      debugPrint('[ScheduleExtractor] Error: $e');
+    }
+  }
+
+  /// Ekstrak deadline dari halaman Mentari jika URL relevan.
+  Future<void> _tryExtractDeadlines(WebViewController controller, String url) async {
+    final lower = url.toLowerCase();
+    final isRelevant = lower.contains('mentari.unpam.ac.id') &&
+        !lower.contains('login') &&
+        !lower.contains('pluginfile') &&
+        !lower.contains('theme/');
+    if (!isRelevant) return;
+    try {
+      final result = await controller
+          .runJavaScriptReturningResult(PortalJsScripts.deadlineExtractor);
+      final jsonStr = result.toString();
+      if (jsonStr.isNotEmpty && jsonStr != 'null' && jsonStr != '[]') {
+        _handleExtractedDeadlines(jsonStr);
+      }
+    } catch (e) {
+      debugPrint('[DeadlineExtractor] Error: $e');
+    }
   }
 
   Future<void> _checkAppUpdateSilently() async {
@@ -2326,6 +2429,40 @@ class _PortalWebViewScreenState extends State<PortalWebViewScreen>
                 } else if (idx == 2) {
                   final previousTab = _currentNavIndex;
                   await _openFullScreenAiAssistant();
+                  if (mounted) {
+                    setState(() => _currentNavIndex = previousTab);
+                    _updateHistoryState();
+                  }
+                } else if (idx == 3) {
+                  final previousTab = _currentNavIndex;
+                  await Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (_) => ScheduleScreen(
+                        onOpenMyUnpamJadwal: () {
+                          Navigator.pop(context);
+                          _ensureMyUnpamControllerInitialized();
+                          setState(() => _currentNavIndex = 1);
+                          Future.delayed(const Duration(milliseconds: 400), () {
+                            if (mounted && _myUnpamController != null) {
+                              _myUnpamController!.loadRequest(
+                                  Uri.parse('https://my.unpam.ac.id/jadwal-kuliah'));
+                            }
+                          });
+                        },
+                        onOpenMentariDeadline: () {
+                          Navigator.pop(context);
+                          setState(() => _currentNavIndex = 0);
+                          Future.delayed(const Duration(milliseconds: 400), () {
+                            if (mounted) {
+                              _controller.loadRequest(
+                                  Uri.parse('https://mentari.unpam.ac.id/my/'));
+                            }
+                          });
+                        },
+                      ),
+                    ),
+                  );
                   if (mounted) {
                     setState(() => _currentNavIndex = previousTab);
                     _updateHistoryState();

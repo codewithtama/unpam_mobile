@@ -1,6 +1,19 @@
 # Catatan Pembaruan Rilis The PAMs
 
-## Versi 1.0.39 (Terbaru)
+## Versi 1.0.40 (Terbaru)
+
+- **Fitur Baru: Jadwal Kuliah & Deadline Tracker**:
+  - **Tab Jadwal Native**: Menambahkan tab keempat "Jadwal" (ikon `calendar_month`) pada bottom navigation bar tanpa mengganggu tab Mentari dan MyUnpam yang sudah ada.
+  - **Scraping Otomatis via JS Injection**: Jadwal kuliah di-scrape otomatis dari halaman MyUnpam SIAKAD, dan deadline/tugas di-scrape dari dashboard Mentari LMS (upcoming events, timeline, assignment tables) menggunakan JavaScript injection pada event `onPageFinished`.
+  - **Tiga Sub-Tab Informatif**: Layar Jadwal menampilkan tiga sub-tab — *Hari Ini* (jadwal kuliah aktif hari ini), *Mingguan* (seluruh jadwal 7 hari ke depan dikelompokkan per hari), dan *Deadline* (daftar tugas/kuis/ujian diurutkan berdasarkan urgensi dengan kode warna).
+  - **Cache Lokal SharedPreferences**: Data jadwal dan deadline di-cache di `SharedPreferences` tanpa dependensi database baru, dengan indikator "terakhir diperbarui" dan tombol deep-link langsung ke portal terkait.
+  - **Notifikasi Reminder Deadline**: `DeadlineReminderService` menampilkan notifikasi immediate saat ditemukan deadline H-0, H-1, dan H-3 — menggunakan kanal notifikasi tersendiri (`the_pams_deadline_reminder_v1`) agar tidak bertabrakan dengan notifikasi OTA.
+  - **Banner Deadline Mendesak**: Menampilkan banner peringatan merah di bagian atas sub-tab Deadline jika ada tugas yang jatuh tempo dalam ≤1 hari.
+  - **Zero Dependensi Baru**: Seluruh fitur dibangun di atas `flutter_local_notifications` dan `shared_preferences` yang sudah ada, tanpa menambahkan satu pun package baru ke `pubspec.yaml`.
+  - **Arsitektur Feature-First**: Semua kode baru terisolasi di `lib/features/schedule/{data,domain,presentation}` sesuai konvensi arsitektur yang sudah ada.
+  - **Audit & Pengujian**: 0 analyzer issues dan 100% lulus 25 automated unit tests (zero breaking changes).
+
+## Versi 1.0.39
 
 - **Redesain Floating Action Button (FAB) Menjadi Ramping & Ergonomis**:
   - **Penyusutan Ukuran Drastis (>55% Lebih Ramping)**: Memangkas lebar bentang FAB dari 292dp menjadi ~118–148dp dan menurunkan tinggi tombol dari 50dp menjadi 40dp, sehingga tidak lagi menutupi materi atau tampilan portal perkuliahan.
