@@ -11,9 +11,12 @@ class NotificationService {
   NotificationService._internal();
 
   final FlutterLocalNotificationsPlugin _plugin = FlutterLocalNotificationsPlugin();
+  FlutterLocalNotificationsPlugin get plugin => _plugin;
   bool _isInitialized = false;
   void Function(AppUpdateInfo info)? onUpdateNotificationTap;
   AppUpdateInfo? _pendingUpdateInfo;
+  void Function(String? payload)? onDeadlineNotificationTap;
+  String? _pendingDeadlinePayload;
 
   static const String _channelId = 'the_pams_update_channel_v1';
   static const String _channelName = 'Pembaruan Aplikasi The PAMs';
@@ -24,16 +27,33 @@ class NotificationService {
   static const String _downloadChannelDesc = 'Menampilkan kemajuan pengunduhan pembaruan APK The PAMs';
   static const int _downloadNotificationId = 1002;
 
+  static const String deadlineChannelId = 'the_pams_deadline_reminder_v1';
+  static const String deadlineChannelName = 'Reminder Deadline Akademik';
+  static const String deadlineChannelDesc =
+      'Pengingat tenggat waktu tugas, kuis, dan ujian perkuliahan.';
+
   DateTime _lastNotifUpdateTime = DateTime.fromMillisecondsSinceEpoch(0);
   int _lastReportedProgress = -1;
 
-  Future<void> initialize({void Function(AppUpdateInfo info)? onUpdateTap}) async {
+  Future<void> initialize({
+    void Function(AppUpdateInfo info)? onUpdateTap,
+    void Function(String? payload)? onDeadlineTap,
+  }) async {
     if (onUpdateTap != null) {
       onUpdateNotificationTap = onUpdateTap;
       if (_pendingUpdateInfo != null) {
         final pending = _pendingUpdateInfo!;
         WidgetsBinding.instance.addPostFrameCallback((_) {
           onUpdateNotificationTap?.call(pending);
+        });
+      }
+    }
+    if (onDeadlineTap != null) {
+      onDeadlineNotificationTap = onDeadlineTap;
+      if (_pendingDeadlinePayload != null) {
+        final pending = _pendingDeadlinePayload;
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          onDeadlineNotificationTap?.call(pending);
         });
       }
     }
@@ -55,16 +75,20 @@ class NotificationService {
     await _plugin.initialize(
       settings: initSettings,
       onDidReceiveNotificationResponse: (response) {
-        AppUpdateInfo? target = _pendingUpdateInfo;
-        if (target == null && response.payload != null && response.payload!.isNotEmpty) {
+        final payload = response.payload;
+        if (payload != null && payload.isNotEmpty) {
           try {
-            final data = jsonDecode(response.payload!);
-            target = AppUpdateInfo.fromJson(data as Map<String, dynamic>);
+            final data = jsonDecode(payload);
+            if (data is Map<String, dynamic> && data['type'] == 'deadline') {
+              _pendingDeadlinePayload = payload;
+              onDeadlineNotificationTap?.call(payload);
+              return;
+            }
+            final target = AppUpdateInfo.fromJson(data as Map<String, dynamic>);
+            _pendingUpdateInfo = target;
+            onUpdateNotificationTap?.call(target);
+            return;
           } catch (_) {}
-        }
-        if (target != null) {
-          _pendingUpdateInfo = target;
-          onUpdateNotificationTap?.call(target);
         }
       },
     );
@@ -93,6 +117,18 @@ class NotificationService {
         showBadge: false,
       );
       await androidPlugin?.createNotificationChannel(downloadChannel);
+
+      const deadlineChannel = AndroidNotificationChannel(
+        deadlineChannelId,
+        deadlineChannelName,
+        description: deadlineChannelDesc,
+        importance: Importance.max,
+        playSound: true,
+        enableVibration: true,
+        enableLights: true,
+        showBadge: true,
+      );
+      await androidPlugin?.createNotificationChannel(deadlineChannel);
     }
 
     // Periksa apakah aplikasi dibuka langsung dari ketukan notifikasi saat status terminated
@@ -101,14 +137,26 @@ class NotificationService {
       if (launchDetails != null &&
           launchDetails.didNotificationLaunchApp &&
           launchDetails.notificationResponse?.payload != null) {
-        final data = jsonDecode(launchDetails.notificationResponse!.payload!);
-        _pendingUpdateInfo = AppUpdateInfo.fromJson(data as Map<String, dynamic>);
-        if (onUpdateNotificationTap != null && _pendingUpdateInfo != null) {
-          final pending = _pendingUpdateInfo!;
-          WidgetsBinding.instance.addPostFrameCallback((_) {
-            onUpdateNotificationTap?.call(pending);
-          });
-        }
+        final rawPayload = launchDetails.notificationResponse!.payload!;
+        try {
+          final data = jsonDecode(rawPayload);
+          if (data is Map<String, dynamic> && data['type'] == 'deadline') {
+            _pendingDeadlinePayload = rawPayload;
+            if (onDeadlineNotificationTap != null) {
+              WidgetsBinding.instance.addPostFrameCallback((_) {
+                onDeadlineNotificationTap?.call(rawPayload);
+              });
+            }
+          } else if (data is Map<String, dynamic>) {
+            _pendingUpdateInfo = AppUpdateInfo.fromJson(data);
+            if (onUpdateNotificationTap != null && _pendingUpdateInfo != null) {
+              final pending = _pendingUpdateInfo!;
+              WidgetsBinding.instance.addPostFrameCallback((_) {
+                onUpdateNotificationTap?.call(pending);
+              });
+            }
+          }
+        } catch (_) {}
       }
     } catch (_) {}
 

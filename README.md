@@ -2,8 +2,8 @@
 
 [![Flutter](https://img.shields.io/badge/Flutter-3.41.7-02569B?logo=flutter&logoColor=white)](https://flutter.dev)
 [![Dart](https://img.shields.io/badge/Dart-3.11.5-0175C2?logo=dart&logoColor=white)](https://dart.dev)
-[![Release](https://img.shields.io/badge/Release-v1.0.42-10B981?logo=github&logoColor=white)](https://github.com/codewithtama/unpam_mobile/releases/tag/v1.0.42)
-[![Tests](https://img.shields.io/badge/Tests-28%20Passed-brightgreen?logo=checkmarx&logoColor=white)](test/widget_test.dart)
+[![Release](https://img.shields.io/badge/Release-v1.0.43-10B981?logo=github&logoColor=white)](https://github.com/codewithtama/unpam_mobile/releases/tag/v1.0.43)
+[![Tests](https://img.shields.io/badge/Tests-29%20Passed-brightgreen?logo=checkmarx&logoColor=white)](test/widget_test.dart)
 [![Platform](https://img.shields.io/badge/Platform-Android%20(API%2021%2B)-3DDC84?logo=android&logoColor=white)](https://android.com)
 [![License](https://img.shields.io/badge/License-Academic-blue.svg)](#keamanan--kepatuhan-privasi)
 

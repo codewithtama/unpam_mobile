@@ -1,3 +1,4 @@
+import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -18,6 +19,7 @@ import 'package:unpam_mobile/core/services/file_download_service.dart';
 import 'package:unpam_mobile/core/services/webview_download_bridge.dart';
 import 'package:unpam_mobile/models/app_update_info.dart';
 import 'package:unpam_mobile/features/schedule/domain/models/schedule_model.dart';
+import 'package:unpam_mobile/core/services/notification_service.dart';
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
@@ -730,6 +732,39 @@ void main() {
       expect(deadlines[0].namaTugas, equals('Pengumpulan Makalah'));
       expect(deadlines[0].namaMataKuliah, equals('REKAYASA PERANGKAT LUNAK'));
       expect(deadlines[0].tipe, equals(DeadlineType.tugas));
+    });
+
+    test('Deadline notification payload format and tap callback handling', () {
+      final deadline = CourseDeadline(
+        id: 'test-dl-1',
+        namaTugas: 'Tugas Mobile Programming',
+        namaMataKuliah: 'PEMROGRAMAN MOBILE',
+        dueDate: DateTime.now().add(const Duration(days: 1)),
+        tipe: DeadlineType.tugas,
+        url: 'https://mentari.unpam.ac.id',
+      );
+
+      final payload = jsonEncode({
+        'type': 'deadline',
+        'id': deadline.id,
+        'namaTugas': deadline.namaTugas,
+        'namaMataKuliah': deadline.namaMataKuliah,
+        'dueDate': deadline.dueDate.toIso8601String(),
+      });
+
+      final decoded = jsonDecode(payload) as Map<String, dynamic>;
+      expect(decoded['type'], equals('deadline'));
+      expect(decoded['id'], equals('test-dl-1'));
+      expect(decoded['namaTugas'], equals('Tugas Mobile Programming'));
+
+      String? tappedPayload;
+      final notifService = NotificationService();
+      notifService.onDeadlineNotificationTap = (p) {
+        tappedPayload = p;
+      };
+
+      notifService.onDeadlineNotificationTap?.call(payload);
+      expect(tappedPayload, equals(payload));
     });
   });
 }

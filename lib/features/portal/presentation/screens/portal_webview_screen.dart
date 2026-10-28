@@ -162,6 +162,11 @@ class _PortalWebViewScreenState extends State<PortalWebViewScreen>
           });
         }
       },
+      onDeadlineTap: (payload) {
+        if (mounted) {
+          _openScheduleScreen(initialTabIndex: 2);
+        }
+      },
     );
 
     WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -1848,6 +1853,60 @@ class _PortalWebViewScreenState extends State<PortalWebViewScreen>
     );
   }
 
+  Future<void> _openScheduleScreen({int initialTabIndex = 0}) async {
+    final previousTab = _currentNavIndex;
+    await Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => ScheduleScreen(
+          initialTabIndex: initialTabIndex,
+          onOpenMyUnpamJadwal: () {
+            Navigator.pop(context);
+            _ensureMyUnpamControllerInitialized();
+            setState(() => _currentNavIndex = 1);
+            Future.delayed(const Duration(milliseconds: 400), () {
+              if (mounted && _myUnpamController != null) {
+                _myUnpamController!.loadRequest(
+                    Uri.parse('https://my.unpam.ac.id/data-akademik/jadwal-kuliah'));
+              }
+            });
+          },
+          onOpenMentariDeadline: () {
+            Navigator.pop(context);
+            setState(() => _currentNavIndex = 0);
+            Future.delayed(const Duration(milliseconds: 400), () {
+              if (mounted) {
+                _controller.loadRequest(
+                    Uri.parse('https://mentari.unpam.ac.id/'));
+              }
+            });
+          },
+          onSyncSchedule: () async {
+            _ensureMyUnpamControllerInitialized();
+            if (_myUnpamController != null) {
+              try {
+                await _myUnpamController!.runJavaScript(PortalJsScripts.scheduleExtractor);
+              } catch (e) {
+                debugPrint('[ManualScheduleSync] Error: $e');
+              }
+            }
+          },
+          onSyncDeadline: () async {
+            try {
+              await _controller.runJavaScript(PortalJsScripts.deadlineExtractor);
+            } catch (e) {
+              debugPrint('[ManualDeadlineSync] Error: $e');
+            }
+          },
+        ),
+      ),
+    );
+    if (mounted) {
+      setState(() => _currentNavIndex = previousTab);
+      _updateHistoryState();
+    }
+  }
+
   Future<void> _consultWithAi({bool openInSplitScreen = true}) async {
     final prompt = await _buildCurrentPagePrompt();
     if (!mounted) return;
@@ -2448,56 +2507,7 @@ class _PortalWebViewScreenState extends State<PortalWebViewScreen>
                     _updateHistoryState();
                   }
                 } else if (idx == 3) {
-                  final previousTab = _currentNavIndex;
-                  await Navigator.push(
-                    context,
-                    MaterialPageRoute(
-                      builder: (_) => ScheduleScreen(
-                        onOpenMyUnpamJadwal: () {
-                          Navigator.pop(context);
-                          _ensureMyUnpamControllerInitialized();
-                          setState(() => _currentNavIndex = 1);
-                          Future.delayed(const Duration(milliseconds: 400), () {
-                            if (mounted && _myUnpamController != null) {
-                              _myUnpamController!.loadRequest(
-                                  Uri.parse('https://my.unpam.ac.id/data-akademik/jadwal-kuliah'));
-                            }
-                          });
-                        },
-                        onOpenMentariDeadline: () {
-                          Navigator.pop(context);
-                          setState(() => _currentNavIndex = 0);
-                          Future.delayed(const Duration(milliseconds: 400), () {
-                            if (mounted) {
-                              _controller.loadRequest(
-                                  Uri.parse('https://mentari.unpam.ac.id/'));
-                            }
-                          });
-                        },
-                        onSyncSchedule: () async {
-                          _ensureMyUnpamControllerInitialized();
-                          if (_myUnpamController != null) {
-                            try {
-                              await _myUnpamController!.runJavaScript(PortalJsScripts.scheduleExtractor);
-                            } catch (e) {
-                              debugPrint('[ManualScheduleSync] Error: $e');
-                            }
-                          }
-                        },
-                        onSyncDeadline: () async {
-                          try {
-                            await _controller.runJavaScript(PortalJsScripts.deadlineExtractor);
-                          } catch (e) {
-                            debugPrint('[ManualDeadlineSync] Error: $e');
-                          }
-                        },
-                      ),
-                    ),
-                  );
-                  if (mounted) {
-                    setState(() => _currentNavIndex = previousTab);
-                    _updateHistoryState();
-                  }
+                  await _openScheduleScreen();
                 }
               },
             ),

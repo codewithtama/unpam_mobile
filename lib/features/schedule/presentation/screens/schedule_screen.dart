@@ -27,8 +27,12 @@ class ScheduleScreen extends StatefulWidget {
   /// Callback untuk memicu sinkronisasi deadline dari Mentari secara langsung.
   final Future<void> Function()? onSyncDeadline;
 
+  /// Tab awal yang aktif (0: Hari Ini, 1: Mingguan, 2: Deadline).
+  final int initialTabIndex;
+
   const ScheduleScreen({
     super.key,
+    this.initialTabIndex = 0,
     this.onOpenMyUnpamJadwal,
     this.onOpenMentariDeadline,
     this.onSyncSchedule,
@@ -46,7 +50,11 @@ class _ScheduleScreenState extends State<ScheduleScreen>
   @override
   void initState() {
     super.initState();
-    _tabController = TabController(length: 3, vsync: this);
+    _tabController = TabController(
+      length: 3,
+      vsync: this,
+      initialIndex: widget.initialTabIndex.clamp(0, 2),
+    );
   }
 
   @override

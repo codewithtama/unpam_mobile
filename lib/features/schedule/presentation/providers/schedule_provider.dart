@@ -57,7 +57,10 @@ class ScheduleProvider extends ChangeNotifier {
     _schedules = _service.loadSchedule();
     _deadlines = _service.loadDeadlines();
     if (_schedules.isNotEmpty) _scheduleState = ScheduleLoadState.loaded;
-    if (_deadlines.isNotEmpty) _deadlineState = ScheduleLoadState.loaded;
+    if (_deadlines.isNotEmpty) {
+      _deadlineState = ScheduleLoadState.loaded;
+      DeadlineReminderService().scheduleRemindersForDeadlines(_deadlines, _prefs);
+    }
   }
 
   // ─── Dipanggil dari PortalWebViewScreen saat JS scraper mengirim data ──

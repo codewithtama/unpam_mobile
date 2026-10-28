@@ -1,6 +1,18 @@
 # Catatan Pembaruan Rilis The PAMs
 
-## Versi 1.0.42 (Terbaru)
+## Versi 1.0.43 (Terbaru)
+
+- **Penyempurnaan Sistem Notifikasi Reminder Deadline Akademik**:
+  - **Penjadwalan Alarm Mandiri (zonedSchedule & Timezone WIB)**: Mengaktifkan alarm terjadwal langsung ke subsistem Android AlarmManager untuk pengingat H-3 (08:00 WIB), H-1 (08:00 WIB), H-0 (07:00 WIB), dan H-2 Jam sebelum jatuh tempo.
+  - **Konfigurasi AndroidManifest Lengkap**: Menambahkan izin RECEIVE_BOOT_COMPLETED, VIBRATE, SCHEDULE_EXACT_ALARM, USE_EXACT_ALARM, serta receiver ScheduledNotificationReceiver & ScheduledNotificationBootReceiver agar reminder tetap bekerja setelah perangkat reboot atau saat mode Doze.
+  - **Fallback Cerdas Mode Alarm**: Mendukung AndroidScheduleMode.exactAllowWhileIdle dengan fallback otomatis ke AndroidScheduleMode.inexactAllowWhileIdle untuk kompatibilitas penuh di Android 12, 13, 14, dan 15 tanpa risiko crash.
+  - **Unifikasi NotificationService**: Menyatukan handler kanal notifikasi (NotificationService dan DeadlineReminderService) dalam satu instance plugin terpadu, mencegah hilangnya callback respon tap.
+  - **Deep-Navigation saat Notifikasi Diketuk**: Mengetuk notifikasi deadline langsung membuka aplikasi dan mengarahkan pengguna ke sub-tab Deadline pada layar Jadwal & Deadline.
+  - **Pemberitahuan Instan Deadline Hari Ini**: Notifikasi Heads-up otomatis muncul saat aplikasi dibuka atau disinkronkan jika terdapat tugas yang jatuh tempo hari ini (<24 jam).
+  - **Pengujian Otomatis**: 29/29 unit & widget tests lulus, 0 analyzer issues.
+
+## Versi 1.0.42
+
 
 - **Penyempurnaan Ekstraksi Deadline & Tugas Mentari LMS**:
   - **Dukungan Halaman Kursus `/u-courses/*`**: Mengekstrak tugas, kuis, dan diskusi langsung dari halaman mata kuliah dan pertemuan Mentari LMS Unpam.
