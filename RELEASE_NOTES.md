@@ -1,6 +1,20 @@
 # Catatan Pembaruan Rilis The PAMs
 
-## Versi 1.0.35 (Terbaru)
+## Versi 1.0.36 (Terbaru)
+
+- **Optimasi Performa & Modularisasi WebView Screen**:
+  - **Dekomposisi Berkas Raksasa (229KB, 5.562 baris)**: Memecah berkas monolitik `portal_webview_screen.dart` menjadi modul-modul independen berarsitektur *feature-first* (`lib/features/portal/`), menurunkan bobot layar utama menjadi <95KB.
+  - **Ekstraksi Skrip JavaScript Statis (`PortalJsScripts`)**: Memindahkan ~62KB skrip injeksi JS (optimasi frame rate, interceptor download, deteksi form login, ekstraksi kuis & kuesioner otomatis) menjadi konstanta compile-time statis terisolasi.
+  - **Isolasi Rendering Frame Rate Tinggi (60–120 FPS)**:
+    - Mengganti pemanggilan `setState` global pada gesture floating action button (FAB) dan divider resize split-screen dengan `ValueNotifier<Offset?>` & `ValueNotifier<double>`. Meniadakan jank dan lag frame drop pada UI root saat digeser.
+    - Mengisolasi indikator pemuatan progress bar halaman dengan `ValueNotifier<int>`.
+    - Membungkus native `IndexedStack` WebView dengan `RepaintBoundary` untuk memisahkan layer compositing GPU Chromium dari elemen Flutter di atasnya.
+  - **Pemisahan Dialog Modal & Widget Overlay**:
+    - Dialog Forum Draft, Quiz Solver, Questionnaire Solver, AI Tools Menu Sheet, dan Biometric Quick Menu dipisah ke `presentation/dialogs/`.
+    - Widget Bottom Navigation, Biometric Banner, White Screen Recovery, Minimized Pill, dan Pull Refresh Indicator dipisah ke `presentation/widgets/`.
+  - **Zero Breaking Changes**: Menjaga kompatibilitas penuh via barrel export di `lib/screens/portal_webview_screen.dart` dengan 0 analyzer error/warning dan 100% kelulusan automated unit test.
+
+## Versi 1.0.35
 
 - **Migrasi Arsitektur Modular Feature-First (`lib/features/`)**:
   - Penataan struktur kode modular per-domain bisnis: `features/ai_assistant`, `features/auth`, dan `features/portal`.
