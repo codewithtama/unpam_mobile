@@ -140,6 +140,25 @@ class WebPageDetectedContext {
     }
   }
 
+  String get compactActionTitle {
+    switch (type) {
+      case WebPageContextType.textSelection:
+        return 'Tanya AI';
+      case WebPageContextType.quiz:
+        return itemCount > 0 ? 'Kuis ($itemCount)' : 'Kuis';
+      case WebPageContextType.questionnaire:
+        return itemCount > 0 ? 'Kuesioner ($itemCount)' : 'Kuesioner';
+      case WebPageContextType.forum:
+        return 'Draf Forum';
+      case WebPageContextType.document:
+        return 'Rangkum';
+      case WebPageContextType.academicScheduleOrGrades:
+        return 'Akademik';
+      case WebPageContextType.none:
+        return 'PAMs AI';
+    }
+  }
+
   IconData get primaryIcon {
     switch (type) {
       case WebPageContextType.textSelection:
@@ -267,91 +286,62 @@ class InPageQuickActionPill extends StatelessWidget {
         scale: isDragging ? 1.05 : 1.0,
         duration: const Duration(milliseconds: 150),
         child: Material(
-          elevation: isDragging ? 12 : (isContextual ? 8 : 5),
-          borderRadius: BorderRadius.circular(28),
-          shadowColor: bgColor.withOpacity(0.55),
+          elevation: isDragging ? 10 : (isContextual ? 6 : 4),
+          borderRadius: BorderRadius.circular(22),
+          shadowColor: bgColor.withOpacity(0.45),
           color: bgColor,
           child: AnimatedContainer(
-            duration: const Duration(milliseconds: 220),
+            duration: const Duration(milliseconds: 200),
             curve: Curves.easeOutCubic,
-            constraints: const BoxConstraints(minHeight: 48),
-            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+            height: 40,
+            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
             decoration: BoxDecoration(
-              borderRadius: BorderRadius.circular(28),
+              borderRadius: BorderRadius.circular(22),
               border: Border.all(
                 color: isDragging
                     ? AppTheme.accentGold
                     : (isContextual
-                        ? AppTheme.accentGold.withOpacity(0.95)
-                        : AppTheme.accentGold.withOpacity(0.5)),
-                width: isDragging || isContextual ? 1.6 : 1.0,
+                        ? AppTheme.accentGold.withOpacity(0.9)
+                        : AppTheme.accentGold.withOpacity(0.4)),
+                width: isDragging || isContextual ? 1.5 : 1.0,
               ),
             ),
             child: Row(
               mainAxisSize: MainAxisSize.min,
               children: [
-                // Handle Geser
+                // Handle geser ringkas
                 Icon(
                   Icons.drag_indicator_rounded,
-                  size: 16,
-                  color: Colors.white.withOpacity(0.7),
+                  size: 14,
+                  color: Colors.white.withOpacity(0.55),
                 ),
-                const SizedBox(width: 2),
+                const SizedBox(width: 4),
 
-                // Tombol Utama Kontekstual
+                // Tombol aksi utama ringkas
                 InkWell(
-                  borderRadius: BorderRadius.circular(20),
+                  borderRadius: BorderRadius.circular(16),
                   onTap: () {
                     HapticFeedback.mediumImpact();
                     onPrimaryAction();
                   },
                   child: Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 4),
+                    padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
                     child: Row(
                       mainAxisSize: MainAxisSize.min,
                       children: [
-                        Container(
-                          padding: const EdgeInsets.all(6),
-                          decoration: BoxDecoration(
-                            color: Colors.white.withOpacity(0.16),
-                            shape: BoxShape.circle,
-                          ),
-                          child: Icon(
-                            detectedContext.primaryIcon,
-                            color: badgeAccent,
-                            size: 16,
-                          ),
+                        Icon(
+                          detectedContext.primaryIcon,
+                          color: badgeAccent,
+                          size: 16,
                         ),
-                        const SizedBox(width: 8),
-                        ConstrainedBox(
-                          constraints: const BoxConstraints(maxWidth: 168),
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              if (isContextual)
-                                Text(
-                                  detectedContext.badgeTitle,
-                                  maxLines: 1,
-                                  overflow: TextOverflow.ellipsis,
-                                  style: TextStyle(
-                                    color: badgeAccent,
-                                    fontSize: 9.5,
-                                    fontWeight: FontWeight.w800,
-                                    letterSpacing: 0.4,
-                                  ),
-                                ),
-                              Text(
-                                detectedContext.primaryActionTitle,
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
-                                style: const TextStyle(
-                                  color: Colors.white,
-                                  fontWeight: FontWeight.bold,
-                                  fontSize: 12.5,
-                                ),
-                              ),
-                            ],
+                        const SizedBox(width: 5),
+                        Text(
+                          detectedContext.compactActionTitle,
+                          style: const TextStyle(
+                            color: Colors.white,
+                            fontWeight: FontWeight.bold,
+                            fontSize: 12,
+                            letterSpacing: 0.1,
                           ),
                         ),
                       ],
@@ -359,106 +349,52 @@ class InPageQuickActionPill extends StatelessWidget {
                   ),
                 ),
 
-                // Tombol Aksi Sekunder Kontekstual (Misal: Parafrase saat teks diblok / Rangkum saat dokumen terdeteksi)
-                if (isContextual &&
-                    onSecondaryAction != null &&
-                    secondaryActionLabel != null) ...[
-                  Container(
-                    height: 24,
-                    width: 1,
-                    margin: const EdgeInsets.symmetric(horizontal: 4),
-                    color: Colors.white.withOpacity(0.24),
-                  ),
-                  InkWell(
-                    borderRadius: BorderRadius.circular(16),
-                    onTap: () {
-                      HapticFeedback.selectionClick();
-                      onSecondaryAction!();
-                    },
-                    child: Container(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 8,
-                        vertical: 5,
-                      ),
-                      decoration: BoxDecoration(
-                        color: Colors.white.withOpacity(0.14),
-                        borderRadius: BorderRadius.circular(16),
-                      ),
-                      child: Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          if (secondaryActionIcon != null) ...[
-                            Icon(
-                              secondaryActionIcon,
-                              size: 13,
-                              color: AppTheme.accentGoldLight,
-                            ),
-                            const SizedBox(width: 4),
-                          ],
-                          Text(
-                            secondaryActionLabel!,
-                            style: const TextStyle(
-                              color: Colors.white,
-                              fontSize: 11,
-                              fontWeight: FontWeight.w700,
-                            ),
-                          ),
-                        ],
+                // Aksi sekunder kontekstual (ikon mini) jika ada
+                if (isContextual && onSecondaryAction != null && secondaryActionLabel != null) ...[
+                  const SizedBox(width: 2),
+                  Tooltip(
+                    message: secondaryActionLabel!,
+                    child: InkWell(
+                      borderRadius: BorderRadius.circular(12),
+                      onTap: () {
+                        HapticFeedback.selectionClick();
+                        onSecondaryAction!();
+                      },
+                      child: Padding(
+                        padding: const EdgeInsets.all(4),
+                        child: Icon(
+                          secondaryActionIcon ?? Icons.auto_fix_high_rounded,
+                          size: 14,
+                          color: AppTheme.accentGoldLight,
+                        ),
                       ),
                     ),
                   ),
                 ],
 
-                // Pembatas & Tombol Cepat Split-Screen / Semua Menu AI
+                // Divider tipis
                 Container(
-                  height: 24,
+                  height: 16,
                   width: 1,
                   margin: const EdgeInsets.symmetric(horizontal: 4),
-                  color: Colors.white.withOpacity(0.24),
+                  color: Colors.white.withOpacity(0.2),
                 ),
 
-                if (!isContextual)
-                  Tooltip(
-                    message: 'Buka Split-Screen AI',
-                    child: InkWell(
-                      borderRadius: BorderRadius.circular(16),
-                      onTap: () {
-                        HapticFeedback.selectionClick();
-                        onOpenSplitScreen();
-                      },
-                      child: const Padding(
-                        padding: EdgeInsets.symmetric(
-                          horizontal: 6,
-                          vertical: 5,
-                        ),
-                        child: Icon(
-                          Icons.vertical_split_rounded,
-                          color: AppTheme.accentGoldLight,
-                          size: 18,
-                        ),
-                      ),
-                    ),
-                  ),
-
+                // Tombol Menu Semua Tools AI
                 Tooltip(
-                  message: 'Semua Menu The PAMs AI Tools',
+                  message: 'Menu The PAMs AI',
                   child: InkWell(
-                    borderRadius: BorderRadius.circular(16),
+                    borderRadius: BorderRadius.circular(12),
                     onTap: () {
                       HapticFeedback.selectionClick();
                       onOpenAllTools();
                     },
                     child: Padding(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 6,
-                        vertical: 5,
-                      ),
+                      padding: const EdgeInsets.all(3),
                       child: Icon(
-                        isContextual
-                            ? Icons.apps_rounded
-                            : Icons.keyboard_arrow_up_rounded,
-                        color: Colors.white.withOpacity(0.9),
-                        size: 18,
+                        isContextual ? Icons.apps_rounded : Icons.more_vert_rounded,
+                        color: Colors.white.withOpacity(0.85),
+                        size: 16,
                       ),
                     ),
                   ),

@@ -2037,8 +2037,8 @@ class _PortalWebViewScreenState extends State<PortalWebViewScreen>
                 builder: (context, constraints) {
                   final activeContext = _activeDetectedContext;
                   final double estimatedWidth =
-                      activeContext.hasActiveContext ? 292.0 : 228.0;
-                  const double buttonHeight = 50.0;
+                      activeContext.hasActiveContext ? 148.0 : 118.0;
+                  const double buttonHeight = 40.0;
                   final double maxW = constraints.maxWidth;
                   final double maxH = constraints.maxHeight;
 
@@ -2236,7 +2236,7 @@ class _PortalWebViewScreenState extends State<PortalWebViewScreen>
                               top: safeY,
                               child: ConstrainedBox(
                                 constraints: BoxConstraints(
-                                  maxWidth: (maxW - 16.0).clamp(180.0, maxW),
+                                  maxWidth: (maxW - 16.0).clamp(110.0, maxW),
                                 ),
                                 child: ValueListenableBuilder<bool>(
                                   valueListenable: _isDraggingFabNotifier,

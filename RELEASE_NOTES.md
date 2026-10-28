@@ -1,6 +1,14 @@
 # Catatan Pembaruan Rilis The PAMs
 
-## Versi 1.0.38 (Terbaru)
+## Versi 1.0.39 (Terbaru)
+
+- **Redesain Floating Action Button (FAB) Menjadi Ramping & Ergonomis**:
+  - **Penyusutan Ukuran Drastis (>55% Lebih Ramping)**: Memangkas lebar bentang FAB dari 292dp menjadi ~118–148dp dan menurunkan tinggi tombol dari 50dp menjadi 40dp, sehingga tidak lagi menutupi materi atau tampilan portal perkuliahan.
+  - **Penyederhanaan Tipografi & Aksi (Single-Line Compact Title)**: Mengganti label bertumpuk 2 baris menjadi satu baris teks ringkas dan tegas (`compactActionTitle`: *PAMs AI*, *Kuis*, *Draf Forum*, *Kuesioner*, *Tanya AI*).
+  - **Integrasi Menu Cepat Terpadu**: Mengganti rentetan tombol horizontal menjadi satu tombol utama aksi cepat dan satu tombol menu `⋮` atau `apps` untuk membuka seluruh menu The PAMs AI tools secara rapi.
+  - **Audit & Pengujian**: 0 analyzer issues dan 100% lulus 25 automated unit tests.
+
+## Versi 1.0.38
 
 - **Perbaikan Validasi Pembaruan Aplikasi (Strict Update Guard)**:
   - **Pencegahan Dialog Update False-Positive**: Memperbaiki `_checkAppUpdateSilently()` pada portal web agar memvalidasi `updateInfo.hasUpdate == true` sebelum memicu `UpdateDialog.show()`. Menghilangkan popup notifikasi pembaruan saat pengguna sudah berada di versi terbaru.
