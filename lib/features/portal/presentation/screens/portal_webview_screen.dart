@@ -168,9 +168,23 @@ class _PortalWebViewScreenState extends State<PortalWebViewScreen>
         }
       },
       onDeadlineTap: (payload) {
-        if (mounted) {
-          _openScheduleScreen(initialTabIndex: 2);
-        }
+        if (!mounted) return;
+        try {
+          if (payload != null && payload.isNotEmpty) {
+            final decoded = jsonDecode(payload) as Map<String, dynamic>;
+            final targetUrl = decoded['url'] as String? ?? '';
+            if (targetUrl.isNotEmpty && targetUrl.startsWith('http')) {
+              setState(() => _currentNavIndex = 0);
+              Future.delayed(const Duration(milliseconds: 300), () {
+                if (mounted) {
+                  _navigateToUrl(targetUrl);
+                }
+              });
+              return;
+            }
+          }
+        } catch (_) {}
+        _openScheduleScreen(initialTabIndex: 2);
       },
     );
 
@@ -1897,6 +1911,15 @@ class _PortalWebViewScreenState extends State<PortalWebViewScreen>
       MaterialPageRoute(
         builder: (_) => ScheduleScreen(
           initialTabIndex: initialTabIndex,
+          onOpenDeadlineUrl: (url) {
+            Navigator.pop(context);
+            setState(() => _currentNavIndex = 0);
+            Future.delayed(const Duration(milliseconds: 300), () {
+              if (mounted) {
+                _navigateToUrl(url);
+              }
+            });
+          },
           onOpenMyUnpamJadwal: () {
             Navigator.pop(context);
             _ensureMyUnpamControllerInitialized();

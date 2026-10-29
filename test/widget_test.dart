@@ -23,6 +23,8 @@ import 'package:unpam_mobile/features/schedule/data/schedule_service.dart';
 import 'package:unpam_mobile/features/schedule/data/deadline_reminder_service.dart';
 import 'package:unpam_mobile/features/schedule/presentation/providers/schedule_provider.dart';
 import 'package:unpam_mobile/core/services/notification_service.dart';
+import 'package:provider/provider.dart';
+import 'package:unpam_mobile/features/schedule/presentation/screens/schedule_screen.dart';
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
@@ -843,6 +845,57 @@ void main() {
       expect(provider.deadlines[1].namaMataKuliah, equals('JARINGAN KOMPUTER'));
       expect(provider.deadlines[0].tipe, equals(DeadlineType.kuis));
       expect(provider.deadlines[1].tipe, equals(DeadlineType.kuis));
+    });
+
+    testWidgets('Tapping deadline in ScheduleScreen triggers onOpenDeadlineUrl to stay in-app', (tester) async {
+      SharedPreferences.setMockInitialValues({});
+      await DeadlineReminderService().initialize();
+      final storage = await StorageService.getInstance();
+      await storage.rawPreferences.clear();
+      final scheduleService = ScheduleService(storage.rawPreferences);
+      final provider = ScheduleProvider(scheduleService, storage.rawPreferences);
+
+      const targetUrl = 'https://mentari.unpam.ac.id/u-courses/20261-04SIFE001-22SIF0173?accord_pertemuan=PERTEMUAN_1';
+      await provider.onDeadlinesExtracted([
+        CourseDeadline(
+          id: 'test-in-app-dl',
+          namaTugas: 'Pretest Pertemuan 1',
+          namaMataKuliah: 'JARINGAN KOMPUTER',
+          dueDate: DateTime.now().add(const Duration(days: 2)),
+          tipe: DeadlineType.kuis,
+          url: targetUrl,
+        ),
+      ]);
+
+      String? openedUrl;
+      await tester.pumpWidget(
+        MaterialApp(
+          home: ChangeNotifierProvider<ScheduleProvider>.value(
+            value: provider,
+            child: Scaffold(
+              body: ScheduleScreen(
+                initialTabIndex: 2, // Sub-tab Deadline
+                onOpenDeadlineUrl: (url) {
+                  openedUrl = url;
+                },
+              ),
+            ),
+          ),
+        ),
+      );
+
+      await tester.pumpAndSettle();
+
+      // Pastikan tile deadline muncul
+      expect(find.text('Pretest Pertemuan 1'), findsOneWidget);
+
+      // Ketuk deadline
+      await tester.tap(find.text('Pretest Pertemuan 1'));
+      await tester.pumpAndSettle();
+
+      // Verifikasi callback in-app terpanggil dengan URL Mentari yang benar
+      expect(openedUrl, equals(targetUrl));
+      await tester.pump(const Duration(seconds: 3));
     });
   });
 }

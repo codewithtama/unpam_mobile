@@ -144,6 +144,7 @@ class DeadlineReminderService {
         'namaTugas': deadline.namaTugas,
         'namaMataKuliah': deadline.namaMataKuliah,
         'dueDate': due.toIso8601String(),
+        'url': deadline.url,
       });
 
       // 1. Reminder H-3 (3 Hari Sebelum, jam 08:00 pagi WIB)

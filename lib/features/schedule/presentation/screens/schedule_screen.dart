@@ -21,6 +21,9 @@ class ScheduleScreen extends StatefulWidget {
   /// Callback untuk membuka portal Mentari di tab deadline/tugas.
   final VoidCallback? onOpenMentariDeadline;
 
+  /// Callback untuk membuka URL deadline langsung di portal Mentari The PAMs.
+  final void Function(String url)? onOpenDeadlineUrl;
+
   /// Callback untuk memicu sinkronisasi jadwal dari MyUnpam secara langsung.
   final Future<void> Function()? onSyncSchedule;
 
@@ -35,6 +38,7 @@ class ScheduleScreen extends StatefulWidget {
     this.initialTabIndex = 0,
     this.onOpenMyUnpamJadwal,
     this.onOpenMentariDeadline,
+    this.onOpenDeadlineUrl,
     this.onSyncSchedule,
     this.onSyncDeadline,
   });
@@ -164,6 +168,7 @@ class _ScheduleScreenState extends State<ScheduleScreen>
           _WeeklyTab(onOpenMyUnpam: widget.onOpenMyUnpamJadwal),
           _DeadlineTab(
             onOpenMentari: widget.onOpenMentariDeadline,
+            onOpenDeadlineUrl: widget.onOpenDeadlineUrl,
             onSyncDeadline: widget.onSyncDeadline,
           ),
         ],
@@ -345,8 +350,13 @@ class _WeeklyTab extends StatelessWidget {
 
 class _DeadlineTab extends StatelessWidget {
   final VoidCallback? onOpenMentari;
+  final void Function(String url)? onOpenDeadlineUrl;
   final Future<void> Function()? onSyncDeadline;
-  const _DeadlineTab({this.onOpenMentari, this.onSyncDeadline});
+  const _DeadlineTab({
+    this.onOpenMentari,
+    this.onOpenDeadlineUrl,
+    this.onSyncDeadline,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -382,7 +392,7 @@ class _DeadlineTab extends StatelessWidget {
               ...upcoming.map(
                 (d) => DeadlineListTile(
                   deadline: d,
-                  onTap: d.url.isNotEmpty ? () => _openUrl(d.url) : null,
+                  onTap: () => _openDeadline(d.url),
                 ),
               ),
             ],
@@ -396,7 +406,7 @@ class _DeadlineTab extends StatelessWidget {
               ...overdue.map(
                 (d) => DeadlineListTile(
                   deadline: d,
-                  onTap: d.url.isNotEmpty ? () => _openUrl(d.url) : null,
+                  onTap: () => _openDeadline(d.url),
                 ),
               ),
             ],
@@ -427,10 +437,14 @@ class _DeadlineTab extends StatelessWidget {
     );
   }
 
-  void _openUrl(String url) async {
-    final uri = Uri.tryParse(url);
-    if (uri == null) return;
-    if (await canLaunchUrl(uri)) {
+  void _openDeadline(String url) async {
+    final targetUrl = url.isNotEmpty ? url : 'https://mentari.unpam.ac.id/';
+    if (onOpenDeadlineUrl != null) {
+      onOpenDeadlineUrl!(targetUrl);
+      return;
+    }
+    final uri = Uri.tryParse(targetUrl);
+    if (uri != null && await canLaunchUrl(uri)) {
       await launchUrl(uri, mode: LaunchMode.externalApplication);
     }
   }

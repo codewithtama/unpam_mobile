@@ -1,6 +1,14 @@
 # Catatan Pembaruan Rilis The PAMs
 
-## Versi 1.0.47 (Terbaru)
+## Versi 1.0.48 (Terbaru)
+
+- **Navigasi Deadline In-App Terintegrasi (Buka Langsung di Mentari LMS Tanpa Browser Eksternal)**:
+  - **In-App Navigation Seamless**: Mengarahkan klik pada tile daftar deadline di tab Jadwal & Deadline langsung ke WebView Mentari LMS di tab utama aplikasi The PAMs. Pengguna tidak lagi dilempar keluar aplikasi ke Chrome atau peramban eksternal.
+  - **Dukungan Push Notifikasi Deadline Terpadu**: Mengetuk notifikasi pengingat deadline (H-1 / hari H) otomatis membuka aplikasi, berpindah ke tab Mentari LMS, dan memuat URL spesifik tugas/kuis mata kuliah secara mulus.
+  - **Transisi Halus**: Dialog Jadwal otomatis ditutup dengan animasi pop sebelum WebView mengarahkan ke halaman target perkuliahan dengan delay transisi yang aman.
+  - **Pengujian Otomatis**: 32/32 unit & widget tests lulus (termasuk verifikasi in-app navigation callback), 0 analyzer issues.
+
+## Versi 1.0.47
 
 - **Optimasi Ekstrem Performa Mentari Sync (Zero-Framedrop & 60–120 FPS)**:
   - **Eliminasi Total DOM Reflow di WebView**: Menggantikan `tempDiv.innerHTML` dan `tempDiv.innerText` dengan parser string murni (`stripHtmlTags`) berkinerja tinggi. Pemrosesan HTML kursus kini berlangsung dalam hitungan milidetik di memori tanpa memicu layout, reflow, atau pembebanan GPU pada Chromium WebView.
