@@ -417,10 +417,62 @@ class UpdateCheckerService {
       try {
         final deviceAbis = await _getDeviceSupportedAbis();
         final List<dynamic> list = jsonDecode(cached) as List<dynamic>;
-        return list.map((e) => GitHubRelease.fromJson(e as Map<String, dynamic>, supportedAbis: deviceAbis)).toList();
+        final releases = list.map((e) => GitHubRelease.fromJson(e as Map<String, dynamic>, supportedAbis: deviceAbis)).toList();
+        if (releases.isNotEmpty) return releases;
       } catch (_) {}
     }
 
-    return [];
+    // 3. Fallback: Data riwayat bawaan aplikasi (offline fallback)
+    return _getOfflineFallbackReleases();
+  }
+
+  /// Data riwayat rilis bawaan aplikasi agar selalu tersedia secara offline
+  List<GitHubRelease> _getOfflineFallbackReleases() {
+    return [
+      GitHubRelease(
+        id: 1048,
+        tagName: 'v1.0.48',
+        name: 'Pembaruan The PAMs v1.0.48',
+        body: '''- Navigasi Deadline In-App Terintegrasi: Mengetuk deadline dari daftar Jadwal & Deadline langsung membuka WebView Mentari LMS di tab utama tanpa keluar ke browser eksternal.
+- Push Notifikasi Terpadu: Mengetuk notifikasi pengingat deadline otomatis berpindah ke tab Mentari LMS dan memuat halaman tugas/kuis terkait.
+- Transisi Halus: Dialog jadwal otomatis tertutup secara mulus sebelum halaman target perkuliahan dibuka.''',
+        publishedAt: DateTime(2026, 10, 29, 14, 15),
+        htmlUrl: 'https://github.com/$_repoOwner/$_repoName/releases/tag/v1.0.48',
+        apkDownloadUrl: 'https://github.com/$_repoOwner/$_repoName/releases/download/v1.0.48/app-arm64-v8a-release.apk',
+      ),
+      GitHubRelease(
+        id: 1047,
+        tagName: 'v1.0.47',
+        name: 'Pembaruan The PAMs v1.0.47',
+        body: '''- Optimasi Ekstrem Performa Mentari Sync (Zero-Framedrop & 60-120 FPS): Eliminasi total DOM reflow di WebView menggunakan parser string murni stripHtmlTags.
+- Debounce & Diff-Guard Penjadwalan Alarm: Validasi _areDeadlinesEqual untuk mencegah penulisan disk berlebih dan debounce AlarmManager 2000 ms.
+- Throttling Evaluasi JS: Pemindaian tugas dilakukan 1 kali per navigasi dengan hash caching payload.''',
+        publishedAt: DateTime(2026, 10, 29, 13, 0),
+        htmlUrl: 'https://github.com/$_repoOwner/$_repoName/releases/tag/v1.0.47',
+        apkDownloadUrl: 'https://github.com/$_repoOwner/$_repoName/releases/download/v1.0.47/app-arm64-v8a-release.apk',
+      ),
+      GitHubRelease(
+        id: 1046,
+        tagName: 'v1.0.46',
+        name: 'Pembaruan The PAMs v1.0.46',
+        body: '''- Optimasi Notifikasi Sinkronisasi Deadline (Anti-Spam & Single-Alert): Notifikasi SnackBar pembaruan deadline dibatasi maksimal 1 kali per sesi perkuliahan.
+- Debounce Agregasi Multi-Course: Seluruh tugas dari berbagai mata kuliah diagregasikan ke dalam 1 pesan ringkasan terpadu.
+- Anti-Tumpuk: Memanggil hideCurrentSnackBar() untuk mencegah penumpukan popup berturut-turut di layar.''',
+        publishedAt: DateTime(2026, 10, 29, 11, 30),
+        htmlUrl: 'https://github.com/$_repoOwner/$_repoName/releases/tag/v1.0.46',
+        apkDownloadUrl: 'https://github.com/$_repoOwner/$_repoName/releases/download/v1.0.46/app-arm64-v8a-release.apk',
+      ),
+      GitHubRelease(
+        id: 1045,
+        tagName: 'v1.0.45',
+        name: 'Pembaruan The PAMs v1.0.45',
+        body: '''- Ekstraksi Sempurna Accordion Pertemuan Mentari LMS & Proactive Multi-Course Sync: Mendukung slot aktivitas Pretest, Posttest, Penugasan Terstruktur, dan Forum Diskusi (Pertemuan 1-21).
+- Proactive Background Sync: Memindai kartu mata kuliah dari dashboard Mentari dan mengekstrak tugas secara terotentikasi di background.
+- Smart Due Date & Pembersihan Judul: Menghitung tenggat waktu jatuh tempo mingguan dan membersihkan kode kelas dari nama mata kuliah.''',
+        publishedAt: DateTime(2026, 10, 29, 9, 0),
+        htmlUrl: 'https://github.com/$_repoOwner/$_repoName/releases/tag/v1.0.45',
+        apkDownloadUrl: 'https://github.com/$_repoOwner/$_repoName/releases/download/v1.0.45/app-arm64-v8a-release.apk',
+      ),
+    ];
   }
 }
