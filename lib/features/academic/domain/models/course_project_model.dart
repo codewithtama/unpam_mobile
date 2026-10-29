@@ -111,3 +111,4 @@ class CourseProjectResponse {
         'data': projects.map((p) => p.toJson()).toList(),
       };
 }
+

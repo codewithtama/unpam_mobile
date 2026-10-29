@@ -68,3 +68,4 @@ class AcademicDocumentItem {
         'type_url': typeUrl,
       };
 }
+

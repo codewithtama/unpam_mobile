@@ -166,3 +166,4 @@ class KrsResponse {
         'krs': courses.map((c) => c.toJson()).toList(),
       };
 }
+

@@ -1,6 +1,19 @@
 # Catatan Pembaruan Rilis The PAMs
 
-## Versi 1.0.51 (Terbaru)
+## Versi 1.0.52 (Terbaru)
+
+- **Integrasi Layanan Native Lengkap Berdasarkan OpenAPI My UNPAM**:
+  - **Kartu Rencana Studi (KRS)**: Layanan rencana studi semester aktif (`/api/krs`) menampilkan total SKS dikontrak, total SKS lulus, kelas, kurikulum, dan nama dosen pengampu.
+  - **Kartu Hasil Studi (KHS)**: Layanan nilai semester (`/api/khs`) lengkap dengan IPS, SKS, huruf mutu, serta rincian komponen nilai (Absen, Tugas, Quiz, UTS, UAS, dan Partisipatif).
+  - **Dokumen Akademik**: Berkas panduan, SK, dan formulir kampus (`/api/dokumen`, `/api/dokumen/kategori`) dengan filter kategori, pencarian, dan tombol aksi buka/unduh.
+  - **Tugas Akhir & Bimbingan Skripsi**: Monitoring status proposal/skripsi (`/api/tugas-akhir/*`), dosen pembimbing 1 & 2, serta riwayat timeline konsultasi bimbingan.
+  - **Penugasan Proyek & MBKM**: Layanan tugas besar proyek kuliah (`/api/penugasan-proyek`) dengan pelacakan status validasi dosen, nilai, dan lampiran soal.
+  - **Pengajuan Izin (Absen Jalan)**: Riwayat izin kuliah & dispensasi (`/api/absen-jalan/pengajuan-izin`) dengan pelacakan status persetujuan.
+  - **Dukungan Mode Tatap Muka & Online**: Filter chip interaktif dan visual badge pada seluruh tampilan jadwal kuliah.
+  - **Penyelarasan AI Tools di Akademik**: Standardisasi floating pill stadium PAMs AI resmi di seluruh sub-layar native Akademik.
+  - **Kualitas & Pengujian**: 63/63 unit dan widget tests lulus, 0 analyzer issues.
+
+## Versi 1.0.51
 
 - **Sinkronisasi Native Terpadu untuk Jadwal & Deadline Tracker**:
   - **Phase 1: Sinkronisasi Native Jadwal Kuliah (My UNPAM)**:

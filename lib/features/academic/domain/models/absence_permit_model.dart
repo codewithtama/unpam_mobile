@@ -91,3 +91,4 @@ class AbsencePermitResponse {
         'data': permits.map((p) => p.toJson()).toList(),
       };
 }
+

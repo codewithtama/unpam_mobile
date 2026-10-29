@@ -154,3 +154,4 @@ class ThesisResponse {
         'bimbingan_riwayat': guidanceHistory.map((g) => g.toJson()).toList(),
       };
 }
+

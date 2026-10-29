@@ -190,3 +190,4 @@ class KhsResponse {
         'khs': courses.map((c) => c.toJson()).toList(),
       };
 }
+
