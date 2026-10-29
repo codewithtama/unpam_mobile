@@ -1,6 +1,14 @@
 # Catatan Pembaruan Rilis The PAMs
 
-## Versi 1.0.48 (Terbaru)
+## Versi 1.0.49 (Terbaru)
+
+- **Hub Akademik Native My UNPAM & 5 Sub-Layar Terpadu**:
+  - **Navigasi Bawah Baru**: Urutan tab disempurnakan menjadi Mentari · MyUnpam · Akademik · The PAMs AI.
+  - **Hub Akademik 6-in-1**: Dasbor native menghubungkan Biodata Diri, Tagihan & Pembayaran Keuangan, Nilai & KHS/Transkrip, Presensi Kehadiran, Sertifikat Kegiatan, serta Jadwal & Deadline Tracker.
+  - **Cloudflare Turnstile Bypass & Background WebView**: Fetching data REST API My UNPAM di-host di hidden InAppWebView untuk bypass Cloudflare WAF 403 secara transparan.
+  - **Arsitektur Modular Feature-First**: Diisolasi di `lib/features/academic/` dengan cache offline SharedPreferences dan full unit tests (56/56 passing tests, 0 analyzer issues).
+
+## Versi 1.0.48
 
 - **Navigasi Deadline In-App Terintegrasi (Buka Langsung di Mentari LMS Tanpa Browser Eksternal)**:
   - **In-App Navigation Seamless**: Mengarahkan klik pada tile daftar deadline di tab Jadwal & Deadline langsung ke WebView Mentari LMS di tab utama aplikasi The PAMs. Pengguna tidak lagi dilempar keluar aplikasi ke Chrome atau peramban eksternal.

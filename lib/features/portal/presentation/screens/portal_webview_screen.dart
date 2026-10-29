@@ -27,6 +27,8 @@ import 'package:unpam_mobile/core/services/webview_download_bridge.dart';
 import 'package:unpam_mobile/features/schedule/domain/models/schedule_model.dart';
 import 'package:unpam_mobile/features/schedule/presentation/providers/schedule_provider.dart';
 import 'package:unpam_mobile/features/schedule/presentation/screens/schedule_screen.dart';
+import 'package:unpam_mobile/features/academic/presentation/screens/academic_hub_screen.dart';
+
 
 import '../../data/scripts/portal_js_scripts.dart';
 import '../dialogs/forum_draft_dialog.dart';
@@ -1904,7 +1906,19 @@ class _PortalWebViewScreenState extends State<PortalWebViewScreen>
     );
   }
 
-  Future<void> _openScheduleScreen({int initialTabIndex = 0}) async {
+    Future<void> _openAcademicHubScreen() async {
+    final previousTab = _currentNavIndex;
+    await Navigator.push(
+      context,
+      MaterialPageRoute(builder: (_) => const AcademicHubScreen()),
+    );
+    if (mounted) {
+      setState(() => _currentNavIndex = previousTab);
+      _updateHistoryState();
+    }
+  }
+
+Future<void> _openScheduleScreen({int initialTabIndex = 0}) async {
     final previousTab = _currentNavIndex;
     await Navigator.push(
       context,
@@ -2567,14 +2581,14 @@ class _PortalWebViewScreenState extends State<PortalWebViewScreen>
                     _injectContextualPageDetectorScript(_myUnpamController!);
                   }
                 } else if (idx == 2) {
+                  await _openAcademicHubScreen();
+                } else if (idx == 3) {
                   final previousTab = _currentNavIndex;
                   await _openFullScreenAiAssistant();
                   if (mounted) {
                     setState(() => _currentNavIndex = previousTab);
                     _updateHistoryState();
                   }
-                } else if (idx == 3) {
-                  await _openScheduleScreen();
                 }
               },
             ),

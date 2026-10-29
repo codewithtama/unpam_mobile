@@ -39,6 +39,77 @@ class StorageService {
     return _preferences?.getString(ApiConstants.cookiesKey);
   }
 
+  String? _readString(String key) {
+    final value = _preferences?.getString(key);
+    return value == null || value.isEmpty ? null : value;
+  }
+
+  Future<void> _writeString(String key, String? value) async {
+    if (value == null || value.isEmpty) {
+      await _preferences?.remove(key);
+    } else {
+      await _preferences?.setString(key, value);
+    }
+  }
+
+  Future<void> saveSatuUnpamToken(String token) =>
+      _writeString(ApiConstants.satuUnpamTokenKey, token.trim());
+
+  String? getSatuUnpamToken() => _readString(ApiConstants.satuUnpamTokenKey);
+
+  Future<void> saveSatuUnpamCookies(String cookies) =>
+      _writeString(ApiConstants.satuUnpamCookiesKey, cookies);
+
+  String? getSatuUnpamCookies() => _readString(ApiConstants.satuUnpamCookiesKey);
+
+  Future<void> saveMyUnpamToken(String token) =>
+      _writeString(ApiConstants.myUnpamTokenKey, token.trim());
+
+  String? getMyUnpamToken() => _readString(ApiConstants.myUnpamTokenKey);
+
+  bool get hasMyUnpamToken => getMyUnpamToken() != null;
+
+  Future<void> saveMyUnpamCookies(String cookies) =>
+      _writeString(ApiConstants.myUnpamCookiesKey, cookies);
+
+  String? getMyUnpamCookies() => _readString(ApiConstants.myUnpamCookiesKey);
+
+  Future<void> clearPortalSessions() async {
+    for (final key in const [
+      ApiConstants.satuUnpamTokenKey,
+      ApiConstants.satuUnpamCookiesKey,
+      ApiConstants.myUnpamTokenKey,
+      ApiConstants.myUnpamCookiesKey,
+    ]) {
+      await _preferences?.remove(key);
+    }
+  }
+
+  Future<void> clearPortalCache() async {
+    for (final key in ApiConstants.myUnpamCacheKeys) {
+      await _preferences?.remove(key);
+    }
+  }
+
+  String? getCachedJson(String key) => _readString(key);
+
+  Future<void> saveCachedJson(String key, String json) => _writeString(key, json);
+
+  Future<void> saveCachedFinanceData(String json) =>
+      _writeString(ApiConstants.myUnpamCachedKeuanganKey, json);
+
+  String? getCachedFinanceData() => _readString(ApiConstants.myUnpamCachedKeuanganKey);
+
+  Future<void> saveCachedSemesters(String json) =>
+      _writeString(ApiConstants.myUnpamCachedSemestersListKey, json);
+
+  String? getCachedSemesters() => _readString(ApiConstants.myUnpamCachedSemestersListKey);
+
+  Future<void> saveSelectedSemester(String semester) =>
+      _writeString(ApiConstants.myUnpamCachedSemesterKey, semester);
+
+  String? getSelectedSemester() => _readString(ApiConstants.myUnpamCachedSemesterKey);
+
   // Active AI Model Selection
   Future<void> saveActiveAiModelId(String modelId) async {
     await _preferences?.setString(ApiConstants.activeAiModelKey, modelId);
@@ -69,39 +140,20 @@ class StorageService {
   String? getProviderApiKey(AiProviderType provider) {
     final prefKey = _getPrefKeyForProvider(provider);
     if (prefKey == null) return null;
-
-    final stored = _preferences?.getString(prefKey);
-    if (stored != null && stored.isNotEmpty) return stored;
-
-    // Optional environment variables fallback
-    switch (provider) {
-      case AiProviderType.gemini:
-        const envKey = String.fromEnvironment('GEMINI_API_KEY');
-        return envKey.isNotEmpty ? envKey : null;
-      case AiProviderType.deepseek:
-        const envKey = String.fromEnvironment('DEEPSEEK_API_KEY');
-        return envKey.isNotEmpty ? envKey : null;
-      case AiProviderType.claude:
-        const envKey = String.fromEnvironment('CLAUDE_API_KEY');
-        return envKey.isNotEmpty ? envKey : null;
-      case AiProviderType.qwen:
-        const envKey = String.fromEnvironment('QWEN_API_KEY');
-        return envKey.isNotEmpty ? envKey : null;
-      case AiProviderType.openai:
-        const envKey = String.fromEnvironment('OPENAI_API_KEY');
-        return envKey.isNotEmpty ? envKey : null;
-      case AiProviderType.openrouter:
-        const envKey = String.fromEnvironment('OPENROUTER_API_KEY');
-        return envKey.isNotEmpty ? envKey : null;
-      case AiProviderType.freeCloud:
-        return null;
-    }
+    final key = _preferences?.getString(prefKey);
+    return (key != null && key.isNotEmpty) ? key : null;
   }
 
   bool hasProviderApiKey(AiProviderType provider) {
     if (provider == AiProviderType.freeCloud) return true;
-    final key = getProviderApiKey(provider);
-    return key != null && key.isNotEmpty;
+    return getProviderApiKey(provider) != null;
+  }
+
+  Future<void> clearProviderApiKey(AiProviderType provider) async {
+    final prefKey = _getPrefKeyForProvider(provider);
+    if (prefKey != null) {
+      await _preferences?.remove(prefKey);
+    }
   }
 
   String? _getPrefKeyForProvider(AiProviderType provider) {
@@ -135,6 +187,8 @@ class StorageService {
   Future<void> clearSession() async {
     await _preferences?.remove(ApiConstants.tokenKey);
     await _preferences?.remove(ApiConstants.cookiesKey);
+    await clearPortalSessions();
+    await clearPortalCache();
   }
 
   Future<void> setUserAgreementAccepted(bool accepted) async {
@@ -143,6 +197,14 @@ class StorageService {
 
   bool isUserAgreementAccepted() {
     return _preferences?.getBool(ApiConstants.userAgreementKey) ?? false;
+  }
+
+  Future<void> setAccountOnboardingDone(bool done) async {
+    await _preferences?.setBool(ApiConstants.accountOnboardingDoneKey, done);
+  }
+
+  bool isAccountOnboardingDone() {
+    return _preferences?.getBool(ApiConstants.accountOnboardingDoneKey) ?? false;
   }
 
   Future<void> resetAll() async {

@@ -3,7 +3,38 @@ class ApiConstants {
 
   static const String tokenKey = 'unpam_bearer_token';
   static const String cookiesKey = 'unpam_cookies';
+
+  static const String webViewUserAgent =
+      'Mozilla/5.0 (Linux; Android 13; SM-S918B) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.6613.127 Mobile Safari/537.36';
+
+  static const String satuUnpamBaseUrl = 'https://satu.unpam.ac.id';
+  static const String myUnpamBaseUrl = 'https://my.unpam.ac.id';
+  static const String satuUnpamTokenKey = 'satuunpam_bearer_token';
+  static const String satuUnpamCookiesKey = 'satuunpam_cookies';
+  static const String myUnpamTokenKey = 'myunpam_bearer_token';
+  static const String myUnpamCookiesKey = 'myunpam_cookies';
+  static const String myUnpamCachedKeuanganKey = 'myunpam_cached_keuangan';
+  static const String myUnpamCachedSemesterKey = 'myunpam_cached_semester';
+  static const String myUnpamCachedSemestersListKey = 'myunpam_cached_semesters_list';
+  static const String myUnpamCachedBiodataKey = 'myunpam_cached_biodata';
+  static const String myUnpamCachedGradesKey = 'myunpam_cached_grades';
+  static const String myUnpamCachedScheduleKey = 'myunpam_cached_schedule';
+  static const String myUnpamCachedCertificatesKey = 'myunpam_cached_certificates';
+  static const String myUnpamCachedAttendanceCoursesKey = 'myunpam_cached_attendance_courses';
+
+  static const List<String> myUnpamCacheKeys = [
+    myUnpamCachedKeuanganKey,
+    myUnpamCachedSemesterKey,
+    myUnpamCachedSemestersListKey,
+    myUnpamCachedBiodataKey,
+    myUnpamCachedGradesKey,
+    myUnpamCachedScheduleKey,
+    myUnpamCachedCertificatesKey,
+    myUnpamCachedAttendanceCoursesKey,
+  ];
+
   static const String userAgreementKey = 'unpam_user_agreement_accepted';
+  static const String accountOnboardingDoneKey = 'unpam_account_onboarding_done';
   static const String biometricAutoLoginEnabledKey = 'unpam_biometric_auto_login_enabled';
   static const String biometricPromptDismissedKey = 'unpam_biometric_prompt_dismissed';
   static const String secureNimKey = 'unpam_secure_nim';

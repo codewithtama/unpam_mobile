@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import '../../../../theme/app_theme.dart';
 
 /// Bilah navigasi bawah untuk berpindah antar portal Mentari, MyUnpam,
-/// Asisten AI, dan Jadwal & Deadline.
+/// Akademik Native Hub, dan Asisten AI The PAMs.
 class PortalBottomNav extends StatelessWidget {
   final int currentIndex;
   final ValueChanged<int> onDestinationSelected;
@@ -33,15 +33,14 @@ class PortalBottomNav extends StatelessWidget {
           label: 'MyUnpam',
         ),
         NavigationDestination(
+          icon: Icon(Icons.dashboard_outlined),
+          selectedIcon: Icon(Icons.dashboard_rounded, color: AppTheme.primaryBlue),
+          label: 'Akademik',
+        ),
+        NavigationDestination(
           icon: Icon(Icons.auto_awesome_outlined),
           selectedIcon: Icon(Icons.auto_awesome, color: AppTheme.accentGold),
           label: 'The PAMs AI',
-        ),
-        NavigationDestination(
-          icon: Icon(Icons.calendar_month_outlined),
-          selectedIcon:
-              Icon(Icons.calendar_month_rounded, color: AppTheme.primaryBlue),
-          label: 'Jadwal',
         ),
       ],
     );
