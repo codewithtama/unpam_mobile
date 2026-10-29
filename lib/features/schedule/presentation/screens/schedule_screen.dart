@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
 import 'package:url_launcher/url_launcher.dart';
+import '../../data/schedule_service.dart';
 import '../../../../theme/app_theme.dart';
 import '../providers/schedule_provider.dart';
 import '../../domain/models/schedule_model.dart';
@@ -392,7 +393,7 @@ class _DeadlineTab extends StatelessWidget {
               ...upcoming.map(
                 (d) => DeadlineListTile(
                   deadline: d,
-                  onTap: () => _openDeadline(d.url),
+                  onTap: () => _openDeadline(context, d.url),
                 ),
               ),
             ],
@@ -406,7 +407,7 @@ class _DeadlineTab extends StatelessWidget {
               ...overdue.map(
                 (d) => DeadlineListTile(
                   deadline: d,
-                  onTap: () => _openDeadline(d.url),
+                  onTap: () => _openDeadline(context, d.url),
                 ),
               ),
             ],
@@ -437,10 +438,15 @@ class _DeadlineTab extends StatelessWidget {
     );
   }
 
-  void _openDeadline(String url) async {
+  void _openDeadline(BuildContext context, String url) async {
     final targetUrl = url.isNotEmpty ? url : 'https://mentari.unpam.ac.id/';
     if (onOpenDeadlineUrl != null) {
       onOpenDeadlineUrl!(targetUrl);
+      return;
+    }
+    if (ScheduleService.globalDeadlineNavigator != null) {
+      Navigator.of(context).popUntil((route) => route.isFirst);
+      ScheduleService.globalDeadlineNavigator!(targetUrl);
       return;
     }
     final uri = Uri.tryParse(targetUrl);

@@ -7,6 +7,9 @@ import '../../../../../screens/ai_paraphrase_screen.dart';
 import '../../../../../theme/app_theme.dart';
 import '../../../../../widgets/in_page_quick_action_pill.dart';
 import '../../../../../widgets/mini_ai_overlay_panel.dart';
+import '../../../portal/presentation/dialogs/ai_tools_menu_sheet.dart';
+import '../../../portal/presentation/dialogs/forum_draft_dialog.dart';
+import '../../../auth/presentation/widgets/biometric_vault_sheet.dart';
 
 class PortalAiContext {
   final String pageTitle;
@@ -27,10 +30,10 @@ class PortalAiAssist extends StatefulWidget {
   const PortalAiAssist({super.key, required this.aiContext, required this.child});
 
   @override
-  State<PortalAiAssist> createState() => _PortalAiAssistState();
+  State<PortalAiAssist> createState() => PortalAiAssistState();
 }
 
-class _PortalAiAssistState extends State<PortalAiAssist> {
+class PortalAiAssistState extends State<PortalAiAssist> {
   static const double _pillHeight = 50;
   static const double _pillWidth = 292;
   static Offset? _sharedPillOffset;
@@ -39,6 +42,8 @@ class _PortalAiAssistState extends State<PortalAiAssist> {
   bool _isSplitMinimized = false;
   bool _isDraggingPill = false;
   double _splitRatio = 0.46;
+
+  void openTools() => _showTools();
 
   WebPageDetectedContext get _detectedContext => WebPageDetectedContext(
         type: WebPageContextType.academicScheduleOrGrades,
@@ -99,75 +104,73 @@ class _PortalAiAssistState extends State<PortalAiAssist> {
   }
 
   void _showTools() {
-    showModalBottomSheet<void>(
+    AiToolsMenuSheet.show(
       context: context,
-      backgroundColor: Colors.white,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
-      ),
-      builder: (sheetContext) {
-        Widget tile(IconData icon, Color color, String title, String subtitle, VoidCallback onTap) {
-          return ListTile(
-            leading: CircleAvatar(
-              backgroundColor: color.withOpacity(0.12),
-              child: Icon(icon, color: color, size: 20),
-            ),
-            title: Text(title, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
-            subtitle: Text(subtitle, style: const TextStyle(fontSize: 12)),
-            onTap: () {
-              Navigator.pop(sheetContext);
-              onTap();
-            },
-          );
+      isMyUnpam: true,
+      pageTitle: '${widget.aiContext.label} • ${widget.aiContext.pageTitle}',
+      isSplitAiActive: _isSplitOpen && !_isSplitMinimized,
+      onToggleSplitAi: () {
+        if (_isSplitOpen) {
+          setState(() {
+            _isSplitOpen = false;
+            _isSplitMinimized = false;
+          });
+        } else {
+          _openSplit();
         }
-
-        return SafeArea(
-          child: Padding(
-            padding: const EdgeInsets.symmetric(vertical: 12),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                const Padding(
-                  padding: EdgeInsets.fromLTRB(20, 4, 20, 8),
-                  child: Row(
-                    children: [
-                      Icon(Icons.auto_awesome, color: AppTheme.accentGold),
-                      SizedBox(width: 10),
-                      Text(
-                        'The PAMs AI Tools',
-                        style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
-                      ),
-                    ],
-                  ),
-                ),
-                tile(
-                    Icons.analytics_rounded,
-                    AppTheme.primaryBlue,
-                    'Telaah ${widget.aiContext.label}',
-                    'AI membaca data halaman ini lalu memberi ringkasan & saran',
-                    _reviewPage),
-                tile(Icons.vertical_split_rounded, AppTheme.primaryLight, 'Buka Split-Screen AI',
-                    'Tanya AI sambil tetap melihat halaman', _openSplit),
-                tile(
-                    Icons.open_in_full_rounded,
-                    AppTheme.primaryBlue,
-                    'AI Layar Penuh',
-                    'Buka The PAMs AI dengan data halaman ini',
-                    () => _openFullScreen(initialPrompt: _buildPrompt())),
-                tile(Icons.auto_fix_high_rounded, AppTheme.accentGold, 'Parafrase Akademik',
-                    'Tulis ulang teks dengan gaya akademik', () {
-                  Navigator.push(
-                    context,
-                    MaterialPageRoute(
-                      builder: (_) => AiParaphraseScreen(courseName: widget.aiContext.pageTitle),
-                    ),
-                  );
-                }),
-              ],
+      },
+      onOpenForumDraft: () {
+        final prompt = _buildPrompt();
+        ForumDraftDialog.show(
+          context: context,
+          pageTitle: widget.aiContext.pageTitle,
+          initialDraft: prompt,
+          onInject: (draft) async {
+            await Clipboard.setData(ClipboardData(text: draft));
+            if (!mounted) return false;
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(
+                content: Text('Draf balasan forum berhasil disalin ke clipboard'),
+                backgroundColor: AppTheme.successGreen,
+                behavior: SnackBarBehavior.floating,
+              ),
+            );
+            return true;
+          },
+        );
+      },
+      onOpenQuizSolver: () {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text(
+              'Fitur Quiz Solver aktif otomatis saat membuka sesi kuis perkuliahan di portal Mentari LMS.',
             ),
+            backgroundColor: AppTheme.primaryBlue,
+            behavior: SnackBarBehavior.floating,
           ),
         );
       },
+      onOpenQuestionnaire: () {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text(
+              'Fitur Kuesioner aktif otomatis saat membuka evaluasi dosen/perkuliahan di portal.',
+            ),
+            backgroundColor: AppTheme.primaryBlue,
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+      },
+      onAskPageAi: _reviewPage,
+      onOpenParaphrase: () {
+        Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (_) => AiParaphraseScreen(courseName: widget.aiContext.pageTitle),
+          ),
+        );
+      },
+      onOpenBiometricVault: () => BiometricVaultSheet.show(context),
     );
   }
 

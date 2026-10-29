@@ -19,7 +19,7 @@ Future<void> reconnectPortal(BuildContext context, Future<void> Function() onCon
   await onConnected();
 }
 
-class PortalPageScaffold extends StatelessWidget {
+class PortalPageScaffold extends StatefulWidget {
   final String title;
   final bool isLoading;
   final Future<void> Function() onRefresh;
@@ -36,18 +36,31 @@ class PortalPageScaffold extends StatelessWidget {
   });
 
   @override
+  State<PortalPageScaffold> createState() => _PortalPageScaffoldState();
+}
+
+class _PortalPageScaffoldState extends State<PortalPageScaffold> {
+  final GlobalKey<PortalAiAssistState> _aiKey = GlobalKey<PortalAiAssistState>();
+
+  @override
   Widget build(BuildContext context) {
     final session = context.watch<MyUnpamSession>();
-    final busy = isLoading || session.isRefreshing;
+    final busy = widget.isLoading || session.isRefreshing;
 
     return Scaffold(
       backgroundColor: AppTheme.bgGrey,
       appBar: AppBar(
-        title: Text(title),
+        title: Text(widget.title),
         actions: [
+          if (widget.aiContext != null)
+            IconButton(
+              tooltip: 'The PAMs AI Tools',
+              onPressed: () => _aiKey.currentState?.openTools(),
+              icon: const Icon(Icons.auto_awesome, color: AppTheme.accentGold, size: 21),
+            ),
           IconButton(
             tooltip: 'Segarkan',
-            onPressed: busy ? null : onRefresh,
+            onPressed: busy ? null : widget.onRefresh,
             icon: busy
                 ? const SizedBox(
                     width: 18,
@@ -58,7 +71,7 @@ class PortalPageScaffold extends StatelessWidget {
           ),
           IconButton(
             tooltip: 'Hubungkan ulang akun',
-            onPressed: () => reconnectPortal(context, onRefresh),
+            onPressed: () => reconnectPortal(context, widget.onRefresh),
             icon: const Icon(Icons.link_rounded),
           ),
         ],
@@ -76,17 +89,21 @@ class PortalPageScaffold extends StatelessWidget {
       body: _wrapWithAi(
         RefreshIndicator(
           color: AppTheme.primaryBlue,
-          onRefresh: onRefresh,
-          child: body,
+          onRefresh: widget.onRefresh,
+          child: widget.body,
         ),
       ),
     );
   }
 
   Widget _wrapWithAi(Widget content) {
-    final ai = aiContext;
+    final ai = widget.aiContext;
     if (ai == null) return content;
-    return PortalAiAssist(aiContext: ai, child: content);
+    return PortalAiAssist(
+      key: _aiKey,
+      aiContext: ai,
+      child: content,
+    );
   }
 }
 

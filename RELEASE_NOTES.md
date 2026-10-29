@@ -1,6 +1,15 @@
 # Catatan Pembaruan Rilis The PAMs
 
-## Versi 1.0.49 (Terbaru)
+## Versi 1.0.50 (Terbaru)
+
+- **Navigasi Deadline In-App Terpadu & Keselarasan AI Tools Akademik**:
+  - **In-App Deadline Navigation dari Hub Akademik**: Mengetuk tugas/deadline dari sub-menu Jadwal & Deadline di Hub Akademik kini langsung kembali ke dalam tab Mentari LMS aplikasi The PAMs secara mulus tanpa pernah melempar pengguna ke peramban eksternal.
+  - **Penyelarasan Penuh The PAMs AI Tools di Layar Akademik**:
+    - Seluruh layar native Akademik (Hub, Biodata, Keuangan, Nilai, Presensi, Sertifikat) kini dilengkapi tombol ikon AI emas (`Icons.auto_awesome`) di AppBar, persis seperti di Mentari dan MyUnpam.
+    - Menu AI Tools pada floating pill maupun AppBar membuka lembar menu resmi `AiToolsMenuSheet` lengkap (AI Forum Diskusi, AI Quiz Solver, AI Pengisi Kuesioner, Tanya AI Halaman Ini, AI Parafrase Akademik, Biometric Vault).
+  - **Pengujian Otomatis**: 56/56 unit & widget tests lulus, 0 analyzer issues.
+
+## Versi 1.0.49
 
 - **Hub Akademik Native My UNPAM & 5 Sub-Layar Terpadu**:
   - **Navigasi Bawah Baru**: Urutan tab disempurnakan menjadi Mentari · MyUnpam · Akademik · The PAMs AI.

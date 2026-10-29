@@ -27,6 +27,7 @@ import 'package:unpam_mobile/core/services/webview_download_bridge.dart';
 import 'package:unpam_mobile/features/schedule/domain/models/schedule_model.dart';
 import 'package:unpam_mobile/features/schedule/presentation/providers/schedule_provider.dart';
 import 'package:unpam_mobile/features/schedule/presentation/screens/schedule_screen.dart';
+import 'package:unpam_mobile/features/schedule/data/schedule_service.dart';
 import 'package:unpam_mobile/features/academic/presentation/screens/academic_hub_screen.dart';
 
 
@@ -156,6 +157,16 @@ class _PortalWebViewScreenState extends State<PortalWebViewScreen>
     _currentUrl = widget.initialUrl;
     _initController();
 
+    ScheduleService.globalDeadlineNavigator = (url) {
+      if (!mounted) return;
+      setState(() => _currentNavIndex = 0);
+      Future.delayed(const Duration(milliseconds: 300), () {
+        if (mounted) {
+          _navigateToUrl(url);
+        }
+      });
+    };
+
     NotificationService().initialize(
       onUpdateTap: (info) {
         if (mounted && info.hasUpdate && !_isUpdateDialogShowing) {
@@ -201,6 +212,9 @@ class _PortalWebViewScreenState extends State<PortalWebViewScreen>
 
   @override
   void dispose() {
+    if (ScheduleService.globalDeadlineNavigator != null) {
+      ScheduleService.globalDeadlineNavigator = null;
+    }
     WidgetsBinding.instance.removeObserver(this);
     _deadlineSnackbarDebounceTimer?.cancel();
     _deadlineExtractThrottleTimer?.cancel();
@@ -1906,11 +1920,23 @@ class _PortalWebViewScreenState extends State<PortalWebViewScreen>
     );
   }
 
-    Future<void> _openAcademicHubScreen() async {
+  Future<void> _openAcademicHubScreen() async {
     final previousTab = _currentNavIndex;
     await Navigator.push(
       context,
-      MaterialPageRoute(builder: (_) => const AcademicHubScreen()),
+      MaterialPageRoute(
+        builder: (_) => AcademicHubScreen(
+          onOpenDeadlineUrl: (url) {
+            Navigator.pop(context);
+            setState(() => _currentNavIndex = 0);
+            Future.delayed(const Duration(milliseconds: 300), () {
+              if (mounted) {
+                _navigateToUrl(url);
+              }
+            });
+          },
+        ),
+      ),
     );
     if (mounted) {
       setState(() => _currentNavIndex = previousTab);

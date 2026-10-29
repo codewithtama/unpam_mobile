@@ -7,6 +7,9 @@ import '../../../../core/constants/api_constants.dart';
 class ScheduleService {
   final SharedPreferences _prefs;
 
+  /// Callback global navigasi deadline ke tab Mentari LMS in-app.
+  static void Function(String url)? globalDeadlineNavigator;
+
   ScheduleService(this._prefs);
 
   // ──────────────────────────────────────────────────────────────

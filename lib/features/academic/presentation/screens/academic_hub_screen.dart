@@ -15,7 +15,9 @@ import 'seminar_certificate_screen.dart';
 import 'student_profile_screen.dart';
 
 class AcademicHubScreen extends StatefulWidget {
-  const AcademicHubScreen({super.key});
+  final void Function(String url)? onOpenDeadlineUrl;
+
+  const AcademicHubScreen({super.key, this.onOpenDeadlineUrl});
 
   @override
   State<AcademicHubScreen> createState() => _AcademicHubScreenState();
@@ -32,7 +34,7 @@ class _HubMenu {
 }
 
 class _AcademicHubScreenState extends State<AcademicHubScreen> {
-  static final List<_HubMenu> _menus = [
+  List<_HubMenu> get _menus => [
     _HubMenu('Biodata', 'Data diri & akademik', Icons.badge_rounded, AppTheme.primaryBlue,
         (_) => const StudentProfileScreen()),
     _HubMenu('Keuangan', 'Tagihan & pembayaran', Icons.account_balance_wallet_rounded,
@@ -40,7 +42,14 @@ class _AcademicHubScreenState extends State<AcademicHubScreen> {
     _HubMenu('Nilai', 'Rangkuman & IPK', Icons.assessment_rounded, AppTheme.primaryLight,
         (_) => const AcademicGradesScreen()),
     _HubMenu('Jadwal & Deadline', 'Jadwal kuliah & tugas', Icons.calendar_today_rounded, AppTheme.primaryBlue,
-        (_) => const ScheduleScreen()),
+        (ctx) => ScheduleScreen(
+          onOpenDeadlineUrl: (url) {
+            Navigator.pop(ctx);
+            if (widget.onOpenDeadlineUrl != null) {
+              widget.onOpenDeadlineUrl!(url);
+            }
+          },
+        )),
     _HubMenu('Presensi', 'Kehadiran per matkul', Icons.how_to_reg_rounded, AppTheme.accentGold,
         (_) => const AttendanceScreen()),
     _HubMenu('Sertifikat', 'Seminar & kegiatan', Icons.card_membership_rounded, AppTheme.primaryLight,

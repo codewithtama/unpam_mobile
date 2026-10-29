@@ -45,7 +45,7 @@ void main() {
 
     await tester.tap(find.byTooltip('Menu The PAMs AI'));
     await tester.pumpAndSettle();
-    await tester.tap(find.text('Buka Split-Screen AI'));
+    await tester.tap(find.text('Split-Screen / Mini AI Overlay'));
     await tester.pumpAndSettle();
 
     expect(find.byType(MiniAiOverlayPanel), findsOneWidget);
