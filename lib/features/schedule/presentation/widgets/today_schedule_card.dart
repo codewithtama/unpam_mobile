@@ -75,7 +75,7 @@ class TodayScheduleCard extends StatelessWidget {
             ),
             Container(
               width: 1.5,
-              height: 70,
+              height: 74,
               margin: const EdgeInsets.symmetric(horizontal: 12),
               decoration: BoxDecoration(
                 gradient: LinearGradient(
@@ -96,6 +96,7 @@ class TodayScheduleCard extends StatelessWidget {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Expanded(
                         child: Text(
@@ -109,30 +110,38 @@ class TodayScheduleCard extends StatelessWidget {
                           overflow: TextOverflow.ellipsis,
                         ),
                       ),
-                      if (isOngoing)
+                      const SizedBox(width: 6),
+                      _buildModeBadge(),
+                      if (isOngoing) ...[
+                        const SizedBox(width: 4),
                         Container(
-                          margin: const EdgeInsets.only(left: 8),
                           padding: const EdgeInsets.symmetric(
-                              horizontal: 8, vertical: 3),
+                              horizontal: 7, vertical: 2.5),
                           decoration: BoxDecoration(
                             color: AppTheme.successGreen,
-                            borderRadius: BorderRadius.circular(20),
+                            borderRadius: BorderRadius.circular(6),
                           ),
                           child: const Text(
                             'Berlangsung',
                             style: TextStyle(
                               color: Colors.white,
-                              fontSize: 10,
+                              fontSize: 9.5,
                               fontWeight: FontWeight.bold,
                             ),
                           ),
                         ),
+                      ],
                     ],
                   ),
                   const SizedBox(height: 6),
                   _buildInfoRow(Icons.tag_rounded, schedule.kode),
                   if (schedule.ruang.isNotEmpty)
-                    _buildInfoRow(Icons.room_outlined, schedule.ruang),
+                    _buildInfoRow(
+                      schedule.isOnline
+                          ? Icons.laptop_chromebook_rounded
+                          : Icons.room_outlined,
+                      schedule.ruang,
+                    ),
                   if (schedule.dosen.isNotEmpty)
                     _buildInfoRow(Icons.person_outline_rounded, schedule.dosen),
                 ],
@@ -140,6 +149,39 @@ class TodayScheduleCard extends StatelessWidget {
             ),
           ],
         ),
+      ),
+    );
+  }
+
+  Widget _buildModeBadge() {
+    final isOnline = schedule.isOnline;
+    final Color badgeBg = isOnline ? const Color(0xFFEFF6FF) : const Color(0xFFF0FDF4);
+    final Color badgeText = isOnline ? const Color(0xFF1D4ED8) : const Color(0xFF15803D);
+    final Color badgeBorder = isOnline ? const Color(0xFFBFDBFE) : const Color(0xFFBBF7D0);
+    final IconData badgeIcon = isOnline ? Icons.laptop_chromebook_rounded : Icons.apartment_rounded;
+    final String label = isOnline ? 'Online' : 'Tatap Muka';
+
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2.5),
+      decoration: BoxDecoration(
+        color: badgeBg,
+        borderRadius: BorderRadius.circular(6),
+        border: Border.all(color: badgeBorder),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(badgeIcon, size: 10, color: badgeText),
+          const SizedBox(width: 3.5),
+          Text(
+            label,
+            style: TextStyle(
+              fontSize: 10,
+              fontWeight: FontWeight.bold,
+              color: badgeText,
+            ),
+          ),
+        ],
       ),
     );
   }
@@ -167,4 +209,3 @@ class TodayScheduleCard extends StatelessWidget {
     );
   }
 }
-

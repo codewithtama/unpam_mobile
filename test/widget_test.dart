@@ -684,6 +684,37 @@ void main() {
       expect(second.jamMulai, equals('13:50'));
       expect(second.jamSelesai, equals('15:30'));
     });
+
+    test('CourseSchedule correctly distinguishes Tatap Muka and Online modes', () {
+      const jsonStr = '''
+      [
+        {
+          "id_mata_kuliah": "22SIF0173",
+          "nama_mata_kuliah": "JARINGAN KOMPUTER",
+          "ruang": "V-V.906",
+          "id_jenis_perkuliahan": "TM",
+          "keterangan_jenis_perkuliahan": "Tatap Muka"
+        },
+        {
+          "id_mata_kuliah": "22SIF0242",
+          "nama_mata_kuliah": "PEMROGRAMAN WEB (E-LEARNING)",
+          "ruang": "ONLINE",
+          "id_jenis_perkuliahan": "OL",
+          "keterangan_jenis_perkuliahan": "Online"
+        }
+      ]
+      ''';
+
+      final list = CourseSchedule.listFromJson(jsonStr);
+      expect(list.length, equals(2));
+      expect(list[0].isOffline, isTrue);
+      expect(list[0].isOnline, isFalse);
+      expect(list[0].jenisPerkuliahan, equals('Tatap Muka'));
+
+      expect(list[1].isOnline, isTrue);
+      expect(list[1].isOffline, isFalse);
+      expect(list[1].jenisPerkuliahan, equals('Online'));
+    });
   });
 
   group('Mentari Deadline Model & Scraper Tests', () {

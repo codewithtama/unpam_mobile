@@ -11,6 +11,8 @@ class CourseSchedule {
   final String dosen;
   final String kelas;
   final int hariIndex; // 1=Senin … 7=Minggu, 0=unknown
+  final String jenisPerkuliahan; // e.g. "Tatap Muka", "Online", dll.
+  final String idJenisPerkuliahan; // e.g. "TM", "OL"
 
   const CourseSchedule({
     required this.kode,
@@ -22,7 +24,20 @@ class CourseSchedule {
     required this.dosen,
     required this.kelas,
     required this.hariIndex,
+    this.jenisPerkuliahan = 'Tatap Muka',
+    this.idJenisPerkuliahan = 'TM',
   });
+
+  bool get isOnline =>
+      idJenisPerkuliahan.trim().toUpperCase() == 'OL' ||
+      jenisPerkuliahan.toLowerCase().contains('online') ||
+      jenisPerkuliahan.toLowerCase().contains('daring') ||
+      ruang.toLowerCase().contains('online') ||
+      ruang.toLowerCase().contains('daring') ||
+      namaMataKuliah.toLowerCase().contains('online') ||
+      namaMataKuliah.toLowerCase().contains('e-learning');
+
+  bool get isOffline => !isOnline;
 
   factory CourseSchedule.fromJson(Map<String, dynamic> json) {
     // 1. Tangani nested object jika payload berasal langsung dari API MyUnpam (/api/jadwal-kuliah)
@@ -141,6 +156,39 @@ class CourseSchedule {
       }
     }
 
+    // 7. Ekstraksi mode jenis perkuliahan (Tatap Muka vs Online)
+    String idJenis = '';
+    if (json['id_jenis_perkuliahan'] is String) {
+      idJenis = (json['id_jenis_perkuliahan'] as String).trim();
+    } else if (json['idJenisPerkuliahan'] is String) {
+      idJenis = (json['idJenisPerkuliahan'] as String).trim();
+    }
+
+    String ketJenis = '';
+    if (json['keterangan_jenis_perkuliahan'] is String) {
+      ketJenis = (json['keterangan_jenis_perkuliahan'] as String).trim();
+    } else if (json['jenisPerkuliahan'] is String) {
+      ketJenis = (json['jenisPerkuliahan'] as String).trim();
+    } else if (json['jenis_perkuliahan'] is String) {
+      ketJenis = (json['jenis_perkuliahan'] as String).trim();
+    } else if (json['jenis'] is String) {
+      ketJenis = (json['jenis'] as String).trim();
+    }
+
+    if (ketJenis.isEmpty) {
+      if (idJenis.toUpperCase() == 'OL' ||
+          ruang.toLowerCase().contains('online') ||
+          ruang.toLowerCase().contains('daring') ||
+          namaMk.toLowerCase().contains('online') ||
+          namaMk.toLowerCase().contains('e-learning')) {
+        ketJenis = 'Online';
+        if (idJenis.isEmpty) idJenis = 'OL';
+      } else {
+        ketJenis = 'Tatap Muka';
+        if (idJenis.isEmpty) idJenis = 'TM';
+      }
+    }
+
     return CourseSchedule(
       kode: kodeMk,
       namaMataKuliah: namaMk,
@@ -151,6 +199,8 @@ class CourseSchedule {
       dosen: namaDosen,
       kelas: kelas,
       hariIndex: finalHariIndex,
+      jenisPerkuliahan: ketJenis,
+      idJenisPerkuliahan: idJenis,
     );
   }
 
@@ -207,6 +257,8 @@ class CourseSchedule {
         'dosen': dosen,
         'kelas': kelas,
         'hariIndex': hariIndex,
+        'jenisPerkuliahan': jenisPerkuliahan,
+        'idJenisPerkuliahan': idJenisPerkuliahan,
       };
 
   static List<CourseSchedule> listFromJson(String jsonStr) {

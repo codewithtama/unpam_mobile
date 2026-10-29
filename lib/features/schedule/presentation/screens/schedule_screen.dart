@@ -13,7 +13,7 @@ import '../widgets/deadline_list_tile.dart';
 /// Layar utama Jadwal Kuliah & Deadline Tracker.
 ///
 /// Menampilkan tiga sub-tab: Hari Ini, Mingguan, dan Deadline.
-/// Mendukung sinkronisasi native langsung via REST API My UNPAM dan AJAX Mentari LMS.
+/// Mendukung pemisahan dan filter matkul Tatap Muka vs Online secara jelas.
 class ScheduleScreen extends StatefulWidget {
   /// Callback untuk membuka portal MyUnpam di tab jadwal kuliah.
   final VoidCallback? onOpenMyUnpamJadwal;
@@ -132,7 +132,7 @@ class _ScheduleScreenState extends State<ScheduleScreen>
               ),
             ),
             Text(
-              'Sinkron otomatis dari portal',
+              'Tatap Muka & Online • Sinkron Otomatis',
               style: TextStyle(color: Colors.white60, fontSize: 10.5),
             ),
           ],
@@ -207,25 +207,40 @@ class _ScheduleScreenState extends State<ScheduleScreen>
 // Tab Hari Ini
 // ─────────────────────────────────────────────────────────────────────────────
 
-class _TodayTab extends StatelessWidget {
+class _TodayTab extends StatefulWidget {
   final VoidCallback? onOpenMyUnpam;
   final Future<void> Function()? onSyncSchedule;
 
   const _TodayTab({this.onOpenMyUnpam, this.onSyncSchedule});
 
   @override
+  State<_TodayTab> createState() => _TodayTabState();
+}
+
+class _TodayTabState extends State<_TodayTab> {
+  String _selectedMode = 'Semua'; // 'Semua', 'Tatap Muka', 'Online'
+
+  @override
   Widget build(BuildContext context) {
     return Consumer<ScheduleProvider>(
       builder: (_, provider, __) {
         final today = DateTime.now();
-        final todaySchedule = provider.todaySchedule;
+        final rawSchedule = provider.todaySchedule;
+        final todaySchedule = rawSchedule.where((s) {
+          if (_selectedMode == 'Tatap Muka') return s.isOffline;
+          if (_selectedMode == 'Online') return s.isOnline;
+          return true;
+        }).toList();
+
+        final countTm = rawSchedule.where((s) => s.isOffline).length;
+        final countOl = rawSchedule.where((s) => s.isOnline).length;
 
         return RefreshIndicator(
           color: AppTheme.accentGold,
           backgroundColor: AppTheme.primaryBlue,
           onRefresh: () async {
-            if (onSyncSchedule != null) {
-              await onSyncSchedule!();
+            if (widget.onSyncSchedule != null) {
+              await widget.onSyncSchedule!();
             } else {
               await provider.syncScheduleWithPortal(forceRefresh: true);
             }
@@ -258,11 +273,28 @@ class _TodayTab extends StatelessWidget {
                   ],
                 ),
               ),
-              const SizedBox(height: 14),
+              const SizedBox(height: 12),
+
+              // Filter Mode Kuliah Hari Ini (Semua, Tatap Muka, Online) jika ada jadwal
+              if (rawSchedule.isNotEmpty) ...[
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 16),
+                  child: Row(
+                    children: [
+                      _buildFilterChip('Semua (${rawSchedule.length})', 'Semua'),
+                      const SizedBox(width: 8),
+                      _buildFilterChip('Tatap Muka ($countTm)', 'Tatap Muka'),
+                      const SizedBox(width: 8),
+                      _buildFilterChip('Online ($countOl)', 'Online'),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 12),
+              ],
 
               if (provider.isScheduleLoading && !provider.hasSchedules)
                 const _LoadingPlaceholder(message: 'Memuat jadwal kuliah...')
-              else if (todaySchedule.isEmpty)
+              else if (rawSchedule.isEmpty)
                 _EmptyState(
                   icon: Icons.event_available_outlined,
                   title: provider.hasSchedules
@@ -276,12 +308,22 @@ class _TodayTab extends StatelessWidget {
                       : 'Sinkronkan Jadwal Sekarang',
                   buttonIcon: Icons.sync_rounded,
                   onButtonTap: () async {
-                    if (onSyncSchedule != null) {
-                      await onSyncSchedule!();
+                    if (widget.onSyncSchedule != null) {
+                      await widget.onSyncSchedule!();
                     } else {
                       await provider.syncScheduleWithPortal(forceRefresh: true);
                     }
                   },
+                )
+              else if (todaySchedule.isEmpty)
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 24),
+                  child: Center(
+                    child: Text(
+                      'Tidak ada kuliah $_selectedMode untuk hari ini.',
+                      style: const TextStyle(fontSize: 13, color: AppTheme.textMuted),
+                    ),
+                  ),
                 )
               else ...[
                 // Upcoming deadlines banner (jika ada yang mendesak)
@@ -298,6 +340,37 @@ class _TodayTab extends StatelessWidget {
           ),
         );
       },
+    );
+  }
+
+  Widget _buildFilterChip(String label, String value) {
+    final isSelected = _selectedMode == value;
+    return GestureDetector(
+      onTap: () => setState(() => _selectedMode = value),
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 150),
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+        decoration: BoxDecoration(
+          color: isSelected
+              ? AppTheme.primaryBlue.withOpacity(0.1)
+              : Colors.white,
+          borderRadius: BorderRadius.circular(20),
+          border: Border.all(
+            color: isSelected
+                ? AppTheme.primaryBlue
+                : AppTheme.cardBorder,
+            width: isSelected ? 1.2 : 1,
+          ),
+        ),
+        child: Text(
+          label,
+          style: TextStyle(
+            fontSize: 11,
+            fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
+            color: isSelected ? AppTheme.primaryBlue : AppTheme.textMuted,
+          ),
+        ),
+      ),
     );
   }
 

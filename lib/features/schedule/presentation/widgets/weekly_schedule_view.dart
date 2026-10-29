@@ -18,6 +18,7 @@ class WeeklyScheduleView extends StatefulWidget {
 
 class _WeeklyScheduleViewState extends State<WeeklyScheduleView> {
   late int _selectedDay;
+  String _selectedMode = 'Semua'; // 'Semua', 'Tatap Muka', 'Online'
 
   @override
   void initState() {
@@ -35,7 +36,15 @@ class _WeeklyScheduleViewState extends State<WeeklyScheduleView> {
 
   @override
   Widget build(BuildContext context) {
-    final scheduleForDay = widget.weeklySchedule[_selectedDay] ?? [];
+    final rawForDay = widget.weeklySchedule[_selectedDay] ?? [];
+    final scheduleForDay = rawForDay.where((s) {
+      if (_selectedMode == 'Tatap Muka') return s.isOffline;
+      if (_selectedMode == 'Online') return s.isOnline;
+      return true;
+    }).toList();
+
+    final countTm = rawForDay.where((s) => s.isOffline).length;
+    final countOl = rawForDay.where((s) => s.isOnline).length;
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -110,12 +119,27 @@ class _WeeklyScheduleViewState extends State<WeeklyScheduleView> {
             },
           ),
         ),
+        const SizedBox(height: 10),
+
+        // Filter Mode: Semua, Tatap Muka, Online
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 16),
+          child: Row(
+            children: [
+              _buildFilterChip('Semua (${rawForDay.length})', 'Semua'),
+              const SizedBox(width: 8),
+              _buildFilterChip('Tatap Muka ($countTm)', 'Tatap Muka'),
+              const SizedBox(width: 8),
+              _buildFilterChip('Online ($countOl)', 'Online'),
+            ],
+          ),
+        ),
         const SizedBox(height: 12),
 
         // Schedule list untuk hari yang dipilih
         if (scheduleForDay.isEmpty)
           Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 20),
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 24),
             child: Center(
               child: Column(
                 children: [
@@ -123,7 +147,9 @@ class _WeeklyScheduleViewState extends State<WeeklyScheduleView> {
                       size: 36, color: AppTheme.textMuted.withOpacity(0.5)),
                   const SizedBox(height: 8),
                   Text(
-                    'Tidak ada kuliah pada hari ${_dayNames[_selectedDay - 1]}',
+                    rawForDay.isEmpty
+                        ? 'Tidak ada kuliah pada hari ${_dayNames[_selectedDay - 1]}'
+                        : 'Tidak ada matkul $_selectedMode pada hari ${_dayNames[_selectedDay - 1]}',
                     style: const TextStyle(
                         fontSize: 13, color: AppTheme.textMuted),
                     textAlign: TextAlign.center,
@@ -137,6 +163,37 @@ class _WeeklyScheduleViewState extends State<WeeklyScheduleView> {
       ],
     );
   }
+
+  Widget _buildFilterChip(String label, String value) {
+    final isSelected = _selectedMode == value;
+    return GestureDetector(
+      onTap: () => setState(() => _selectedMode = value),
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 150),
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+        decoration: BoxDecoration(
+          color: isSelected
+              ? AppTheme.primaryBlue.withOpacity(0.1)
+              : Colors.white,
+          borderRadius: BorderRadius.circular(20),
+          border: Border.all(
+            color: isSelected
+                ? AppTheme.primaryBlue
+                : AppTheme.cardBorder,
+            width: isSelected ? 1.2 : 1,
+          ),
+        ),
+        child: Text(
+          label,
+          style: TextStyle(
+            fontSize: 11,
+            fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
+            color: isSelected ? AppTheme.primaryBlue : AppTheme.textMuted,
+          ),
+        ),
+      ),
+    );
+  }
 }
 
 class _WeeklyScheduleItem extends StatelessWidget {
@@ -146,6 +203,13 @@ class _WeeklyScheduleItem extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final isOnline = schedule.isOnline;
+    final Color badgeBg = isOnline ? const Color(0xFFEFF6FF) : const Color(0xFFF0FDF4);
+    final Color badgeText = isOnline ? const Color(0xFF1D4ED8) : const Color(0xFF15803D);
+    final Color badgeBorder = isOnline ? const Color(0xFFBFDBFE) : const Color(0xFFBBF7D0);
+    final IconData badgeIcon = isOnline ? Icons.laptop_chromebook_rounded : Icons.apartment_rounded;
+    final String modeLabel = isOnline ? 'Online' : 'Tatap Muka';
+
     return Container(
       margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 5),
       padding: const EdgeInsets.all(12),
@@ -158,9 +222,9 @@ class _WeeklyScheduleItem extends StatelessWidget {
         children: [
           Container(
             width: 4,
-            height: 48,
+            height: 52,
             decoration: BoxDecoration(
-              color: AppTheme.primaryBlue,
+              color: isOnline ? AppTheme.accentGold : AppTheme.primaryBlue,
               borderRadius: BorderRadius.circular(2),
             ),
           ),
@@ -169,34 +233,59 @@ class _WeeklyScheduleItem extends StatelessWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(
-                  schedule.namaMataKuliah,
-                  style: const TextStyle(
-                    fontSize: 13,
-                    fontWeight: FontWeight.w600,
-                    color: AppTheme.textDark,
-                  ),
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
+                Row(
+                  children: [
+                    Expanded(
+                      child: Text(
+                        schedule.namaMataKuliah,
+                        style: const TextStyle(
+                          fontSize: 13,
+                          fontWeight: FontWeight.w600,
+                          color: AppTheme.textDark,
+                        ),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ),
+                    const SizedBox(width: 6),
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                      decoration: BoxDecoration(
+                        color: badgeBg,
+                        borderRadius: BorderRadius.circular(6),
+                        border: Border.all(color: badgeBorder),
+                      ),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(badgeIcon, size: 10, color: badgeText),
+                          const SizedBox(width: 3),
+                          Text(
+                            modeLabel,
+                            style: TextStyle(
+                              fontSize: 10,
+                              fontWeight: FontWeight.bold,
+                              color: badgeText,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
                 ),
                 const SizedBox(height: 4),
                 Text(
                   '${schedule.jamMulai} – ${schedule.jamSelesai}'
-                  '${schedule.ruang.isNotEmpty ? ' · ${schedule.ruang}' : ''}',
+                  '${schedule.ruang.isNotEmpty ? ' · ${schedule.ruang}' : ''}'
+                  '${schedule.dosen.isNotEmpty ? ' · ${schedule.dosen}' : ''}',
                   style: const TextStyle(
                     fontSize: 11,
                     color: AppTheme.textMuted,
                   ),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
                 ),
               ],
-            ),
-          ),
-          Text(
-            schedule.kode,
-            style: const TextStyle(
-              fontSize: 10,
-              color: AppTheme.textMuted,
-              fontWeight: FontWeight.w500,
             ),
           ),
         ],
@@ -204,4 +293,3 @@ class _WeeklyScheduleItem extends StatelessWidget {
     );
   }
 }
-
