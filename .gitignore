@@ -60,3 +60,6 @@ app.*.map.json
 *.salive
 
 api-network-records.json
+
+# Local API documentation / dumps
+openapi-*.json
