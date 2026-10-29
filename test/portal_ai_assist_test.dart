@@ -14,7 +14,7 @@ import 'package:unpam_mobile/widgets/portal_ai_assist.dart';
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
-  testWidgets('shows the Telaah pill and docks the split-screen AI panel', (tester) async {
+  testWidgets('shows the PAMs AI pill and docks the split-screen AI panel', (tester) async {
     SharedPreferences.setMockInitialValues({});
     final storage = await StorageService.getInstance();
     await storage.resetAll();
@@ -40,7 +40,7 @@ void main() {
     await tester.pump();
 
     expect(find.byType(InPageQuickActionPill), findsOneWidget);
-    expect(find.text('Akademik'), findsOneWidget);
+    expect(find.text('PAMs AI'), findsOneWidget);
     expect(find.byType(MiniAiOverlayPanel), findsNothing);
 
     await tester.tap(find.byTooltip('Menu The PAMs AI'));

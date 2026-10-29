@@ -34,8 +34,8 @@ class PortalAiAssist extends StatefulWidget {
 }
 
 class PortalAiAssistState extends State<PortalAiAssist> {
-  static const double _pillHeight = 50;
-  static const double _pillWidth = 292;
+  static const double _pillHeight = 44;
+  static const double _pillWidth = 160;
   static Offset? _sharedPillOffset;
 
   bool _isSplitOpen = false;
@@ -45,9 +45,8 @@ class PortalAiAssistState extends State<PortalAiAssist> {
 
   void openTools() => _showTools();
 
-  WebPageDetectedContext get _detectedContext => WebPageDetectedContext(
-        type: WebPageContextType.academicScheduleOrGrades,
-        label: widget.aiContext.label,
+  WebPageDetectedContext get _detectedContext => const WebPageDetectedContext(
+        type: WebPageContextType.none,
       );
 
   String _buildPrompt() {
@@ -233,7 +232,7 @@ class PortalAiAssistState extends State<PortalAiAssist> {
                 left: safeX,
                 top: safeY,
                 child: ConstrainedBox(
-                  constraints: BoxConstraints(maxWidth: (maxW - 16).clamp(180.0, maxW)),
+                  constraints: BoxConstraints(maxWidth: (maxW - 16).clamp(140.0, maxW)),
                   child: InPageQuickActionPill(
                     detectedContext: _detectedContext,
                     isDragging: _isDraggingPill,
@@ -243,7 +242,7 @@ class PortalAiAssistState extends State<PortalAiAssist> {
                     }),
                     onPanEnd: (_) => setState(() => _isDraggingPill = false),
                     onPanCancel: () => setState(() => _isDraggingPill = false),
-                    onPrimaryAction: _reviewPage,
+                    onPrimaryAction: _showTools,
                     onOpenAllTools: _showTools,
                     onOpenSplitScreen: _openSplit,
                   ),
