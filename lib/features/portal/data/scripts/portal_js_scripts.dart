@@ -605,7 +605,10 @@ class PortalJsScripts {
 
         if (courseLinks.length > 0 && !window.__pamsDashboardCoursesFetched) {
           window.__pamsDashboardCoursesFetched = true;
-          courseLinks.slice(0, 10).forEach(function(cUrl, idx) {
+          var targets = courseLinks.slice(0, 10);
+          var allAccumulated = [];
+          var completed = 0;
+          targets.forEach(function(cUrl, idx) {
             setTimeout(function() {
               fetch(cUrl, { credentials: 'same-origin' })
                 .then(function(r) { return r.text(); })
@@ -613,11 +616,19 @@ class PortalJsScripts {
                   var tempDiv = document.createElement('div');
                   tempDiv.innerHTML = html;
                   var cItems = parseMentariCourseTextOrDom(tempDiv.innerText, cUrl);
-                  if (cItems && cItems.length > 0 && window.DeadlineChannel) {
-                    window.DeadlineChannel.postMessage(JSON.stringify(cItems));
+                  if (cItems && cItems.length > 0) {
+                    allAccumulated = allAccumulated.concat(cItems);
                   }
-                }).catch(function() {});
-            }, idx * 400);
+                }).catch(function() {})
+                .finally(function() {
+                  completed++;
+                  if (completed >= targets.length) {
+                    if (allAccumulated.length > 0 && window.DeadlineChannel) {
+                      window.DeadlineChannel.postMessage(JSON.stringify(allAccumulated));
+                    }
+                  }
+                });
+            }, idx * 250);
           });
         }
 

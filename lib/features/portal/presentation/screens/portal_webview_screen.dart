@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
@@ -110,6 +111,9 @@ class _PortalWebViewScreenState extends State<PortalWebViewScreen>
   bool _isCheckingUpdate = false;
   bool _isUpdateDialogShowing = false;
   bool _isHandlingRawPdf = false;
+  Timer? _deadlineSnackbarDebounceTimer;
+  bool _hasShownDeadlineSnackbarThisSession = false;
+  bool _hasShownScheduleSnackbarThisSession = false;
 
   static const String _customUserAgent =
       'Mozilla/5.0 (Linux; Android 13; SM-S918B) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.6613.127 Mobile Safari/537.36';
@@ -181,6 +185,7 @@ class _PortalWebViewScreenState extends State<PortalWebViewScreen>
   @override
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
+    _deadlineSnackbarDebounceTimer?.cancel();
     _fabOffsetNotifier.dispose();
     _isDraggingFabNotifier.dispose();
     _splitAiRatioNotifier.dispose();
@@ -1136,13 +1141,19 @@ class _PortalWebViewScreenState extends State<PortalWebViewScreen>
   // ──────────────────────────────────────────────────────────────────────────
 
   /// Dipanggil saat JS scheduleExtractor mengirim hasil scraping dari MyUnpam.
-  void _handleExtractedSchedule(String jsonStr) {
+  void _handleExtractedSchedule(String jsonStr, {bool isManualSync = false}) {
     try {
       final schedules = CourseSchedule.listFromJson(jsonStr);
       if (!mounted || schedules.isEmpty) return;
       final provider = context.read<ScheduleProvider>();
       provider.onScheduleExtracted(schedules);
       debugPrint('[ScheduleSync] ${schedules.length} jadwal berhasil di-scrape.');
+
+      // Notifikasi jadwal cukup ditampilkan 1 kali saja per sesi atau bila dipicu manual
+      if (!isManualSync && _hasShownScheduleSnackbarThisSession) return;
+      _hasShownScheduleSnackbarThisSession = true;
+
+      ScaffoldMessenger.of(context).hideCurrentSnackBar();
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text('✓ ${schedules.length} jadwal kuliah berhasil disinkronkan!'),
@@ -1156,20 +1167,36 @@ class _PortalWebViewScreenState extends State<PortalWebViewScreen>
   }
 
   /// Dipanggil saat JS deadlineExtractor mengirim hasil scraping dari Mentari.
-  void _handleExtractedDeadlines(String jsonStr) {
+  void _handleExtractedDeadlines(String jsonStr, {bool isManualSync = false}) {
     try {
       final deadlines = CourseDeadline.listFromJson(jsonStr);
       if (!mounted || deadlines.isEmpty) return;
       final provider = context.read<ScheduleProvider>();
       provider.onDeadlinesExtracted(deadlines);
       debugPrint('[DeadlineSync] ${deadlines.length} deadline berhasil di-scrape.');
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('✓ ${deadlines.length} deadline/tugas berhasil diperbarui!'),
-          duration: const Duration(seconds: 2),
-          backgroundColor: AppTheme.successGreen,
-        ),
-      );
+
+      // Jika bukan sync manual dan notifikasi sudah pernah ditampilkan di sesi ini, jangan tampilkan lagi
+      if (!isManualSync && _hasShownDeadlineSnackbarThisSession) {
+        return;
+      }
+
+      // Debounce notifikasi agar proses background multi-course hanya memunculkan tepat 1 kali SnackBar
+      _deadlineSnackbarDebounceTimer?.cancel();
+      _deadlineSnackbarDebounceTimer = Timer(const Duration(milliseconds: 1200), () {
+        if (!mounted) return;
+        if (!isManualSync && _hasShownDeadlineSnackbarThisSession) return;
+        _hasShownDeadlineSnackbarThisSession = true;
+
+        final totalCount = provider.deadlines.length;
+        ScaffoldMessenger.of(context).hideCurrentSnackBar();
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('✓ $totalCount deadline/tugas berhasil diperbarui!'),
+            duration: const Duration(seconds: 2),
+            backgroundColor: AppTheme.successGreen,
+          ),
+        );
+      });
     } catch (e) {
       debugPrint('[DeadlineSync] Error parse deadline: $e');
     }
@@ -1911,7 +1938,7 @@ class _PortalWebViewScreenState extends State<PortalWebViewScreen>
                   .runJavaScriptReturningResult(PortalJsScripts.deadlineExtractor);
               final str = res.toString();
               if (str.isNotEmpty && str != 'null' && str != '[]') {
-                _handleExtractedDeadlines(str);
+                _handleExtractedDeadlines(str, isManualSync: true);
               }
             } catch (e) {
               debugPrint('[ManualDeadlineSync] Error: $e');
@@ -2196,6 +2223,8 @@ class _PortalWebViewScreenState extends State<PortalWebViewScreen>
 
   Future<void> _startRefresh() async {
     if (_isRefreshing) return;
+    _hasShownDeadlineSnackbarThisSession = false;
+    _hasShownScheduleSnackbarThisSession = false;
     setState(() => _isRefreshing = true);
     _isPullingNotifier.value = false;
     _pullDistanceNotifier.value = 0.0;

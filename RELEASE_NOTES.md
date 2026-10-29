@@ -1,6 +1,15 @@
 # Catatan Pembaruan Rilis The PAMs
 
-## Versi 1.0.45 (Terbaru)
+## Versi 1.0.46 (Terbaru)
+
+- **Optimasi Notifikasi Sinkronisasi Deadline (Anti-Spam & Single-Alert)**:
+  - **Pembatasan Notifikasi Tunggal (Cukup 1 Kali)**: Notifikasi SnackBar `✓ X deadline/tugas berhasil diperbarui!` kini dibatasi maksimal 1 kali per sesi perkuliahan Mentari, mencegah notifikasi berulang-ulang yang mengganggu pengguna saat berpindah halaman atau saat scanner DOM berjalan.
+  - **Debounce Agregasi Multi-Course**: Saat aplikasi memindai banyak mata kuliah di background secara simultan, SnackBar otomatis didebounce (1.200 ms) dan seluruh tugas diagregasi ke dalam 1 pesan ringkasan gabungan di akhir proses.
+  - **Pencegahan Penumpukan Antrean SnackBar**: Menambahkan `hideCurrentSnackBar()` sebelum menampilkan notifikasi agar tidak ada penumpukan popup berturut-turut di layar.
+  - **JavaScript Batch Accumulator**: Skrip background fetch pada dashboard Mentari kini mengakumulasikan seluruh mata kuliah terlebih dahulu sebelum mengirimkan satu payload terpadu ke aplikasi.
+  - **Pengujian Otomatis**: 31/31 unit & widget tests lulus, 0 analyzer issues.
+
+## Versi 1.0.45
 
 - **Ekstraksi Sempurna Accordion Pertemuan Mentari LMS & Proactive Multi-Course Sync**:
   - **Dukungan Struktur Asli Accordion Pertemuan Mentari**: Mengatasi perbedaan arsitektur Mentari LMS (non-standard Moodle layout) dengan parser khusus yang memindai slot aktivitas wajib mahasiswa di setiap pertemuan (`Pertemuan 1` s.d. `Pertemuan 21`):
