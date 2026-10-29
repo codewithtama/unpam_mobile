@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../../domain/models/schedule_model.dart';
@@ -13,6 +14,26 @@ class ScheduleProvider extends ChangeNotifier {
 
   List<CourseSchedule> _schedules = [];
   List<CourseDeadline> _deadlines = [];
+  Timer? _scheduleAlarmDebounceTimer;
+
+  @override
+  void dispose() {
+    _scheduleAlarmDebounceTimer?.cancel();
+    super.dispose();
+  }
+
+  bool _areDeadlinesEqual(List<CourseDeadline> a, List<CourseDeadline> b) {
+    if (a.length != b.length) return false;
+    for (var i = 0; i < a.length; i++) {
+      if (a[i].id != b[i].id ||
+          a[i].dueDate != b[i].dueDate ||
+          a[i].namaTugas != b[i].namaTugas ||
+          a[i].namaMataKuliah != b[i].namaMataKuliah) {
+        return false;
+      }
+    }
+    return true;
+  }
   ScheduleLoadState _scheduleState = ScheduleLoadState.idle;
   ScheduleLoadState _deadlineState = ScheduleLoadState.idle;
   String _scheduleError = '';
@@ -101,15 +122,23 @@ class ScheduleProvider extends ChangeNotifier {
     final merged = map.values.toList()
       ..sort((a, b) => a.dueDate.compareTo(b.dueDate));
 
+    // Cek apakah data benar-benar berubah sebelum menulis ke disk dan menyentuh platform channel
+    if (_areDeadlinesEqual(_deadlines, merged)) {
+      return;
+    }
+
     _deadlines = merged;
     _deadlineState = ScheduleLoadState.loaded;
     _deadlineError = '';
     await _service.saveDeadlines(merged);
-
-    // Jadwalkan notifikasi reminder untuk daftar terbaru
-    await DeadlineReminderService()
-        .scheduleRemindersForDeadlines(merged, _prefs);
     notifyListeners();
+
+    // Debounce penjadwalan alarm native AlarmManager agar tidak membanjiri IPC platform channel
+    _scheduleAlarmDebounceTimer?.cancel();
+    _scheduleAlarmDebounceTimer = Timer(const Duration(milliseconds: 2000), () async {
+      await DeadlineReminderService()
+          .scheduleRemindersForDeadlines(_deadlines, _prefs);
+    });
   }
 
   String _resolveCourseName(String rawCourse, String url) {

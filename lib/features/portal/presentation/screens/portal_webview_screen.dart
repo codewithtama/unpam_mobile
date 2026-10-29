@@ -112,6 +112,7 @@ class _PortalWebViewScreenState extends State<PortalWebViewScreen>
   bool _isUpdateDialogShowing = false;
   bool _isHandlingRawPdf = false;
   Timer? _deadlineSnackbarDebounceTimer;
+  Timer? _deadlineExtractThrottleTimer;
   bool _hasShownDeadlineSnackbarThisSession = false;
   bool _hasShownScheduleSnackbarThisSession = false;
 
@@ -186,6 +187,7 @@ class _PortalWebViewScreenState extends State<PortalWebViewScreen>
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
     _deadlineSnackbarDebounceTimer?.cancel();
+    _deadlineExtractThrottleTimer?.cancel();
     _fabOffsetNotifier.dispose();
     _isDraggingFabNotifier.dispose();
     _splitAiRatioNotifier.dispose();
@@ -1224,8 +1226,8 @@ class _PortalWebViewScreenState extends State<PortalWebViewScreen>
     }
   }
 
-  /// Ekstrak deadline dari halaman Mentari jika URL relevan.
-  Future<void> _tryExtractDeadlines(WebViewController controller, String url) async {
+  /// Ekstrak deadline dari halaman Mentari jika URL relevan dengan proteksi throttling.
+  void _tryExtractDeadlines(WebViewController controller, String url) {
     final lower = url.toLowerCase();
     final isRelevant = lower.contains('mentari.unpam.ac.id') &&
         !lower.contains('login') &&
@@ -1233,7 +1235,9 @@ class _PortalWebViewScreenState extends State<PortalWebViewScreen>
         !lower.contains('theme/');
     if (!isRelevant) return;
 
-    Future<void> extract() async {
+    _deadlineExtractThrottleTimer?.cancel();
+    _deadlineExtractThrottleTimer = Timer(const Duration(milliseconds: 700), () async {
+      if (!mounted) return;
       try {
         final result = await controller
             .runJavaScriptReturningResult(PortalJsScripts.deadlineExtractor);
@@ -1244,14 +1248,6 @@ class _PortalWebViewScreenState extends State<PortalWebViewScreen>
       } catch (e) {
         debugPrint('[DeadlineExtractor] Error: $e');
       }
-    }
-
-    await extract();
-    Future.delayed(const Duration(milliseconds: 800), () {
-      if (mounted) extract();
-    });
-    Future.delayed(const Duration(milliseconds: 2000), () {
-      if (mounted) extract();
     });
   }
 

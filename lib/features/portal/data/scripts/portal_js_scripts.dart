@@ -381,6 +381,20 @@ class PortalJsScripts {
         return null;
       }
 
+      // Pembersih HTML ringan berbasis string (tanpa membuat DOM atau memicu reflow browser)
+      function stripHtmlTags(str) {
+        if (!str) return '';
+        return str
+          .replace(/<script\b[^<]*(?:(?!<\/script>)<[^<]*)*<\/script>/gi, ' ')
+          .replace(/<style\b[^<]*(?:(?!<\/style>)<[^<]*)*<\/style>/gi, ' ')
+          .replace(/<[^>]+>/g, ' ')
+          .replace(/&nbsp;/gi, ' ')
+          .replace(/&amp;/gi, '&')
+          .replace(/&quot;/gi, '"')
+          .replace(/&#39;/gi, "'")
+          .replace(/\s{2,}/g, ' ');
+      }
+
       function guessType(text) {
         var lower = (text || '').toLowerCase();
         if (lower.indexOf('quiz') !== -1 || lower.indexOf('kuis') !== -1 || lower.indexOf('pretest') !== -1 || lower.indexOf('posttest') !== -1) return 'kuis';
@@ -605,7 +619,7 @@ class PortalJsScripts {
 
         if (courseLinks.length > 0 && !window.__pamsDashboardCoursesFetched) {
           window.__pamsDashboardCoursesFetched = true;
-          var targets = courseLinks.slice(0, 10);
+          var targets = courseLinks.slice(0, 8);
           var allAccumulated = [];
           var completed = 0;
           targets.forEach(function(cUrl, idx) {
@@ -613,9 +627,9 @@ class PortalJsScripts {
               fetch(cUrl, { credentials: 'same-origin' })
                 .then(function(r) { return r.text(); })
                 .then(function(html) {
-                  var tempDiv = document.createElement('div');
-                  tempDiv.innerHTML = html;
-                  var cItems = parseMentariCourseTextOrDom(tempDiv.innerText, cUrl);
+                  // Gunakan string parser murni tanpa DOM reflow
+                  var cleanText = stripHtmlTags(html);
+                  var cItems = parseMentariCourseTextOrDom(cleanText, cUrl);
                   if (cItems && cItems.length > 0) {
                     allAccumulated = allAccumulated.concat(cItems);
                   }
@@ -628,7 +642,7 @@ class PortalJsScripts {
                     }
                   }
                 });
-            }, idx * 250);
+            }, idx * 350);
           });
         }
 
@@ -702,22 +716,26 @@ class PortalJsScripts {
       function runScan() {
         try {
           var results = scanDomDeadlines();
-          if (results && results.length > 0 && window.DeadlineChannel) {
-            window.DeadlineChannel.postMessage(JSON.stringify(results));
+          if (results && results.length > 0) {
+            // Hindari banjir bridge platform jika data tidak berubah
+            var hash = results.length + ':' + results[0].id + ':' + results[results.length - 1].id;
+            if (hash === window.__pamsLastDeadlineHash) return;
+            window.__pamsLastDeadlineHash = hash;
+            if (window.DeadlineChannel) {
+              window.DeadlineChannel.postMessage(JSON.stringify(results));
+            }
           }
         } catch(e) {}
       }
 
       runScan();
-      setTimeout(runScan, 500);
-      setTimeout(runScan, 1500);
 
       if (!window.__pamsDeadlineObserverInstalled && window.MutationObserver) {
         window.__pamsDeadlineObserverInstalled = true;
         var debounceTimer = null;
         var observer = new MutationObserver(function() {
           if (debounceTimer) clearTimeout(debounceTimer);
-          debounceTimer = setTimeout(runScan, 800);
+          debounceTimer = setTimeout(runScan, 2500);
         });
         if (document.body) {
           observer.observe(document.body, { childList: true, subtree: true });

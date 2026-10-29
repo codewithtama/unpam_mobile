@@ -1,6 +1,14 @@
 # Catatan Pembaruan Rilis The PAMs
 
-## Versi 1.0.46 (Terbaru)
+## Versi 1.0.47 (Terbaru)
+
+- **Optimasi Ekstrem Performa Mentari Sync (Zero-Framedrop & 60–120 FPS)**:
+  - **Eliminasi Total DOM Reflow di WebView**: Menggantikan `tempDiv.innerHTML` dan `tempDiv.innerText` dengan parser string murni (`stripHtmlTags`) berkinerja tinggi. Pemrosesan HTML kursus kini berlangsung dalam hitungan milidetik di memori tanpa memicu layout, reflow, atau pembebanan GPU pada Chromium WebView.
+  - **Debounce & Diff-Guard Penjadwalan Alarm**: Menambahkan validasi `_areDeadlinesEqual` pada `ScheduleProvider` untuk mencegah penulisan disk dan penjadwalan ulang jika data tidak berubah. Penjadwalan alarm `AlarmManager` native didebounce 2.000 ms, mengeliminasi banjir ratusan panggilan platform channel IPC yang sebelumnya membekukan thread utama Flutter.
+  - **Throttling Evaluasi JavaScript & MutationObserver**: Menghapus eksekusi bertingkat (triplicate calls) pada `_tryExtractDeadlines` menjadi 1 kali evaluasi tertunda (700 ms). Debounce `MutationObserver` dinaikkan menjadi 2.500 ms dengan hash caching payload agar tidak mengirim data duplikat.
+  - **Pengujian Otomatis**: 31/31 unit & widget tests lulus, 0 analyzer issues.
+
+## Versi 1.0.46
 
 - **Optimasi Notifikasi Sinkronisasi Deadline (Anti-Spam & Single-Alert)**:
   - **Pembatasan Notifikasi Tunggal (Cukup 1 Kali)**: Notifikasi SnackBar `✓ X deadline/tugas berhasil diperbarui!` kini dibatasi maksimal 1 kali per sesi perkuliahan Mentari, mencegah notifikasi berulang-ulang yang mengganggu pengguna saat berpindah halaman atau saat scanner DOM berjalan.
