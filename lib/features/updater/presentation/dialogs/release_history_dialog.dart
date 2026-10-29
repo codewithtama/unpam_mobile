@@ -36,7 +36,7 @@ class _ReleaseHistoryDialogState extends State<ReleaseHistoryDialog> {
   bool _isLoading = true;
   String? _errorMessage;
   List<GitHubRelease> _releases = [];
-  String _currentVersion = '1.0.50';
+  String _currentVersion = '1.0.51';
 
   @override
   void initState() {

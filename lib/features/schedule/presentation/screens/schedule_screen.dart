@@ -13,8 +13,7 @@ import '../widgets/deadline_list_tile.dart';
 /// Layar utama Jadwal Kuliah & Deadline Tracker.
 ///
 /// Menampilkan tiga sub-tab: Hari Ini, Mingguan, dan Deadline.
-/// Data diisi secara otomatis oleh JS scraper di portal WebView dan
-/// disimpan di cache lokal via SharedPreferences.
+/// Mendukung sinkronisasi native langsung via REST API My UNPAM dan AJAX Mentari LMS.
 class ScheduleScreen extends StatefulWidget {
   /// Callback untuk membuka portal MyUnpam di tab jadwal kuliah.
   final VoidCallback? onOpenMyUnpamJadwal;
@@ -60,12 +59,48 @@ class _ScheduleScreenState extends State<ScheduleScreen>
       vsync: this,
       initialIndex: widget.initialTabIndex.clamp(0, 2),
     );
+
+    // Otomatis tarik jadwal secara native jika belum tersedia
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      final provider = context.read<ScheduleProvider>();
+      if (!provider.hasSchedules) {
+        provider.syncScheduleWithPortal();
+      }
+    });
   }
 
   @override
   void dispose() {
     _tabController.dispose();
     super.dispose();
+  }
+
+  Future<void> _triggerActiveSync() async {
+    final isDeadlineTab = _tabController.index == 2;
+    ScaffoldMessenger.of(context).hideCurrentSnackBar();
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(isDeadlineTab
+            ? 'Menyinkronkan deadline dari Mentari LMS...'
+            : 'Menyinkronkan jadwal kuliah dari My UNPAM...'),
+        duration: const Duration(seconds: 2),
+      ),
+    );
+
+    if (isDeadlineTab) {
+      if (widget.onSyncDeadline != null) {
+        await widget.onSyncDeadline!.call();
+      } else if (mounted) {
+        await context.read<ScheduleProvider>().syncDeadlinesWithMentari();
+      }
+    } else {
+      if (widget.onSyncSchedule != null) {
+        await widget.onSyncSchedule!.call();
+      } else if (mounted) {
+        await context.read<ScheduleProvider>().syncScheduleWithPortal(forceRefresh: true);
+      }
+    }
   }
 
   @override
@@ -103,34 +138,18 @@ class _ScheduleScreenState extends State<ScheduleScreen>
           ],
         ),
         actions: [
-          if (widget.onSyncSchedule != null || widget.onSyncDeadline != null)
-            IconButton(
-              icon: const Icon(Icons.sync_rounded, color: AppTheme.accentGold, size: 22),
-              tooltip: 'Sinkronkan data dari portal',
-              onPressed: () async {
-                final isDeadlineTab = _tabController.index == 2;
-                ScaffoldMessenger.of(context).showSnackBar(
-                  SnackBar(
-                    content: Text(isDeadlineTab
-                        ? 'Menyinkronkan deadline dari Mentari LMS...'
-                        : 'Menyinkronkan jadwal kuliah dari MyUnpam...'),
-                    duration: const Duration(seconds: 2),
-                  ),
-                );
-                if (isDeadlineTab) {
-                  await widget.onSyncDeadline?.call();
-                } else {
-                  await widget.onSyncSchedule?.call();
-                }
-              },
-            ),
+          IconButton(
+            icon: const Icon(Icons.sync_rounded, color: AppTheme.accentGold, size: 22),
+            tooltip: 'Sinkronkan data secara native',
+            onPressed: _triggerActiveSync,
+          ),
           Consumer<ScheduleProvider>(
             builder: (_, provider, __) {
               final lastSync = provider.lastScheduleSync;
               return Tooltip(
                 message: lastSync != null
-                    ? 'Terakhir sync: ${DateFormat('HH:mm, dd MMM', 'id_ID').format(lastSync)}\n\nTekan tombol sync atau buka halaman Jadwal Kuliah di MyUnpam.'
-                    : 'Belum pernah sync.\nTekan tombol sync atau buka halaman Jadwal di MyUnpam.',
+                    ? 'Terakhir sync: ${DateFormat('HH:mm, dd MMM', 'id_ID').format(lastSync)}\n\nTekan tombol sync atau tarik layar ke bawah untuk memperbarui.'
+                    : 'Belum pernah sync.\nTekan tombol sync untuk sinkronisasi native.',
                 child: Padding(
                   padding: const EdgeInsets.only(right: 16),
                   child: Icon(
@@ -165,8 +184,14 @@ class _ScheduleScreenState extends State<ScheduleScreen>
       body: TabBarView(
         controller: _tabController,
         children: [
-          _TodayTab(onOpenMyUnpam: widget.onOpenMyUnpamJadwal),
-          _WeeklyTab(onOpenMyUnpam: widget.onOpenMyUnpamJadwal),
+          _TodayTab(
+            onOpenMyUnpam: widget.onOpenMyUnpamJadwal,
+            onSyncSchedule: widget.onSyncSchedule,
+          ),
+          _WeeklyTab(
+            onOpenMyUnpam: widget.onOpenMyUnpamJadwal,
+            onSyncSchedule: widget.onSyncSchedule,
+          ),
           _DeadlineTab(
             onOpenMentari: widget.onOpenMentariDeadline,
             onOpenDeadlineUrl: widget.onOpenDeadlineUrl,
@@ -184,7 +209,9 @@ class _ScheduleScreenState extends State<ScheduleScreen>
 
 class _TodayTab extends StatelessWidget {
   final VoidCallback? onOpenMyUnpam;
-  const _TodayTab({this.onOpenMyUnpam});
+  final Future<void> Function()? onSyncSchedule;
+
+  const _TodayTab({this.onOpenMyUnpam, this.onSyncSchedule});
 
   @override
   Widget build(BuildContext context) {
@@ -193,62 +220,82 @@ class _TodayTab extends StatelessWidget {
         final today = DateTime.now();
         final todaySchedule = provider.todaySchedule;
 
-        return ListView(
-          padding: const EdgeInsets.only(top: 14, bottom: 24),
-          children: [
-            // Header tanggal hari ini
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 16),
-              child: Row(
-                children: [
-                  Container(
-                    padding: const EdgeInsets.symmetric(
-                        horizontal: 12, vertical: 6),
-                    decoration: BoxDecoration(
-                      color: AppTheme.primaryBlue.withOpacity(0.1),
-                      borderRadius: BorderRadius.circular(20),
-                    ),
-                    child: Text(
-                      DateFormat('EEEE, d MMMM yyyy', 'id_ID').format(today),
-                      style: const TextStyle(
-                        fontSize: 13,
-                        fontWeight: FontWeight.w600,
-                        color: AppTheme.primaryBlue,
+        return RefreshIndicator(
+          color: AppTheme.accentGold,
+          backgroundColor: AppTheme.primaryBlue,
+          onRefresh: () async {
+            if (onSyncSchedule != null) {
+              await onSyncSchedule!();
+            } else {
+              await provider.syncScheduleWithPortal(forceRefresh: true);
+            }
+          },
+          child: ListView(
+            physics: const AlwaysScrollableScrollPhysics(),
+            padding: const EdgeInsets.only(top: 14, bottom: 24),
+            children: [
+              // Header tanggal hari ini
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 16),
+                child: Row(
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 12, vertical: 6),
+                      decoration: BoxDecoration(
+                        color: AppTheme.primaryBlue.withOpacity(0.1),
+                        borderRadius: BorderRadius.circular(20),
+                      ),
+                      child: Text(
+                        DateFormat('EEEE, d MMMM yyyy', 'id_ID').format(today),
+                        style: const TextStyle(
+                          fontSize: 13,
+                          fontWeight: FontWeight.w600,
+                          color: AppTheme.primaryBlue,
+                        ),
                       ),
                     ),
-                  ),
-                ],
-              ),
-            ),
-            const SizedBox(height: 14),
-
-            if (provider.isScheduleLoading)
-              const _LoadingPlaceholder(message: 'Memuat jadwal...')
-            else if (todaySchedule.isEmpty)
-              _EmptyState(
-                icon: Icons.event_available_outlined,
-                title: provider.hasSchedules
-                    ? 'Tidak ada kuliah hari ini'
-                    : 'Jadwal belum tersedia',
-                subtitle: provider.hasSchedules
-                    ? 'Nikmati hari liburmu! 🎉'
-                    : 'Buka halaman Jadwal Kuliah di MyUnpam untuk sinkronisasi otomatis.',
-                buttonLabel:
-                    provider.hasSchedules ? null : 'Buka Jadwal di MyUnpam',
-                onButtonTap: onOpenMyUnpam,
-              )
-            else ...[
-              // Upcoming deadlines banner (jika ada yang mendesak)
-              _buildUpcomingDeadlineBanner(context),
-              // Jadwal cards
-              ...todaySchedule.map(
-                (s) => TodayScheduleCard(
-                  schedule: s,
-                  isOngoing: _isOngoing(s),
+                  ],
                 ),
               ),
+              const SizedBox(height: 14),
+
+              if (provider.isScheduleLoading && !provider.hasSchedules)
+                const _LoadingPlaceholder(message: 'Memuat jadwal kuliah...')
+              else if (todaySchedule.isEmpty)
+                _EmptyState(
+                  icon: Icons.event_available_outlined,
+                  title: provider.hasSchedules
+                      ? 'Tidak ada kuliah hari ini'
+                      : 'Jadwal belum tersedia',
+                  subtitle: provider.hasSchedules
+                      ? 'Nikmati hari liburmu! 🎉'
+                      : 'Tarik ke bawah atau tekan tombol untuk sinkronisasi langsung dari My UNPAM.',
+                  buttonLabel: provider.hasSchedules
+                      ? null
+                      : 'Sinkronkan Jadwal Sekarang',
+                  buttonIcon: Icons.sync_rounded,
+                  onButtonTap: () async {
+                    if (onSyncSchedule != null) {
+                      await onSyncSchedule!();
+                    } else {
+                      await provider.syncScheduleWithPortal(forceRefresh: true);
+                    }
+                  },
+                )
+              else ...[
+                // Upcoming deadlines banner (jika ada yang mendesak)
+                _buildUpcomingDeadlineBanner(context),
+                // Jadwal cards
+                ...todaySchedule.map(
+                  (s) => TodayScheduleCard(
+                    schedule: s,
+                    isOngoing: _isOngoing(s),
+                  ),
+                ),
+              ],
             ],
-          ],
+          ),
         );
       },
     );
@@ -313,32 +360,63 @@ class _TodayTab extends StatelessWidget {
 
 class _WeeklyTab extends StatelessWidget {
   final VoidCallback? onOpenMyUnpam;
-  const _WeeklyTab({this.onOpenMyUnpam});
+  final Future<void> Function()? onSyncSchedule;
+
+  const _WeeklyTab({this.onOpenMyUnpam, this.onSyncSchedule});
 
   @override
   Widget build(BuildContext context) {
     return Consumer<ScheduleProvider>(
       builder: (_, provider, __) {
-        if (provider.isScheduleLoading) {
-          return const _LoadingPlaceholder(message: 'Memuat jadwal...');
-        }
+        return RefreshIndicator(
+          color: AppTheme.accentGold,
+          backgroundColor: AppTheme.primaryBlue,
+          onRefresh: () async {
+            if (onSyncSchedule != null) {
+              await onSyncSchedule!();
+            } else {
+              await provider.syncScheduleWithPortal(forceRefresh: true);
+            }
+          },
+          child: Builder(
+            builder: (context) {
+              if (provider.isScheduleLoading && !provider.hasSchedules) {
+                return const _LoadingPlaceholder(message: 'Memuat jadwal...');
+              }
 
-        if (!provider.hasSchedules) {
-          return _EmptyState(
-            icon: Icons.calendar_today_outlined,
-            title: 'Jadwal belum tersedia',
-            subtitle:
-                'Buka halaman Jadwal Kuliah di MyUnpam untuk sinkronisasi jadwal secara otomatis.',
-            buttonLabel: 'Buka Jadwal di MyUnpam',
-            onButtonTap: onOpenMyUnpam,
-          );
-        }
+              if (!provider.hasSchedules) {
+                return ListView(
+                  physics: const AlwaysScrollableScrollPhysics(),
+                  children: [
+                    SizedBox(height: MediaQuery.of(context).size.height * 0.15),
+                    _EmptyState(
+                      icon: Icons.calendar_today_outlined,
+                      title: 'Jadwal belum tersedia',
+                      subtitle:
+                          'Tarik ke bawah atau tekan tombol untuk sinkronisasi jadwal kuliah langsung dari My UNPAM.',
+                      buttonLabel: 'Sinkronkan Jadwal Sekarang',
+                      buttonIcon: Icons.sync_rounded,
+                      onButtonTap: () async {
+                        if (onSyncSchedule != null) {
+                          await onSyncSchedule!();
+                        } else {
+                          await provider.syncScheduleWithPortal(forceRefresh: true);
+                        }
+                      },
+                    ),
+                  ],
+                );
+              }
 
-        return ListView(
-          padding: const EdgeInsets.only(top: 14, bottom: 24),
-          children: [
-            WeeklyScheduleView(weeklySchedule: provider.weeklySchedule),
-          ],
+              return ListView(
+                physics: const AlwaysScrollableScrollPhysics(),
+                padding: const EdgeInsets.only(top: 14, bottom: 24),
+                children: [
+                  WeeklyScheduleView(weeklySchedule: provider.weeklySchedule),
+                ],
+              );
+            },
+          ),
         );
       },
     );
@@ -353,6 +431,7 @@ class _DeadlineTab extends StatelessWidget {
   final VoidCallback? onOpenMentari;
   final void Function(String url)? onOpenDeadlineUrl;
   final Future<void> Function()? onSyncDeadline;
+
   const _DeadlineTab({
     this.onOpenMentari,
     this.onOpenDeadlineUrl,
@@ -363,76 +442,105 @@ class _DeadlineTab extends StatelessWidget {
   Widget build(BuildContext context) {
     return Consumer<ScheduleProvider>(
       builder: (_, provider, __) {
-        if (provider.isDeadlineLoading) {
-          return const _LoadingPlaceholder(message: 'Memuat deadline...');
-        }
+        return RefreshIndicator(
+          color: AppTheme.accentGold,
+          backgroundColor: AppTheme.primaryBlue,
+          onRefresh: () async {
+            if (onSyncDeadline != null) {
+              await onSyncDeadline!();
+            } else {
+              await provider.syncDeadlinesWithMentari();
+            }
+          },
+          child: Builder(
+            builder: (context) {
+              if (provider.isDeadlineLoading && !provider.hasDeadlines) {
+                return const _LoadingPlaceholder(message: 'Memuat deadline...');
+              }
 
-        final upcoming = provider.upcomingDeadlines;
-        final overdue = provider.overdueDeadlines;
+              final upcoming = provider.upcomingDeadlines;
+              final overdue = provider.overdueDeadlines;
 
-        if (!provider.hasDeadlines) {
-          return _EmptyState(
-            icon: Icons.assignment_outlined,
-            title: 'Deadline belum tersedia',
-            subtitle:
-                'Buka Mentari LMS dan buka salah satu mata kuliah atau tugas untuk sinkronisasi otomatis.',
-            buttonLabel: 'Buka Mentari LMS',
-            onButtonTap: onOpenMentari,
-          );
-        }
+              if (!provider.hasDeadlines) {
+                return ListView(
+                  physics: const AlwaysScrollableScrollPhysics(),
+                  children: [
+                    SizedBox(height: MediaQuery.of(context).size.height * 0.15),
+                    _EmptyState(
+                      icon: Icons.assignment_outlined,
+                      title: 'Deadline belum tersedia',
+                      subtitle:
+                          'Tarik ke bawah atau tekan tombol untuk sinkronisasi deadline tugas langsung dari Mentari LMS.',
+                      buttonLabel: 'Sinkronkan Deadline Sekarang',
+                      buttonIcon: Icons.sync_rounded,
+                      onButtonTap: () async {
+                        if (onSyncDeadline != null) {
+                          await onSyncDeadline!();
+                        } else {
+                          await provider.syncDeadlinesWithMentari();
+                        }
+                      },
+                    ),
+                  ],
+                );
+              }
 
-        return ListView(
-          padding: const EdgeInsets.only(top: 14, bottom: 24),
-          children: [
-            if (upcoming.isNotEmpty) ...[
-              _SectionHeader(
-                title: 'Akan Datang (${upcoming.length})',
-                icon: Icons.pending_actions_outlined,
-                color: AppTheme.primaryBlue,
-              ),
-              ...upcoming.map(
-                (d) => DeadlineListTile(
-                  deadline: d,
-                  onTap: () => _openDeadline(context, d.url),
-                ),
-              ),
-            ],
-            if (overdue.isNotEmpty) ...[
-              const SizedBox(height: 8),
-              _SectionHeader(
-                title: 'Terlewat (${overdue.length})',
-                icon: Icons.assignment_late_outlined,
-                color: Colors.grey.shade500,
-              ),
-              ...overdue.map(
-                (d) => DeadlineListTile(
-                  deadline: d,
-                  onTap: () => _openDeadline(context, d.url),
-                ),
-              ),
-            ],
-            const SizedBox(height: 8),
-            // Sync hint
-            const Padding(
-              padding: EdgeInsets.symmetric(horizontal: 16),
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.center,
+              return ListView(
+                physics: const AlwaysScrollableScrollPhysics(),
+                padding: const EdgeInsets.only(top: 14, bottom: 24),
                 children: [
-                  Icon(Icons.info_outline,
-                      size: 13, color: AppTheme.textMuted),
-                  SizedBox(width: 6),
-                  Expanded(
-                    child: Text(
-                      'Deadline diambil dari dashboard Mentari LMS. Buka Mentari untuk memperbarui.',
-                      style: TextStyle(
-                          fontSize: 11, color: AppTheme.textMuted),
-                      textAlign: TextAlign.center,
+                  if (upcoming.isNotEmpty) ...[
+                    _SectionHeader(
+                      title: 'Akan Datang (${upcoming.length})',
+                      icon: Icons.pending_actions_outlined,
+                      color: AppTheme.primaryBlue,
+                    ),
+                    ...upcoming.map(
+                      (d) => DeadlineListTile(
+                        deadline: d,
+                        onTap: () => _openDeadline(context, d.url),
+                      ),
+                    ),
+                  ],
+                  if (overdue.isNotEmpty) ...[
+                    const SizedBox(height: 8),
+                    _SectionHeader(
+                      title: 'Terlewat (${overdue.length})',
+                      icon: Icons.assignment_late_outlined,
+                      color: Colors.grey.shade500,
+                    ),
+                    ...overdue.map(
+                      (d) => DeadlineListTile(
+                        deadline: d,
+                        onTap: () => _openDeadline(context, d.url),
+                      ),
+                    ),
+                  ],
+                  const SizedBox(height: 8),
+                  // Sync hint
+                  const Padding(
+                    padding: EdgeInsets.symmetric(horizontal: 16),
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Icon(Icons.info_outline,
+                            size: 13, color: AppTheme.textMuted),
+                        SizedBox(width: 6),
+                        Expanded(
+                          child: Text(
+                            'Deadline disinkronkan langsung dari Mentari LMS.',
+                            style: TextStyle(
+                                fontSize: 11, color: AppTheme.textMuted),
+                            textAlign: TextAlign.center,
+                          ),
+                        ),
+                      ],
                     ),
                   ),
                 ],
-              ),
-            ),
-          ],
+              );
+            },
+          ),
         );
       },
     );
@@ -529,6 +637,7 @@ class _EmptyState extends StatelessWidget {
   final String title;
   final String subtitle;
   final String? buttonLabel;
+  final IconData buttonIcon;
   final VoidCallback? onButtonTap;
 
   const _EmptyState({
@@ -536,6 +645,7 @@ class _EmptyState extends StatelessWidget {
     required this.title,
     required this.subtitle,
     this.buttonLabel,
+    this.buttonIcon = Icons.open_in_new_rounded,
     this.onButtonTap,
   });
 
@@ -580,7 +690,7 @@ class _EmptyState extends StatelessWidget {
               const SizedBox(height: 22),
               ElevatedButton.icon(
                 onPressed: onButtonTap,
-                icon: const Icon(Icons.open_in_new_rounded, size: 16),
+                icon: Icon(buttonIcon, size: 16),
                 label: Text(buttonLabel!),
               ),
             ],

@@ -25,6 +25,9 @@ import 'package:unpam_mobile/features/schedule/presentation/providers/schedule_p
 import 'package:unpam_mobile/core/services/notification_service.dart';
 import 'package:provider/provider.dart';
 import 'package:unpam_mobile/features/schedule/presentation/screens/schedule_screen.dart';
+import 'package:unpam_mobile/core/constants/api_constants.dart';
+import 'package:unpam_mobile/features/academic/data/my_unpam_session.dart';
+import 'package:unpam_mobile/features/academic/data/academic_portal_service.dart';
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
@@ -896,6 +899,60 @@ void main() {
       // Verifikasi callback in-app terpanggil dengan URL Mentari yang benar
       expect(openedUrl, equals(targetUrl));
       await tester.pump(const Duration(seconds: 3));
+    });
+
+    test('ScheduleProvider.syncScheduleWithPortal natively syncs schedule from AcademicPortalService', () async {
+      SharedPreferences.setMockInitialValues({});
+      final storage = await StorageService.getInstance();
+      await storage.rawPreferences.clear();
+      final scheduleService = ScheduleService(storage.rawPreferences);
+
+      final session = MyUnpamSession(storage);
+      final academicService = AcademicPortalService(session, storage);
+
+      const mockScheduleJson = '''
+      {
+        "jadwal": [
+          {
+            "id_mata_kuliah": "22SIF0242",
+            "nama_mata_kuliah": "PEMROGRAMAN MOBILE",
+            "id_kelas": "04SIFE001",
+            "ruang": "V.401",
+            "nama_lokasi_kampus": "Kampus Viktor",
+            "id_periode": "1",
+            "id_jenis_perkuliahan": "TM",
+            "keterangan_jenis_perkuliahan": "Tatap Muka",
+            "waktu_kuliah": {
+              "ket_jam": "07:40 - 09:20",
+              "hari": {
+                "id_hari_waktu_kuliah": "4",
+                "nama_hari": "Kamis"
+              }
+            },
+            "dosen": {
+              "nama_gelar_dosen": "Dr. Dosen Pengampu, M.Kom."
+            }
+          }
+        ]
+      }
+      ''';
+      await storage.saveCachedJson(ApiConstants.myUnpamCachedScheduleKey, mockScheduleJson);
+
+      final provider = ScheduleProvider(
+        scheduleService,
+        storage.rawPreferences,
+        academicPortalService: academicService,
+      );
+
+      expect(provider.schedules.length, equals(1));
+      expect(provider.schedules[0].namaMataKuliah, equals('PEMROGRAMAN MOBILE'));
+      expect(provider.schedules[0].hari, equals('Kamis'));
+      expect(provider.schedules[0].jamMulai, equals('07:40'));
+      expect(provider.schedules[0].jamSelesai, equals('09:20'));
+
+      await provider.syncScheduleWithPortal();
+      expect(provider.schedules.length, equals(1));
+      expect(provider.scheduleState, equals(ScheduleLoadState.loaded));
     });
   });
 }

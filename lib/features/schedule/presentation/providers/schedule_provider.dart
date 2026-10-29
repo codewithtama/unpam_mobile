@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import '../../../academic/data/academic_portal_service.dart';
 import '../../domain/models/schedule_model.dart';
 import '../../data/schedule_service.dart';
 import '../../data/deadline_reminder_service.dart';
@@ -11,6 +12,7 @@ enum ScheduleLoadState { idle, loading, loaded, error }
 class ScheduleProvider extends ChangeNotifier {
   final ScheduleService _service;
   final SharedPreferences _prefs;
+  final AcademicPortalService? _academicPortalService;
 
   List<CourseSchedule> _schedules = [];
   List<CourseDeadline> _deadlines = [];
@@ -34,12 +36,17 @@ class ScheduleProvider extends ChangeNotifier {
     }
     return true;
   }
+
   ScheduleLoadState _scheduleState = ScheduleLoadState.idle;
   ScheduleLoadState _deadlineState = ScheduleLoadState.idle;
   String _scheduleError = '';
   String _deadlineError = '';
 
-  ScheduleProvider(this._service, this._prefs) {
+  ScheduleProvider(
+    this._service,
+    this._prefs, {
+    AcademicPortalService? academicPortalService,
+  }) : _academicPortalService = academicPortalService {
     _loadFromCache();
   }
 
@@ -76,11 +83,82 @@ class ScheduleProvider extends ChangeNotifier {
 
   void _loadFromCache() {
     _schedules = _service.loadSchedule();
+    if (_schedules.isEmpty && _academicPortalService != null) {
+      final cached = _academicPortalService!.getCachedSchedule();
+      if (cached != null && cached.jadwal.isNotEmpty) {
+        _schedules = cached.jadwal
+            .map((e) => CourseSchedule.fromJson(e.toJson()))
+            .toList();
+        _service.saveSchedule(_schedules);
+      }
+    }
+
     _deadlines = _service.loadDeadlines();
     if (_schedules.isNotEmpty) _scheduleState = ScheduleLoadState.loaded;
     if (_deadlines.isNotEmpty) {
       _deadlineState = ScheduleLoadState.loaded;
       DeadlineReminderService().scheduleRemindersForDeadlines(_deadlines, _prefs);
+    }
+  }
+
+  // ─── Sinkronisasi Native Portal & LMS ─────────────────────────
+
+  /// Sinkronkan jadwal kuliah langsung secara native dari REST API My UNPAM.
+  Future<void> syncScheduleWithPortal({bool forceRefresh = false}) async {
+    if (_academicPortalService == null) return;
+    if (_scheduleState == ScheduleLoadState.loading) return;
+
+    _scheduleState = ScheduleLoadState.loading;
+    _scheduleError = '';
+    notifyListeners();
+
+    try {
+      final response = await _academicPortalService!.fetchLectureSchedule(
+        forceRefresh: forceRefresh,
+      );
+      final mapped = response.jadwal
+          .map((item) => CourseSchedule.fromJson(item.toJson()))
+          .toList();
+
+      if (mapped.isNotEmpty) {
+        _schedules = mapped;
+        _scheduleState = ScheduleLoadState.loaded;
+        _scheduleError = '';
+        await _service.saveSchedule(mapped);
+      } else {
+        _scheduleState = ScheduleLoadState.loaded;
+      }
+    } catch (e) {
+      debugPrint('[ScheduleProvider] syncScheduleWithPortal error: $e');
+      _scheduleError = e.toString().replaceFirst('Exception: ', '');
+      _scheduleState =
+          _schedules.isNotEmpty ? ScheduleLoadState.loaded : ScheduleLoadState.error;
+    } finally {
+      notifyListeners();
+    }
+  }
+
+  /// Memicu sinkronisasi deadline Mentari LMS secara native.
+  Future<void> syncDeadlinesWithMentari() async {
+    if (_deadlineState == ScheduleLoadState.loading) return;
+    _deadlineState = ScheduleLoadState.loading;
+    _deadlineError = '';
+    notifyListeners();
+
+    try {
+      if (ScheduleService.globalDeadlineSyncer != null) {
+        await ScheduleService.globalDeadlineSyncer!();
+      }
+      // Beri toleransi waktu eksekusi AJAX respons asynchronous sebelum menyelesaikan indikator
+      await Future.delayed(const Duration(milliseconds: 1400));
+      _deadlineState = ScheduleLoadState.loaded;
+    } catch (e) {
+      debugPrint('[ScheduleProvider] syncDeadlinesWithMentari error: $e');
+      _deadlineError = e.toString().replaceFirst('Exception: ', '');
+      _deadlineState =
+          _deadlines.isNotEmpty ? ScheduleLoadState.loaded : ScheduleLoadState.error;
+    } finally {
+      notifyListeners();
     }
   }
 
@@ -191,4 +269,3 @@ class ScheduleProvider extends ChangeNotifier {
     notifyListeners();
   }
 }
-

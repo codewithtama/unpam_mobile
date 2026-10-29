@@ -1,6 +1,19 @@
 # Catatan Pembaruan Rilis The PAMs
 
-## Versi 1.0.50 (Terbaru)
+## Versi 1.0.51 (Terbaru)
+
+- **Sinkronisasi Native Terpadu untuk Jadwal & Deadline Tracker**:
+  - **Phase 1: Sinkronisasi Native Jadwal Kuliah (My UNPAM)**:
+    - `ScheduleProvider` kini terhubung langsung dengan `AcademicPortalService` (`/api/jadwal-kuliah`) melalui REST API My UNPAM di latar belakang.
+    - Hidrasi instan dari cache portal saat pembukaan layar dan auto-fetch jika data jadwal belum ada di memori.
+    - Dukungan pull-to-refresh langsung pada tab 'Hari Ini' dan 'Mingguan', serta tombol sinkronisasi pada kondisi data kosong.
+  - **Phase 2: Sinkronisasi Native Deadline & Kuis (Mentari Moodle LMS)**:
+    - Mengintegrasikan Moodle Web Service AJAX resmi (`/lib/ajax/service.php` dengan metode `core_calendar_get_action_events_by_timesort`).
+    - Otomatis mengekstrak token CSRF Moodle `sesskey` saat sesi Mentari aktif, menarik seluruh kalender deadline dan tugas aktif seluruh mata kuliah dalam 1 kali panggilan background tanpa perlu membuka halaman kursus satu per satu.
+    - Dukungan pull-to-refresh pada tab 'Deadline' dan sinkronisasi manual langsung dari tombol sinkronisasi AppBar.
+  - **Pengujian & Kualitas**: 57/57 unit & widget tests lulus, 0 analyzer issues.
+
+## Versi 1.0.50
 
 - **Navigasi Deadline In-App Terpadu & Keselarasan AI Tools Akademik**:
   - **In-App Deadline Navigation dari Hub Akademik**: Mengetuk tugas/deadline dari sub-menu Jadwal & Deadline di Hub Akademik kini langsung kembali ke dalam tab Mentari LMS aplikasi The PAMs secara mulus tanpa pernah melempar pengguna ke peramban eksternal.

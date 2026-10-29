@@ -49,20 +49,26 @@ void main() async {
     ..refresher = portalRefresher.run
     ..fetcher = portalFetcher.get;
 
+  final academicService = AcademicPortalService(portalSession, storage);
+
   runApp(
     MultiProvider(
       providers: [
         ChangeNotifierProvider(create: (_) => AiProvider(aiService, storage)),
         ChangeNotifierProvider(create: (_) => BiometricProvider(biometricService)),
         ChangeNotifierProvider(
-          create: (_) => ScheduleProvider(scheduleService, storage.rawPreferences),
+          create: (_) => ScheduleProvider(
+            scheduleService,
+            storage.rawPreferences,
+            academicPortalService: academicService,
+          ),
         ),
         ChangeNotifierProvider.value(value: portalSession),
         ChangeNotifierProvider(
           create: (_) => FinanceProvider(FinanceService(portalSession, storage), storage),
         ),
         ChangeNotifierProvider(
-          create: (_) => AcademicPortalProvider(AcademicPortalService(portalSession, storage)),
+          create: (_) => AcademicPortalProvider(academicService),
         ),
       ],
       child: ThePamsApp(

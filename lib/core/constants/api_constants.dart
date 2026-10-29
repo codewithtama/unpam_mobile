@@ -55,4 +55,5 @@ class ApiConstants {
   static const String scheduleLastSyncKey = 'unpam_schedule_last_sync';
   static const String deadlineLastSyncKey = 'unpam_deadline_last_sync';
   static const String scheduledReminderIdsKey = 'unpam_scheduled_reminder_ids';
+  static const String mentariSesskeyKey = 'unpam_mentari_sesskey';
 }

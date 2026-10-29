@@ -10,6 +10,9 @@ class ScheduleService {
   /// Callback global navigasi deadline ke tab Mentari LMS in-app.
   static void Function(String url)? globalDeadlineNavigator;
 
+  /// Callback global untuk memicu sinkronisasi deadline Mentari secara native.
+  static Future<void> Function()? globalDeadlineSyncer;
+
   ScheduleService(this._prefs);
 
   // ──────────────────────────────────────────────────────────────

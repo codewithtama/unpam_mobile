@@ -167,6 +167,16 @@ class _PortalWebViewScreenState extends State<PortalWebViewScreen>
       });
     };
 
+    ScheduleService.globalDeadlineSyncer = () async {
+      if (!mounted) return;
+      try {
+        await _controller.runJavaScript('window.__pamsMoodleAjaxFired = false;');
+        _tryExtractDeadlines(_controller, _currentUrl.isNotEmpty ? _currentUrl : 'https://mentari.unpam.ac.id');
+      } catch (e) {
+        debugPrint('[DeadlineSyncer] error: ');
+      }
+    };
+
     NotificationService().initialize(
       onUpdateTap: (info) {
         if (mounted && info.hasUpdate && !_isUpdateDialogShowing) {
@@ -215,6 +225,7 @@ class _PortalWebViewScreenState extends State<PortalWebViewScreen>
     if (ScheduleService.globalDeadlineNavigator != null) {
       ScheduleService.globalDeadlineNavigator = null;
     }
+    ScheduleService.globalDeadlineSyncer = null;
     WidgetsBinding.instance.removeObserver(this);
     _deadlineSnackbarDebounceTimer?.cancel();
     _deadlineExtractThrottleTimer?.cancel();

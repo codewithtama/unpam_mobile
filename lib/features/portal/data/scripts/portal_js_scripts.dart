@@ -231,6 +231,79 @@ class PortalJsScripts {
   /// Dilengkapi Network Hook, SPA Navigation Observer, dan parser tanggal lokal Indonesia.
   static const String deadlineExtractor = r'''
     (function() {
+      // ─── 0. Native Moodle Web Service AJAX (Calendar & Action Events) ───
+      try {
+        var sesskey = (window.M && window.M.cfg && window.M.cfg.sesskey) || '';
+        if (!sesskey) {
+          var sInp = document.querySelector('input[name="sesskey"]');
+          if (sInp && sInp.value) sesskey = sInp.value;
+        }
+        if (!sesskey) {
+          var logoutA = document.querySelector('a[href*="sesskey="]');
+          if (logoutA) {
+            var mSess = logoutA.href.match(/sesskey=([a-zA-Z0-9]+)/);
+            if (mSess) sesskey = mSess[1];
+          }
+        }
+
+        if (sesskey && !window.__pamsMoodleAjaxFired) {
+          window.__pamsMoodleAjaxFired = true;
+          var nowSec = Math.floor(Date.now() / 1000) - 86400;
+          var moodlePayload = [
+            {
+              index: 0,
+              methodname: "core_calendar_get_action_events_by_timesort",
+              args: {
+                limitnum: 100,
+                timesortfrom: nowSec
+              }
+            }
+          ];
+
+          fetch('/lib/ajax/service.php?sesskey=' + encodeURIComponent(sesskey) + '&info=core_calendar_get_action_events_by_timesort', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'Accept': 'application/json'
+            },
+            body: JSON.stringify(moodlePayload),
+            credentials: 'include'
+          })
+          .then(function(r) { return r.json(); })
+          .then(function(arr) {
+            if (Array.isArray(arr) && arr[0] && arr[0].data && Array.isArray(arr[0].data.events)) {
+              var evList = arr[0].data.events;
+              var resDeadlines = [];
+              for (var i = 0; i < evList.length; i++) {
+                var ev = evList[i];
+                var t = ev.activityname || ev.name || '';
+                var c = (ev.course && (ev.course.fullname || ev.course.shortname || ev.course.name)) || '';
+                var ts = ev.timesort || ev.timestart || 0;
+                var dIso = ts > 0 ? new Date(ts * 1000).toISOString() : null;
+                var u = ev.url || (ev.action && ev.action.url) || '';
+                var mType = ev.modname || ev.eventtype || 'tugas';
+
+                if (t && dIso) {
+                  resDeadlines.push({
+                    id: 'mentari_moodle_' + (ev.id || i),
+                    namaTugas: t,
+                    namaMataKuliah: c,
+                    dueDate: dIso,
+                    tipe: mType,
+                    url: u
+                  });
+                }
+              }
+
+              if (resDeadlines.length > 0 && window.DeadlineChannel) {
+                window.DeadlineChannel.postMessage(JSON.stringify(resDeadlines));
+              }
+            }
+          })
+          .catch(function(e) {});
+        }
+      } catch(e) {}
+
       // ─── 1. Hook Network Requests (XHR & Fetch) untuk Mentari ─────────
       if (!window.__pamsMentariHookInstalled) {
         window.__pamsMentariHookInstalled = true;

@@ -1,4 +1,5 @@
-import 'package:unpam_mobile/features/schedule/presentation/screens/schedule_screen.dart';
+import '../../../schedule/presentation/screens/schedule_screen.dart';
+import '../../../schedule/presentation/providers/schedule_provider.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../../data/my_unpam_session.dart';
@@ -49,6 +50,8 @@ class _AcademicHubScreenState extends State<AcademicHubScreen> {
               widget.onOpenDeadlineUrl!(url);
             }
           },
+          onSyncSchedule: () => ctx.read<ScheduleProvider>().syncScheduleWithPortal(forceRefresh: true),
+          onSyncDeadline: () => ctx.read<ScheduleProvider>().syncDeadlinesWithMentari(),
         )),
     _HubMenu('Presensi', 'Kehadiran per matkul', Icons.how_to_reg_rounded, AppTheme.accentGold,
         (_) => const AttendanceScreen()),
@@ -68,8 +71,12 @@ class _AcademicHubScreenState extends State<AcademicHubScreen> {
   Future<void> _refresh() async {
     final portal = context.read<AcademicPortalProvider>();
     final finance = context.read<FinanceProvider>();
-    await portal.refreshAll();
-    await finance.refresh();
+    final schedule = context.read<ScheduleProvider>();
+    await Future.wait([
+      portal.refreshAll(),
+      finance.refresh(),
+      schedule.syncScheduleWithPortal(forceRefresh: true),
+    ]);
   }
 
   String _buildAiSummary() {
