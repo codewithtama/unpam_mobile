@@ -9,11 +9,17 @@ import '../providers/finance_provider.dart';
 import '../../../../theme/app_theme.dart';
 import '../widgets/portal_ai_assist.dart';
 import '../widgets/portal_state_views.dart';
+import 'academic_documents_screen.dart';
 import 'academic_grades_screen.dart';
+import 'absence_permit_screen.dart';
 import 'attendance_screen.dart';
+import 'course_projects_screen.dart';
 import 'finance_screen.dart';
+import 'khs_screen.dart';
+import 'krs_screen.dart';
 import 'seminar_certificate_screen.dart';
 import 'student_profile_screen.dart';
+import 'thesis_screen.dart';
 
 class AcademicHubScreen extends StatefulWidget {
   final void Function(String url)? onOpenDeadlineUrl;
@@ -35,29 +41,109 @@ class _HubMenu {
 }
 
 class _AcademicHubScreenState extends State<AcademicHubScreen> {
-  List<_HubMenu> get _menus => [
-    _HubMenu('Biodata', 'Data diri & akademik', Icons.badge_rounded, AppTheme.primaryBlue,
-        (_) => const StudentProfileScreen()),
-    _HubMenu('Keuangan', 'Tagihan & pembayaran', Icons.account_balance_wallet_rounded,
-        AppTheme.accentGold, (_) => const FinanceScreen()),
-    _HubMenu('Nilai', 'Rangkuman & IPK', Icons.assessment_rounded, AppTheme.primaryLight,
-        (_) => const AcademicGradesScreen()),
-    _HubMenu('Jadwal & Deadline', 'Jadwal kuliah & tugas', Icons.calendar_today_rounded, AppTheme.primaryBlue,
-        (ctx) => ScheduleScreen(
-          onOpenDeadlineUrl: (url) {
-            Navigator.pop(ctx);
-            if (widget.onOpenDeadlineUrl != null) {
-              widget.onOpenDeadlineUrl!(url);
-            }
-          },
-          onSyncSchedule: () => ctx.read<ScheduleProvider>().syncScheduleWithPortal(forceRefresh: true),
-          onSyncDeadline: () => ctx.read<ScheduleProvider>().syncDeadlinesWithMentari(),
-        )),
-    _HubMenu('Presensi', 'Kehadiran per matkul', Icons.how_to_reg_rounded, AppTheme.accentGold,
-        (_) => const AttendanceScreen()),
-    _HubMenu('Sertifikat', 'Seminar & kegiatan', Icons.card_membership_rounded, AppTheme.primaryLight,
-        (_) => const SeminarCertificateScreen()),
-  ];
+  List<_HubMenu> get _coreAcademicMenus => [
+        _HubMenu(
+          'Biodata',
+          'Data diri & profil',
+          Icons.badge_rounded,
+          AppTheme.primaryBlue,
+          (_) => const StudentProfileScreen(),
+        ),
+        _HubMenu(
+          'KRS',
+          'Rencana studi aktif',
+          Icons.receipt_long_rounded,
+          AppTheme.accentGold,
+          (_) => const KrsScreen(),
+        ),
+        _HubMenu(
+          'KHS',
+          'Hasil studi & nilai',
+          Icons.grade_rounded,
+          AppTheme.primaryLight,
+          (_) => const KhsScreen(),
+        ),
+        _HubMenu(
+          'Transkrip',
+          'Rangkuman & IPK',
+          Icons.assessment_rounded,
+          AppTheme.primaryBlue,
+          (_) => const AcademicGradesScreen(),
+        ),
+        _HubMenu(
+          'Jadwal & Tugas',
+          'Jadwal kuliah & deadline',
+          Icons.calendar_today_rounded,
+          AppTheme.accentGold,
+          (ctx) => ScheduleScreen(
+            onOpenDeadlineUrl: (url) {
+              Navigator.pop(ctx);
+              if (widget.onOpenDeadlineUrl != null) {
+                widget.onOpenDeadlineUrl!(url);
+              }
+            },
+            onSyncSchedule: () =>
+                ctx.read<ScheduleProvider>().syncScheduleWithPortal(forceRefresh: true),
+            onSyncDeadline: () =>
+                ctx.read<ScheduleProvider>().syncDeadlinesWithMentari(),
+          ),
+        ),
+        _HubMenu(
+          'Presensi',
+          'Kehadiran per matkul',
+          Icons.how_to_reg_rounded,
+          AppTheme.primaryLight,
+          (_) => const AttendanceScreen(),
+        ),
+      ];
+
+  List<_HubMenu> get _administrationMenus => [
+        _HubMenu(
+          'Keuangan',
+          'Tagihan & pembayaran',
+          Icons.account_balance_wallet_rounded,
+          AppTheme.accentGold,
+          (_) => const FinanceScreen(),
+        ),
+        _HubMenu(
+          'Dokumen',
+          'Panduan & berkas resmi',
+          Icons.folder_shared_rounded,
+          AppTheme.primaryBlue,
+          (_) => const AcademicDocumentsScreen(),
+        ),
+        _HubMenu(
+          'Sertifikat',
+          'Seminar & event',
+          Icons.card_membership_rounded,
+          AppTheme.primaryLight,
+          (_) => const SeminarCertificateScreen(),
+        ),
+      ];
+
+  List<_HubMenu> get _specialProgramMenus => [
+        _HubMenu(
+          'Tugas Akhir',
+          'Skripsi & bimbingan',
+          Icons.menu_book_rounded,
+          AppTheme.primaryBlue,
+          (_) => const ThesisScreen(),
+        ),
+        _HubMenu(
+          'Proyek Kuliah',
+          'Tugas besar & MBKM',
+          Icons.assignment_turned_in_rounded,
+          AppTheme.accentGold,
+          (_) => const CourseProjectsScreen(),
+        ),
+        _HubMenu(
+          'Pengajuan Izin',
+          'Izin & absen jalan',
+          Icons.event_busy_rounded,
+          AppTheme.primaryLight,
+          (_) => const AbsencePermitScreen(),
+        ),
+      ];
 
   @override
   void initState() {
@@ -84,9 +170,15 @@ class _AcademicHubScreenState extends State<AcademicHubScreen> {
     final finance = context.read<FinanceProvider>();
     return [
       PortalAiText.biodata(portal.biodata.data),
+      PortalAiText.krs(portal.krs.data),
+      PortalAiText.khs(portal.khs.data),
       PortalAiText.grades(portal.grades.data),
       PortalAiText.schedule(portal.schedule.data),
       PortalAiText.finance(finance.financeData),
+      PortalAiText.thesis(portal.thesis.data),
+      PortalAiText.courseProjects(portal.courseProjects.data),
+      PortalAiText.absencePermits(portal.absencePermits.data),
+      PortalAiText.documents(portal.documents.data),
     ].where((part) => part.isNotEmpty).join('\n\n');
   }
 
@@ -108,27 +200,49 @@ class _AcademicHubScreenState extends State<AcademicHubScreen> {
           _buildStudentCard(),
           const SizedBox(height: 14),
           _buildSessionCard(),
-          const SizedBox(height: 20),
-          const Text(
-            'Layanan My UNPAM',
-            style: TextStyle(
-              fontSize: 15,
-              fontWeight: FontWeight.bold,
-              color: AppTheme.textDark,
-            ),
-          ),
+          const SizedBox(height: 22),
+          _buildSectionHeader('Akademik Perkuliahan', Icons.school_rounded),
           const SizedBox(height: 10),
-          GridView.count(
-            crossAxisCount: 2,
-            shrinkWrap: true,
-            physics: const NeverScrollableScrollPhysics(),
-            mainAxisSpacing: 12,
-            crossAxisSpacing: 12,
-            childAspectRatio: 1.35,
-            children: _menus.map(_buildMenuTile).toList(),
-          ),
+          _buildMenuGrid(_coreAcademicMenus),
+          const SizedBox(height: 22),
+          _buildSectionHeader('Administrasi & Dokumen', Icons.business_center_rounded),
+          const SizedBox(height: 10),
+          _buildMenuGrid(_administrationMenus),
+          const SizedBox(height: 22),
+          _buildSectionHeader('Program & Bimbingan', Icons.auto_stories_rounded),
+          const SizedBox(height: 10),
+          _buildMenuGrid(_specialProgramMenus),
         ],
       ),
+    );
+  }
+
+  Widget _buildSectionHeader(String title, IconData icon) {
+    return Row(
+      children: [
+        Icon(icon, size: 18, color: AppTheme.primaryBlue),
+        const SizedBox(width: 8),
+        Text(
+          title,
+          style: const TextStyle(
+            fontSize: 15,
+            fontWeight: FontWeight.bold,
+            color: AppTheme.textDark,
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildMenuGrid(List<_HubMenu> menus) {
+    return GridView.count(
+      crossAxisCount: 2,
+      shrinkWrap: true,
+      physics: const NeverScrollableScrollPhysics(),
+      mainAxisSpacing: 12,
+      crossAxisSpacing: 12,
+      childAspectRatio: 1.35,
+      children: menus.map(_buildMenuTile).toList(),
     );
   }
 

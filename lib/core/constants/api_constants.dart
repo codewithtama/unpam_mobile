@@ -21,6 +21,13 @@ class ApiConstants {
   static const String myUnpamCachedScheduleKey = 'myunpam_cached_schedule';
   static const String myUnpamCachedCertificatesKey = 'myunpam_cached_certificates';
   static const String myUnpamCachedAttendanceCoursesKey = 'myunpam_cached_attendance_courses';
+  static const String myUnpamCachedKrsKey = 'myunpam_cached_krs';
+  static const String myUnpamCachedKhsKey = 'myunpam_cached_khs';
+  static const String myUnpamCachedDokumenKey = 'myunpam_cached_dokumen';
+  static const String myUnpamCachedDokumenKategoriKey = 'myunpam_cached_dokumen_kategori';
+  static const String myUnpamCachedThesisKey = 'myunpam_cached_thesis';
+  static const String myUnpamCachedCourseProjectsKey = 'myunpam_cached_course_projects';
+  static const String myUnpamCachedAbsencePermitsKey = 'myunpam_cached_absence_permits';
 
   static const List<String> myUnpamCacheKeys = [
     myUnpamCachedKeuanganKey,
@@ -31,6 +38,13 @@ class ApiConstants {
     myUnpamCachedScheduleKey,
     myUnpamCachedCertificatesKey,
     myUnpamCachedAttendanceCoursesKey,
+    myUnpamCachedKrsKey,
+    myUnpamCachedKhsKey,
+    myUnpamCachedDokumenKey,
+    myUnpamCachedDokumenKategoriKey,
+    myUnpamCachedThesisKey,
+    myUnpamCachedCourseProjectsKey,
+    myUnpamCachedAbsencePermitsKey,
   ];
 
   static const String userAgreementKey = 'unpam_user_agreement_accepted';

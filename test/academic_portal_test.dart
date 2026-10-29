@@ -1,5 +1,11 @@
-﻿import 'dart:convert';
+import 'dart:convert';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:unpam_mobile/models/absence_permit_model.dart';
+import 'package:unpam_mobile/models/academic_document_model.dart';
+import 'package:unpam_mobile/models/course_project_model.dart';
+import 'package:unpam_mobile/models/khs_model.dart';
+import 'package:unpam_mobile/models/krs_model.dart';
+import 'package:unpam_mobile/models/thesis_model.dart';
 import 'package:unpam_mobile/models/academic_grades_model.dart';
 import 'package:unpam_mobile/models/attendance_model.dart';
 import 'package:unpam_mobile/models/lecture_schedule_model.dart';
@@ -306,6 +312,231 @@ void main() {
       expect(summary.recorded, 3);
       // percentage = 2 / 3 * 100 = 66.666%
       expect(summary.percentage, closeTo(66.67, 0.05));
+    });
+  });
+
+  group('KRS Model Tests', () {
+    const rawJson = '''
+    {
+      "semester": {
+        "id_semester_registrasi": "20261",
+        "nama_semester_registrasi": "Ganjil 2026/2027"
+      },
+      "mutu": {
+        "itotalsksambil": "20",
+        "itotalskslulus": "80",
+        "itotalmutuambil": "75.5",
+        "itotalmutululus": "302.0"
+      },
+      "mahasiswa": {
+        "krs": [
+          {
+            "id_mata_kuliah": "22SIF0013",
+            "nama_mata_kuliah": "REKAYASA PERANGKAT LUNAK",
+            "sks_mata_kuliah": "3",
+            "id_kelas": "04SIFE001",
+            "nama_kurikulum": "KURIKULUM 2022",
+            "mata_kuliah": {
+              "nama_dosen_pengampu": "DR. AHMAD FAUZI, M.KOM"
+            }
+          },
+          {
+            "id_mata_kuliah": "22SIF0022",
+            "nama_mata_kuliah": "BASIS DATA LANJUT",
+            "sks_mata_kuliah": "3",
+            "id_kelas": "04SIFE001",
+            "nama_kurikulum": "KURIKULUM 2022"
+          }
+        ]
+      }
+    }
+    ''';
+
+    test('Parses KrsResponse accurately', () {
+      final map = jsonDecode(rawJson) as Map<String, dynamic>;
+      final krs = KrsResponse.fromJson(map);
+
+      expect(krs.semester?.namaSemesterRegistrasi, 'Ganjil 2026/2027');
+      expect(krs.mutu?.sksLulus, 80);
+      expect(krs.courses.length, 2);
+      expect(krs.totalSks, 6);
+      expect(krs.courses[0].namaMataKuliah, 'REKAYASA PERANGKAT LUNAK');
+      expect(krs.courses[0].namaDosenPengampu, 'DR. AHMAD FAUZI, M.KOM');
+      expect(krs.courses[0].idKelas, '04SIFE001');
+    });
+  });
+
+  group('KHS Model Tests', () {
+    const rawJson = '''
+    {
+      "ips": 3.85,
+      "semester": {
+        "id_semester_registrasi": "20252",
+        "nama_semester_registrasi": "Genap 2025/2026"
+      },
+      "mutu": {
+        "itotalsksambil": "18",
+        "itotalskslulus": "18",
+        "itotalmutuambil": "69.3",
+        "itotalmutululus": "69.3"
+      },
+      "khs": [
+        {
+          "idmtk": "22SIF0073",
+          "snama": "PEMROGRAMAN MOBILE",
+          "isks": "3",
+          "kelas": "04SIFE001",
+          "fgrade": "A",
+          "imutu": "12.0",
+          "absen": "100",
+          "tugas": "90",
+          "quiz": "85",
+          "uts": "92",
+          "uas": "95"
+        },
+        {
+          "idmtk": "22SIF0083",
+          "snama": "JARINGAN KOMPUTER",
+          "isks": "3",
+          "kelas": "04SIFE001",
+          "fgrade": "B+",
+          "imutu": "9.9",
+          "absen": "85",
+          "tugas": "80",
+          "quiz": "75",
+          "uts": "78",
+          "uas": "82"
+        }
+      ]
+    }
+    ''';
+
+    test('Parses KhsResponse and score components accurately', () {
+      final map = jsonDecode(rawJson) as Map<String, dynamic>;
+      final khs = KhsResponse.fromJson(map);
+
+      expect(khs.ips, 3.85);
+      expect(khs.courses.length, 2);
+      expect(khs.totalSks, 6);
+      final c1 = khs.courses[0];
+      expect(c1.namaMataKuliah, 'PEMROGRAMAN MOBILE');
+      expect(c1.grade, 'A');
+      expect(c1.isPassed, isTrue);
+      expect(c1.nilaiAbsen, '100');
+      expect(c1.nilaiUts, '92');
+      expect(c1.nilaiUas, '95');
+    });
+  });
+
+  group('AcademicDocument Model Tests', () {
+    const rawDocs = '''
+    [
+      {
+        "id_dokumen": "DOC001",
+        "nama_dokumen": "Panduan Skripsi 2026",
+        "url": "https://my.unpam.ac.id/files/panduan_skripsi.pdf",
+        "id_dokumen_kategori": "CAT01",
+        "type_url": "pdf"
+      }
+    ]
+    ''';
+
+    const rawCats = '''
+    [
+      {
+        "id_dokumen_kategori": "CAT01",
+        "nama_dokumen_kategori": "Buku Pedoman"
+      }
+    ]
+    ''';
+
+    test('Parses AcademicDocumentItem and Category correctly', () {
+      final docList = jsonDecode(rawDocs) as List;
+      final doc = AcademicDocumentItem.fromJson(docList[0] as Map<String, dynamic>);
+      expect(doc.idDokumen, 'DOC001');
+      expect(doc.namaDokumen, 'Panduan Skripsi 2026');
+      expect(doc.isPdf, isTrue);
+      expect(doc.fileExtension, 'pdf');
+
+      final catList = jsonDecode(rawCats) as List;
+      final cat = AcademicDocumentCategory.fromJson(catList[0] as Map<String, dynamic>);
+      expect(cat.idKategori, 'CAT01');
+      expect(cat.namaKategori, 'Buku Pedoman');
+    });
+  });
+
+  group('Thesis Model Tests', () {
+    const rawJson = '''
+    {
+      "is_proposal": false,
+      "nama_mahasiswa": "BUDI SANTOSO",
+      "data_tugas_akhir": {
+        "judul": "RANCANG BANGUN APLIKASI MOBILE UNPAM",
+        "status": "Bimbingan Aktif",
+        "semester": "08"
+      }
+    }
+    ''';
+
+    test('Parses ThesisResponse and active thesis status correctly', () {
+      final map = jsonDecode(rawJson) as Map<String, dynamic>;
+      final thesis = ThesisResponse.fromJson(map);
+
+      expect(thesis.hasActiveThesis, isTrue);
+      expect(thesis.detail?.judul, 'RANCANG BANGUN APLIKASI MOBILE UNPAM');
+      expect(thesis.detail?.status, 'Bimbingan Aktif');
+    });
+  });
+
+  group('CourseProject and AbsencePermit Tests', () {
+    const rawProjects = '''
+    {
+      "current_page": 1,
+      "data": [
+        {
+          "id": "PRJ01",
+          "nama_mata_kuliah": "PROYEK SISTEM INFORMASI",
+          "pertemuan_ke": "12",
+          "sks": "3",
+          "nama_dosen_pengampu": "DR. BUDI, M.KOM",
+          "disetujui_dosen_pengampu": "1",
+          "nilai": "90",
+          "pengajuan_expired": false
+        }
+      ]
+    }
+    ''';
+
+    const rawPermits = '''
+    {
+      "current_page": 1,
+      "data": [
+        {
+          "id": "IZIN01",
+          "nama_mata_kuliah": "ALGORITMA",
+          "pertemuan_ke": "3",
+          "jenis_izin": "Sakit",
+          "alasan": "Demam berdarah",
+          "status": "Disetujui",
+          "created_at": "2026-10-25"
+        }
+      ]
+    }
+    ''';
+
+    test('Parses CourseProjectResponse and AbsencePermitResponse accurately', () {
+      final prjMap = jsonDecode(rawProjects) as Map<String, dynamic>;
+      final projects = CourseProjectResponse.fromJson(prjMap);
+      expect(projects.projects.length, 1);
+      expect(projects.projects[0].namaMataKuliah, 'PROYEK SISTEM INFORMASI');
+      expect(projects.projects[0].isApproved, isTrue);
+      expect(projects.projects[0].nilai, '90');
+
+      final permitMap = jsonDecode(rawPermits) as Map<String, dynamic>;
+      final permits = AbsencePermitResponse.fromJson(permitMap);
+      expect(permits.permits.length, 1);
+      expect(permits.permits[0].isApproved, isTrue);
+      expect(permits.permits[0].alasan, 'Demam berdarah');
     });
   });
 }

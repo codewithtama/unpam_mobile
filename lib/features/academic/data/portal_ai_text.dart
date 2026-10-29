@@ -1,9 +1,15 @@
+import '../domain/models/academic_document_model.dart';
 import '../domain/models/academic_grades_model.dart';
+import '../domain/models/absence_permit_model.dart';
 import '../domain/models/attendance_model.dart';
+import '../domain/models/course_project_model.dart';
 import '../domain/models/finance_model.dart';
+import '../domain/models/khs_model.dart';
+import '../domain/models/krs_model.dart';
 import '../domain/models/lecture_schedule_model.dart';
 import '../domain/models/seminar_certificate_model.dart';
 import '../domain/models/student_biodata_model.dart';
+import '../domain/models/thesis_model.dart';
 
 class PortalAiText {
   static String biodata(StudentBiodata? b) {
@@ -92,5 +98,69 @@ class PortalAiText {
       }
     }
     return buffer.toString();
+  }
+
+  static String krs(KrsResponse? k) {
+    if (k == null) return '';
+    final buffer = StringBuffer();
+    if (k.semester != null) {
+      buffer.writeln('Semester: ${k.semester!.namaSemesterRegistrasi}');
+    }
+    buffer.writeln('Total SKS Dikontrak: ${k.totalSks} SKS');
+    for (final c in k.courses) {
+      buffer.writeln('- ${c.namaMataKuliah} (${c.sks} SKS) | Kelas: ${c.idKelas} | Dosen: ${c.namaDosenPengampu ?? '-'}');
+    }
+    return buffer.toString();
+  }
+
+  static String khs(KhsResponse? k) {
+    if (k == null) return '';
+    final buffer = StringBuffer();
+    if (k.semester != null) {
+      buffer.writeln('Semester: ${k.semester!.namaSemesterRegistrasi}');
+    }
+    if (k.ips != null) {
+      buffer.writeln('IPS: ${k.ips!.toStringAsFixed(2)}');
+    }
+    buffer.writeln('Total SKS: ${k.totalSks} SKS');
+    for (final c in k.courses) {
+      buffer.writeln('- ${c.namaMataKuliah} (${c.sksCount} SKS): Grade ${c.grade} (Mutu ${c.mutu}) | Absen: ${c.nilaiAbsen ?? '-'}, Tugas: ${c.nilaiTugas ?? '-'}, UTS: ${c.nilaiUts ?? '-'}, UAS: ${c.nilaiUas ?? '-'}');
+    }
+    return buffer.toString();
+  }
+
+  static String documents(List<AcademicDocumentItem>? docs) {
+    if (docs == null) return '';
+    if (docs.isEmpty) return 'Tidak ada dokumen akademik.';
+    return docs.map((d) => '- ${d.namaDokumen} (${d.fileExtension.toUpperCase()})').join('\n');
+  }
+
+  static String thesis(ThesisResponse? t) {
+    if (t == null || !t.hasActiveThesis) return 'Belum mengambil tugas akhir atau skripsi.';
+    final buffer = StringBuffer()
+      ..writeln('Status Skripsi/TA: ${t.detail?.status ?? 'Aktif'}')
+      ..writeln('Judul: ${t.detail?.judul ?? '-'}')
+      ..writeln('Pembimbing 1: ${t.supervisors?.pembimbing1 ?? '-'}')
+      ..writeln('Pembimbing 2: ${t.supervisors?.pembimbing2 ?? '-'}');
+    if (t.guidanceHistory.isNotEmpty) {
+      buffer.writeln('Riwayat Bimbingan: ${t.guidanceHistory.length} kali pertemuan');
+    }
+    return buffer.toString();
+  }
+
+  static String courseProjects(CourseProjectResponse? cp) {
+    if (cp == null || cp.projects.isEmpty) return 'Belum ada penugasan proyek.';
+    return cp.projects
+        .map((p) =>
+            '- ${p.namaMataKuliah} (Pertemuan ${p.pertemuanKe}): ${p.isApproved ? "Disetujui" : "Menunggu Validasi"} | Nilai: ${p.nilai ?? "-"}')
+        .join('\n');
+  }
+
+  static String absencePermits(AbsencePermitResponse? ap) {
+    if (ap == null || ap.permits.isEmpty) return 'Belum ada pengajuan izin/absen jalan.';
+    return ap.permits
+        .map((p) =>
+            '- ${p.namaMataKuliah ?? "Kuliah"} (Pertemuan ${p.pertemuanKe ?? "-"}): ${p.alasan ?? p.jenisIzin ?? "Izin"} [${p.status ?? "Diajukan"}]')
+        .join('\n');
   }
 }
