@@ -40,12 +40,12 @@ class MentariModuleModel {
   static MentariModuleType parseModuleType(String modName) {
     final lower = modName.toLowerCase().trim();
     return switch (lower) {
-      'resource' || 'file' || 'folder' => MentariModuleType.resource,
-      'forum' || 'discussion' => MentariModuleType.forum,
-      'quiz' => MentariModuleType.quiz,
-      'assign' || 'assignment' => MentariModuleType.assign,
+      'resource' || 'file' || 'folder' || 'power_point' || 'buku_isbn' || 'artikel_riset' || 'materi_lainnya' => MentariModuleType.resource,
+      'forum' || 'discussion' || 'forum_diskusi' => MentariModuleType.forum,
+      'quiz' || 'pre_test' || 'post_test' || 'quesioner' || 'kuesioner' => MentariModuleType.quiz,
+      'assign' || 'assignment' || 'penugasan_terstruktur' => MentariModuleType.assign,
       'attendance' || 'presensi' => MentariModuleType.attendance,
-      'url' => MentariModuleType.url,
+      'url' || 'link' || 'link_vcon' || 'video_ajar' => MentariModuleType.url,
       'page' || 'book' || 'label' => MentariModuleType.page,
       _ => MentariModuleType.other,
     };
@@ -129,18 +129,29 @@ class MentariModuleModel {
       }
     }
 
-    final rawType = (json['modname'] ?? json['type'] ?? 'other').toString();
+    final rawType = (json['kode_template'] ?? json['tipe'] ?? json['modname'] ?? json['type'] ?? 'other').toString();
+    final url = (json['link'] ?? json['url'] ?? '').toString();
+    final name = (json['judul'] ?? json['name'] ?? 'Aktivitas Perkuliahan').toString();
+
+    int parsedId = int.tryParse(json['id']?.toString() ?? '0') ?? 0;
+    if (parsedId == 0 && json['id'] != null) {
+      parsedId = json['id'].toString().hashCode.abs();
+    }
+
+    final isCompleted = json['completion'] == true ||
+        json['completion'] == 1 ||
+        json['completiondata']?['state'] == 1;
 
     return MentariModuleModel(
-      id: int.tryParse(json['id']?.toString() ?? '0') ?? 0,
-      name: (json['name'] ?? 'Aktivitas Perkuliahan').toString(),
+      id: parsedId,
+      name: name,
       type: parseModuleType(rawType),
-      url: (json['url'] ?? '').toString(),
-      description: json['description']?.toString(),
-      fileUrl: fUrl ?? json['fileurl']?.toString(),
+      url: url,
+      description: (json['konten'] ?? json['description'])?.toString(),
+      fileUrl: json['file']?.toString() ?? fUrl ?? json['fileurl']?.toString(),
       fileName: fName ?? json['filename']?.toString(),
       fileSize: fSize,
-      isCompleted: json['completiondata']?['state'] == 1 || json['completion'] == 1,
+      isCompleted: isCompleted,
       dueDate: due,
     );
   }

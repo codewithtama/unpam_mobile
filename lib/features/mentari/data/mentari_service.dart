@@ -8,6 +8,7 @@ import '../../../../core/services/storage_service.dart';
 import '../domain/models/mentari_course_model.dart';
 import '../domain/models/mentari_section_model.dart';
 import '../domain/models/mentari_module_model.dart';
+import 'mentari_web_fetcher.dart';
 
 class MentariAuthException implements Exception {
   final String message;
@@ -21,8 +22,9 @@ class MentariAuthException implements Exception {
 class MentariService {
   final StorageService _storage;
   final Dio _dio;
+  MentariWebFetcher? webFetcher;
 
-  MentariService(this._storage, {Dio? dio})
+  MentariService(this._storage, {Dio? dio, this.webFetcher})
       : _dio = dio ??
             Dio(
               BaseOptions(
@@ -38,9 +40,14 @@ class MentariService {
             );
 
   bool get hasActiveSession {
+    final token = _storage.getMentariToken();
     final sesskey = _storage.getMentariSesskey();
-    final cookies = _storage.getMentariCookies() ?? _storage.getCookies();
-    return (sesskey != null && sesskey.isNotEmpty) || (cookies != null && cookies.isNotEmpty);
+    final cookies = _storage.getMentariCookies();
+    final cached = _storage.getMentariCachedCourses();
+    return (token != null && token.isNotEmpty) ||
+        (sesskey != null && sesskey.isNotEmpty) ||
+        (cookies != null && cookies.isNotEmpty) ||
+        (cached != null && cached.isNotEmpty);
   }
 
   Future<Map<String, String>> _buildHeaders() async {
@@ -62,13 +69,18 @@ class MentariService {
     if (cookies != null && cookies.isNotEmpty) {
       headers['Cookie'] = cookies;
     }
+
+    final token = _storage.getMentariToken();
+    if (token != null && token.isNotEmpty) {
+      headers['Authorization'] = 'Bearer $token';
+    }
+
     return headers;
   }
 
   void _tryExtractAndSaveSesskey(String html) {
     if (html.isEmpty) return;
 
-    // 1. window.M.cfg.sesskey atau "sesskey":"..."
     final m1 = RegExp(r'"sesskey":\s*"([a-zA-Z0-9]+)"').firstMatch(html);
     if (m1 != null) {
       final key = m1.group(1);
@@ -78,7 +90,6 @@ class MentariService {
       }
     }
 
-    // 2. input[name="sesskey"] value="..."
     final m2 = RegExp(r'name=[\x22\x27]sesskey[\x22\x27]\s+value=[\x22\x27]([a-zA-Z0-9]+)[\x22\x27]').firstMatch(html);
     if (m2 != null) {
       final key = m2.group(1);
@@ -88,7 +99,6 @@ class MentariService {
       }
     }
 
-    // 3. logout.php?sesskey=...
     final m3 = RegExp(r'logout\.php\?sesskey=([a-zA-Z0-9]+)').firstMatch(html);
     if (m3 != null) {
       final key = m3.group(1);
@@ -120,32 +130,56 @@ class MentariService {
       }
     }
 
-    final headers = await _buildHeaders();
-    var sesskey = _storage.getMentariSesskey();
-
-    // Jika sesskey belum ada namun cookies ada, preflight ke /my/ untuk tangkap sesskey
-    if ((sesskey == null || sesskey.isEmpty) && headers.containsKey('Cookie')) {
+    // ── Strategi 0: MyUnpam-style Headless Background Web Fetcher (Utama) ──
+    if (webFetcher != null) {
       try {
-        final preflight = await _dio.get(
-          '/my/',
-          options: Options(headers: headers),
-        );
-        if (preflight.statusCode == 200 && preflight.data is String) {
-          final html = preflight.data as String;
-          _tryExtractAndSaveSesskey(html);
-          sesskey = _storage.getMentariSesskey();
-          final parsed = _parseCoursesFromHtml(html);
-          if (parsed.isNotEmpty) {
-            await _storage.saveMentariCachedCourses(jsonEncode(parsed));
-            return parsed;
-          }
+        final fetchedCourses = await webFetcher!.fetchCoursesDirectly();
+        if (fetchedCourses.isNotEmpty) {
+          await _storage.saveMentariCachedCourses(jsonEncode(fetchedCourses.map((c) => c.toJson()).toList()));
+          return fetchedCourses;
         }
       } catch (e) {
-        debugPrint('[MentariService] Preflight /my/ error: $e');
+        debugPrint('[MentariService] WebFetcher fetch courses error: $e');
       }
     }
 
-    // ── Strategi 1: Moodle AJAX Web Service ──
+    final headers = await _buildHeaders();
+
+    // ── Strategi 1: Direct Mentari REST API (/api/user-course) ──
+    try {
+      final res = await _dio.get(
+        '/api/user-course?page=1&limit=100',
+        options: Options(headers: headers),
+      );
+
+      if (res.statusCode == 200 && res.data != null) {
+        final raw = res.data is String ? jsonDecode(res.data) : res.data;
+        List<dynamic>? list;
+        if (raw is List) {
+          list = raw;
+        } else if (raw is Map && raw['data'] is List) {
+          list = raw['data'] as List;
+        } else if (raw is Map && raw['courses'] is List) {
+          list = raw['courses'] as List;
+        }
+
+        if (list != null && list.isNotEmpty) {
+          final courses = list
+              .whereType<Map<String, dynamic>>()
+              .map((e) => MentariCourseModel.fromJson(e))
+              .toList();
+          if (courses.isNotEmpty) {
+            await _storage.saveMentariCachedCourses(jsonEncode(courses.map((c) => c.toJson()).toList()));
+            return courses;
+          }
+        }
+      }
+    } catch (e) {
+      debugPrint('[MentariService] Direct /api/user-course error: $e');
+    }
+
+    // ── Strategi 2: Moodle AJAX Web Service Fallback ──
+    var sesskey = _storage.getMentariSesskey();
     if (sesskey != null && sesskey.isNotEmpty) {
       try {
         final ajaxUrl = '/lib/ajax/service.php?sesskey=${Uri.encodeComponent(sesskey)}&info=core_course_get_enrolled_courses_by_timeline_classification';
@@ -182,7 +216,7 @@ class MentariService {
                   .map((e) => MentariCourseModel.fromJson(e))
                   .toList();
               if (courses.isNotEmpty) {
-                await _storage.saveMentariCachedCourses(jsonEncode(courses));
+                await _storage.saveMentariCachedCourses(jsonEncode(courses.map((c) => c.toJson()).toList()));
                 return courses;
               }
             }
@@ -193,7 +227,7 @@ class MentariService {
       }
     }
 
-    // ── Strategi 2: Scrape Dashboard HTML ──
+    // ── Strategi 3: Scrape Dashboard HTML ──
     try {
       final res = await _dio.get(
         '/my/',
@@ -205,7 +239,7 @@ class MentariService {
         _tryExtractAndSaveSesskey(html);
         final courses = _parseCoursesFromHtml(html);
         if (courses.isNotEmpty) {
-          await _storage.saveMentariCachedCourses(jsonEncode(courses));
+          await _storage.saveMentariCachedCourses(jsonEncode(courses.map((c) => c.toJson()).toList()));
           return courses;
         }
       }
@@ -213,7 +247,7 @@ class MentariService {
       debugPrint('[MentariService] Scrape dashboard error: $e');
     }
 
-    // Fallback: jika offline dan ada cache
+    // Fallback: jika offline dan ada cache lokal
     final cachedJson = _storage.getMentariCachedCourses();
     if (cachedJson != null && cachedJson.isNotEmpty) {
       final list = jsonDecode(cachedJson) as List<dynamic>;
@@ -230,7 +264,11 @@ class MentariService {
   // 2. Fetch Course Details (Pertemuan 1-21 & Modul)
   // ──────────────────────────────────────────────────────────────────────────
 
-  Future<List<MentariSectionModel>> fetchCourseSections(int courseId, {bool forceRefresh = false}) async {
+  Future<List<MentariSectionModel>> fetchCourseSections(
+    int courseId, {
+    String? courseCode,
+    bool forceRefresh = false,
+  }) async {
     if (!forceRefresh) {
       final cachedJson = _storage.getMentariCachedCourseDetail(courseId);
       if (cachedJson != null && cachedJson.isNotEmpty) {
@@ -247,10 +285,62 @@ class MentariService {
       }
     }
 
-    final headers = await _buildHeaders();
-    final sesskey = _storage.getMentariSesskey();
+    final identifier = (courseCode != null && courseCode.isNotEmpty) ? courseCode : '$courseId';
 
-    // ── Strategi 1: Moodle AJAX Web Service ──
+    // ── Strategi 0: MyUnpam-style Headless Background Web Fetcher (Utama) ──
+    if (webFetcher != null) {
+      try {
+        final fetchedSections = await webFetcher!.fetchCourseSectionsDirectly(identifier);
+        if (fetchedSections.isNotEmpty) {
+          await _storage.saveMentariCachedCourseDetail(
+            courseId,
+            jsonEncode(fetchedSections.map((s) => s.toJson()).toList()),
+          );
+          return fetchedSections;
+        }
+      } catch (e) {
+        debugPrint('[MentariService] WebFetcher fetch detail error: $e');
+      }
+    }
+
+    final headers = await _buildHeaders();
+
+    // ── Strategi 1: Direct Mentari REST API (/api/user-course/{token}) ──
+    try {
+      final res = await _dio.get(
+        '/api/user-course/$identifier',
+        options: Options(headers: headers),
+      );
+
+      if (res.statusCode == 200 && res.data != null) {
+        final raw = res.data is String ? jsonDecode(res.data) : res.data;
+        List<dynamic>? list;
+        if (raw is Map && raw['data'] is List) {
+          list = raw['data'] as List;
+        } else if (raw is List) {
+          list = raw;
+        }
+
+        if (list != null && list.isNotEmpty) {
+          final sections = list
+              .whereType<Map<String, dynamic>>()
+              .map((s) => MentariSectionModel.fromJson(s))
+              .toList();
+          if (sections.isNotEmpty) {
+            await _storage.saveMentariCachedCourseDetail(
+              courseId,
+              jsonEncode(sections.map((s) => s.toJson()).toList()),
+            );
+            return sections;
+          }
+        }
+      }
+    } catch (e) {
+      debugPrint('[MentariService] Direct /api/user-course detail error: $e');
+    }
+
+    // ── Strategi 2: Moodle AJAX Web Service Fallback ──
+    final sesskey = _storage.getMentariSesskey();
     if (sesskey != null && sesskey.isNotEmpty) {
       try {
         final ajaxUrl = '/lib/ajax/service.php?sesskey=${Uri.encodeComponent(sesskey)}&info=core_course_get_contents';
@@ -288,7 +378,10 @@ class MentariService {
                   .map((e) => MentariSectionModel.fromJson(e))
                   .toList();
               if (sections.isNotEmpty) {
-                await _storage.saveMentariCachedCourseDetail(courseId, jsonEncode(sections));
+                await _storage.saveMentariCachedCourseDetail(
+                  courseId,
+                  jsonEncode(sections.map((s) => s.toJson()).toList()),
+                );
                 return sections;
               }
             }
@@ -299,7 +392,7 @@ class MentariService {
       }
     }
 
-    // ── Strategi 2: Scrape Course Page HTML ──
+    // ── Strategi 3: Scrape Course Page HTML ──
     try {
       final res = await _dio.get(
         '/course/view.php?id=$courseId',
@@ -311,7 +404,10 @@ class MentariService {
         _tryExtractAndSaveSesskey(html);
         final sections = _parseSectionsFromHtml(html);
         if (sections.isNotEmpty) {
-          await _storage.saveMentariCachedCourseDetail(courseId, jsonEncode(sections));
+          await _storage.saveMentariCachedCourseDetail(
+            courseId,
+            jsonEncode(sections.map((s) => s.toJson()).toList()),
+          );
           return sections;
         }
       }
@@ -341,7 +437,6 @@ class MentariService {
     final results = <MentariCourseModel>[];
     final seenIds = <int>{};
 
-    // Deteksi card kursus di Moodle modern
     final cards = doc.querySelectorAll('.dashboard-card, .course-info-container, .coursebox');
     for (final card in cards) {
       final link = card.querySelector('a[href*="/course/view.php?id="]');
@@ -381,7 +476,6 @@ class MentariService {
       );
     }
 
-    // Fallback: parsing dari generic links
     if (results.isEmpty) {
       final allLinks = doc.querySelectorAll('a[href*="/course/view.php?id="]');
       for (final link in allLinks) {
@@ -415,7 +509,6 @@ class MentariService {
     final doc = html_parser.parse(html);
     final sections = <MentariSectionModel>[];
 
-    // Deteksi container section Moodle
     var sectionNodes = doc.querySelectorAll('li.section.main, .section.course-section');
     if (sectionNodes.isEmpty) {
       sectionNodes = doc
@@ -459,7 +552,6 @@ class MentariService {
 
         final modType = MentariModuleModel.parseModuleType(modTypeStr ?? '');
 
-        // Cari link file langsung jika ada (PDF / Resource)
         String? directFileUrl;
         if (modType == MentariModuleType.resource) {
           final fileLink = mod.querySelector('a[href*="pluginfile.php"]');

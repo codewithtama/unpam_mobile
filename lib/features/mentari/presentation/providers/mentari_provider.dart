@@ -73,14 +73,22 @@ class MentariProvider extends ChangeNotifier {
     }
   }
 
-  Future<void> fetchCourseSections(int courseId, {bool forceRefresh = false}) async {
+  Future<void> fetchCourseSections(int courseId, {String? courseCode, bool forceRefresh = false}) async {
     if (_isLoadingSections) return;
     _isLoadingSections = true;
     _errorMessage = null;
     notifyListeners();
 
     try {
-      final sections = await _service.fetchCourseSections(courseId, forceRefresh: forceRefresh);
+      String? code = courseCode;
+      if (code == null) {
+        final c = _courses.cast<MentariCourseModel?>().firstWhere(
+              (element) => element?.id == courseId,
+              orElse: () => null,
+            );
+        code = c?.courseCode ?? (c?.idNumber.isNotEmpty == true ? c?.idNumber : null);
+      }
+      final sections = await _service.fetchCourseSections(courseId, courseCode: code, forceRefresh: forceRefresh);
       _courseSections[courseId] = sections;
     } catch (e) {
       _errorMessage = e.toString().replaceFirst('Exception: ', '');

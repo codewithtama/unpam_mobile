@@ -30,14 +30,14 @@ class MentariSectionModel {
       modules.isEmpty ? 0.0 : completedModulesCount / modules.length;
 
   factory MentariSectionModel.fromJson(Map<String, dynamic> json) {
-    final rawModules = json['modules'] as List<dynamic>? ?? [];
+    final rawModules = (json['modules'] ?? json['sub_section']) as List<dynamic>? ?? [];
     final modules = rawModules
         .whereType<Map<String, dynamic>>()
         .map((m) => MentariModuleModel.fromJson(m))
         .toList();
 
-    final rawName = (json['name'] ?? '').toString().trim();
-    int sNum = int.tryParse(json['section']?.toString() ?? '0') ?? 0;
+    final rawName = (json['nama_section'] ?? json['nama_pertemuan'] ?? json['name'] ?? '').toString().trim();
+    int sNum = int.tryParse(json['sort']?.toString() ?? json['section']?.toString() ?? '0') ?? 0;
     if (sNum == 0 && rawName.isNotEmpty) {
       final match = RegExp(r'(?:pertemuan|sesi|minggu)\s*(\d+)', caseSensitive: false)
           .firstMatch(rawName);
@@ -45,12 +45,28 @@ class MentariSectionModel {
         sNum = int.tryParse(match.group(1) ?? '0') ?? 0;
       }
     }
+    if (sNum == 0 && json['kode_section'] != null) {
+      final kMatch = RegExp(r'PERTEMUAN_(\d+)', caseSensitive: false)
+          .firstMatch(json['kode_section'].toString());
+      if (kMatch != null) {
+        sNum = int.tryParse(kMatch.group(1) ?? '0') ?? 0;
+      }
+    }
+
+    int parsedId = int.tryParse(json['id']?.toString() ?? '0') ?? 0;
+    if (parsedId == 0) {
+      if (sNum > 0) {
+        parsedId = sNum;
+      } else if (json['kode_section'] != null) {
+        parsedId = json['kode_section'].toString().hashCode.abs();
+      }
+    }
 
     return MentariSectionModel(
-      id: int.tryParse(json['id']?.toString() ?? '0') ?? 0,
+      id: parsedId,
       name: rawName.isNotEmpty ? rawName : (sNum > 0 ? 'Pertemuan $sNum' : 'Informasi Umum & Silabus'),
       sectionNumber: sNum,
-      summary: (json['summary'] ?? '').toString().trim(),
+      summary: (json['summary'] ?? json['konten'] ?? '').toString().trim(),
       modules: modules,
       visible: json['visible'] == null || json['visible'] == 1 || json['visible'] == true,
     );
@@ -65,4 +81,3 @@ class MentariSectionModel {
         'modules': modules.map((m) => m.toJson()).toList(),
       };
 }
-

@@ -1,6 +1,16 @@
 # Catatan Pembaruan Rilis The PAMs
 
-## Versi 1.0.59 (Terbaru)
+## Versi 1.0.60 (Terbaru)
+
+- **Implementasi Arsitektur WebFetcher & REST API Client Mentari LMS (Teknik MyUnpam)**:
+  - **Headless Background Web Fetcher (`MentariWebFetcher`)**: Mengadopsi arsitektur peramban Chromium latar belakang persis seperti `MyUnpamWebFetcher` yang terbukti andal. Mengeliminasi pemblokiran Cloudflare WAF, kegagalan TLS fingerprint, dan CORS dengan menjalankan `fetch()` langsung dalam konteks domain asli `https://mentari.unpam.ac.id/`.
+  - **Penyelarasan Single Page Application (SPA Vite/React)**: Menghilangkan dependensi Moodle PHP klasik (`/my/` & `sesskey`) dan beralih ke spesifikasi REST API resmi Mentari UNPAM (`GET /api/user-course` dan `GET /api/user-course/{token}`).
+  - **Dukungan Schema Ganda & Null-Safety**: Memperbarui `MentariCourseModel`, `MentariSectionModel`, dan `MentariModuleModel` untuk membaca payload modern Mentari (`kode_course`, `coursename`, `sub_section`, `tipe`, `judul`, `konten`, UUIDs, dan status `completion`) berdampingan dengan fallback Moodle klasik.
+  - **Background WebView Integration (`MyUnpamRefreshHost`)**: Mendaftarkan `mentariFetcher.controller` ke dalam tumpukan `ThePamsApp` dan `MyUnpamRefreshHost` di `main.dart` agar sesi peramban tetap hidup secara konstan di latar belakang aplikasi.
+  - **Alur Login Cerdas (`MentariAuthModal`)**: Auto-fill kredensial mahasiswa via NIM & kata sandi tersimpan, deteksi otomatis penyelesaian Cloudflare Turnstile, serta sniffing token JWT instan dari `localStorage` dan peramban.
+  - **Pengujian & Kualitas**: 77/77 unit & widget tests lulus (100%), 0 analyzer issues (`flutter analyze` bersih).
+
+## Versi 1.0.59
 
 - **Standarisasi Warna Brand Oranye / Emas Kampus `#f0882e` Secara Menyeluruh**:
   - **Penyelarasan Warna Aksen Utama**: Mengubah warna aksen emas, amber, dan oranye (`accentGold`) serta varian lembutnya (`accentGoldLight`) menjadi kode resmi **`#f0882e`**.

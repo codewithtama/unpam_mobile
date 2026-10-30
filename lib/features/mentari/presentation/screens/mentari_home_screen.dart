@@ -258,14 +258,18 @@ class _MentariHomeScreenState extends State<MentariHomeScreen> {
                         Text(
                           _searchQuery.isNotEmpty
                               ? 'Tidak Ada Mata Kuliah Cocok'
-                              : 'Belum Terhubung ke Mentari LMS',
+                              : (provider.hasActiveSession
+                                  ? 'Belum Ada Data Mata Kuliah'
+                                  : 'Belum Terhubung ke Mentari LMS'),
                           style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15),
                         ),
                         const SizedBox(height: 6),
                         Text(
                           _searchQuery.isNotEmpty
                               ? 'Coba gunakan kata kunci pencarian yang lain.'
-                              : 'Hubungkan akun Mentari E-Learning untuk menyinkronkan daftar perkuliahan, modul materi, kuis, dan forum diskusi.',
+                              : (provider.hasActiveSession
+                                  ? 'Sesi Mentari LMS terhubung. Tarik ke bawah atau klik tombol untuk menyinkronkan daftar mata kuliah.'
+                                  : 'Hubungkan akun Mentari E-Learning untuk menyinkronkan daftar perkuliahan, modul materi, kuis, dan forum diskusi.'),
                           textAlign: TextAlign.center,
                           style: const TextStyle(fontSize: 12, color: AppTheme.textMuted),
                         ),
@@ -278,9 +282,17 @@ class _MentariHomeScreenState extends State<MentariHomeScreen> {
                               padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
                               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                             ),
-                            onPressed: _handleConnectMentari,
-                            icon: const Icon(Icons.link_rounded, size: 18),
-                            label: const Text('Hubungkan Akun Mentari', style: TextStyle(fontWeight: FontWeight.bold)),
+                            onPressed: provider.hasActiveSession
+                                ? () => provider.fetchCourses(forceRefresh: true)
+                                : _handleConnectMentari,
+                            icon: Icon(
+                              provider.hasActiveSession ? Icons.sync_rounded : Icons.link_rounded,
+                              size: 18,
+                            ),
+                            label: Text(
+                              provider.hasActiveSession ? 'Sinkronkan Mata Kuliah' : 'Hubungkan Akun Mentari',
+                              style: const TextStyle(fontWeight: FontWeight.bold),
+                            ),
                           ),
                       ],
                     ),

@@ -23,12 +23,18 @@ class MentariCourseDetailScreen extends StatefulWidget {
 class _MentariCourseDetailScreenState extends State<MentariCourseDetailScreen> {
   final Set<int> _expandedSectionIds = {};
 
+  String? get _resolvedCourseCode =>
+      widget.course.courseCode ?? (widget.course.idNumber.isNotEmpty ? widget.course.idNumber : null);
+
   @override
   void initState() {
     super.initState();
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) return;
-      context.read<MentariProvider>().fetchCourseSections(widget.course.id);
+      context.read<MentariProvider>().fetchCourseSections(
+            widget.course.id,
+            courseCode: _resolvedCourseCode,
+          );
     });
   }
 
@@ -62,7 +68,7 @@ class _MentariCourseDetailScreenState extends State<MentariCourseDetailScreen> {
             icon: const Icon(Icons.refresh_rounded),
             tooltip: 'Segarkan Materi',
             onPressed: () =>
-                provider.fetchCourseSections(widget.course.id, forceRefresh: true),
+                provider.fetchCourseSections(widget.course.id, courseCode: _resolvedCourseCode, forceRefresh: true),
           ),
         ],
       ),
@@ -170,7 +176,11 @@ class _MentariCourseDetailScreenState extends State<MentariCourseDetailScreen> {
                           const SizedBox(height: 16),
                           ElevatedButton.icon(
                             style: ElevatedButton.styleFrom(backgroundColor: AppTheme.primaryBlue),
-                            onPressed: () => provider.fetchCourseSections(widget.course.id, forceRefresh: true),
+                            onPressed: () => provider.fetchCourseSections(
+                              widget.course.id,
+                              courseCode: _resolvedCourseCode,
+                              forceRefresh: true,
+                            ),
                             icon: const Icon(Icons.refresh_rounded, size: 18, color: Colors.white),
                             label: const Text('Muat Ulang', style: TextStyle(color: Colors.white)),
                           ),

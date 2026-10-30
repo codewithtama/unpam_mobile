@@ -1,12 +1,15 @@
 import 'dart:async';
+import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:webview_flutter/webview_flutter.dart';
 import '../../../../core/constants/api_constants.dart';
+import '../../../../core/constants/mentari_scripts.dart';
 import '../../../../core/services/storage_service.dart';
 import '../../../../providers/biometric_provider.dart';
 import '../../../../theme/app_theme.dart';
 import '../../../academic/data/my_unpam_session.dart';
+import '../../domain/models/mentari_course_model.dart';
 import '../providers/mentari_provider.dart';
 
 class MentariAuthModal extends StatefulWidget {
@@ -31,7 +34,7 @@ class _MentariAuthModalState extends State<MentariAuthModal> {
   int _progress = 0;
   bool _isLoading = true;
   bool _sessionCaptured = false;
-  String _currentStepText = 'Memuat portal login Mentari LMS...';
+  String _currentStepText = 'Memuat portal Mentari LMS...';
   late final Future<(String, String)?> _credentials;
 
   @override
@@ -44,6 +47,21 @@ class _MentariAuthModalState extends State<MentariAuthModal> {
     _controller = WebViewController()
       ..setJavaScriptMode(JavaScriptMode.unrestricted)
       ..setUserAgent(ApiConstants.webViewUserAgent)
+      ..addJavaScriptChannel(
+        MentariScripts.tokenChannel,
+        onMessageReceived: (m) => _onTokenChannelMessage(m.message),
+      )
+      ..addJavaScriptChannel(
+        MentariScripts.statusChannel,
+        onMessageReceived: (m) {
+          if (!mounted) return;
+          if (m.message == 'auto_submitted') {
+            setState(() {
+              _currentStepText = 'Memverifikasi kredensial login Mentari...';
+            });
+          }
+        },
+      )
       ..setNavigationDelegate(
         NavigationDelegate(
           onProgress: (progress) {
@@ -60,7 +78,7 @@ class _MentariAuthModalState extends State<MentariAuthModal> {
           },
         ),
       )
-      ..loadRequest(Uri.parse('${ApiConstants.mentariBaseUrl}/login/index.php'));
+      ..loadRequest(Uri.parse('${ApiConstants.mentariBaseUrl}/'));
   }
 
   Future<(String, String)?> _resolveCredentials(MyUnpamSession session) async {
@@ -84,68 +102,54 @@ class _MentariAuthModalState extends State<MentariAuthModal> {
     if (!mounted || _sessionCaptured) return;
     final lower = url.toLowerCase();
     setState(() {
-      if (lower.contains('/my') || lower.contains('course/view.php')) {
-        _currentStepText = 'Berhasil masuk Mentari! Menyimpan sesi & sesskey...';
+      if (lower.contains('/u-courses') || lower.contains('/dashboard') || (lower.contains('mentari.unpam.ac.id') && !lower.contains('login'))) {
+        _currentStepText = 'Berhasil masuk Mentari! Menyinkronkan daftar mata kuliah...';
       } else if (lower.contains('satu.unpam.ac.id')) {
         _currentStepText = 'Menghubungkan via SSO Satu UNPAM...';
       } else if (lower.contains('login')) {
-        _currentStepText = 'Silakan login dengan NIM & Password Anda di Mentari.';
+        _currentStepText = 'Silakan login dengan NIM & Password Mentari Anda.';
       } else {
-        _currentStepText = 'Memproses navigasi Mentari...';
+        _currentStepText = 'Memproses autentikasi Mentari LMS...';
       }
     });
   }
 
+  Future<void> _onTokenChannelMessage(String message) async {
+    if (_sessionCaptured) return;
+    try {
+      final payload = jsonDecode(message) as Map<String, dynamic>;
+      final token = (payload['token'] ?? '').toString().trim();
+      if (token.length > 20) {
+        await _storage.saveMentariToken(token);
+        await _verifyAndCaptureSession(token: token);
+      }
+    } catch (_) {}
+  }
+
   Future<void> _inspectPageAndExtract(String url) async {
     if (_sessionCaptured) return;
-    final lower = url.toLowerCase();
 
-    // 1. Auto-fill credentials jika berada di halaman login
-    if (lower.contains('login/index.php') || lower.contains('/login')) {
-      final creds = await _credentials;
-      if (creds != null && mounted) {
-        try {
-          await _controller.runJavaScript('''
-          (function(u, p) {
-            try {
-              var userEl = document.querySelector('#username') || document.querySelector('input[name="username"]');
-              var passEl = document.querySelector('#password') || document.querySelector('input[name="password"]');
-              if (userEl && passEl && !userEl.value) {
-                userEl.value = u;
-                passEl.value = p;
-                ['input', 'change'].forEach(function(e) {
-                  userEl.dispatchEvent(new Event(e, { bubbles: true }));
-                  passEl.dispatchEvent(new Event(e, { bubbles: true }));
-                });
-              }
-            } catch(e) {}
-          })(${Uri.encodeComponent(creds.$1)}, ${Uri.encodeComponent(creds.$2)});
-          ''');
-        } catch (_) {}
-      }
-    }
-
-    // 2. Ekstrak sesskey dari DOM
-    String extractedSesskey = '';
+    // 1. Injeksi token sniffer
     try {
-      final rawKey = await _controller.runJavaScriptReturningResult(r'''
-      (function() {
-        try {
-          if (window.M && window.M.cfg && window.M.cfg.sesskey) return window.M.cfg.sesskey;
-          var el = document.querySelector('input[name="sesskey"]');
-          if (el && el.value) return el.value;
-          var m = document.documentElement.innerHTML.match(/"sesskey":"([a-zA-Z0-9]+)"/);
-          if (m) return m[1];
-          var m2 = document.documentElement.innerHTML.match(/logout\.php\?sesskey=([a-zA-Z0-9]+)/);
-          if (m2) return m2[1];
-        } catch (e) {}
-        return '';
-      })()
-      ''');
-      extractedSesskey = rawKey.toString().replaceAll('"', '').trim();
+      await _controller.runJavaScript(MentariScripts.tokenSniffer);
     } catch (_) {}
 
-    // 3. Ekstrak Cookies Moodle dari WebViewCookieManager dan document.cookie
+    // 2. Auto-fill credentials jika terdapat input login
+    final creds = await _credentials;
+    if (creds != null && mounted) {
+      try {
+        await _controller.runJavaScript(MentariScripts.fillLogin(creds.$1, creds.$2));
+      } catch (_) {}
+    }
+
+    // 3. Verifikasi apakah sudah masuk dashboard atau memiliki session aktif
+    await _verifyAndCaptureSession();
+  }
+
+  Future<void> _verifyAndCaptureSession({String? token}) async {
+    if (_sessionCaptured) return;
+
+    // Ekstrak cookies dari WebView
     String cookieString = '';
     try {
       final webCookies = await WebViewCookieManager().getCookies(
@@ -163,15 +167,77 @@ class _MentariAuthModalState extends State<MentariAuthModal> {
       } catch (_) {}
     }
 
-    final hasMoodleCookie = cookieString.toLowerCase().contains('moodlesession');
-    final isOnDashboard = lower.contains('/my') || lower.contains('course');
+    // Jalankan verifikasi API langsung dalam konteks WebView browser
+    try {
+      final probeResult = await _controller.runJavaScriptReturningResult(r'''
+(async function() {
+  try {
+    var stored = localStorage.getItem('access_token') || localStorage.getItem('token') || '';
+    stored = stored.replace(/^__q_strn\|/, '').replace(/^Bearer\s+/i, '').replace(/["']/g, '');
+    var headers = { 'Accept': 'application/json, text/plain, */*' };
+    if (stored && stored.length > 20) {
+      headers['Authorization'] = 'Bearer ' + stored;
+    }
+    var res = await fetch('/api/user-course?page=1&limit=50', { headers: headers, credentials: 'include' });
+    if (res.status === 200) {
+      var body = await res.text();
+      return JSON.stringify({ ok: true, status: 200, body: body, token: stored });
+    }
+    var isLogin = location.pathname.indexOf('/login') !== -1;
+    return JSON.stringify({ ok: !isLogin && stored.length > 20, status: res.status, token: stored });
+  } catch (e) {
+    return JSON.stringify({ ok: false, error: String(e) });
+  }
+})()
+''');
 
-    if ((hasMoodleCookie || extractedSesskey.isNotEmpty) && (isOnDashboard || hasMoodleCookie)) {
-      await _saveSessionAndFinish(cookieString, extractedSesskey);
+      var probeStr = probeResult.toString();
+      if (probeStr.startsWith('"') && probeStr.endsWith('"')) {
+        probeStr = jsonDecode(probeStr);
+      }
+      final probeData = jsonDecode(probeStr) as Map<String, dynamic>;
+
+      if (probeData['ok'] == true) {
+        final activeToken = (probeData['token'] ?? token ?? '').toString().trim();
+        final bodyStr = (probeData['body'] ?? '').toString();
+
+        List<MentariCourseModel> courses = [];
+        if (bodyStr.isNotEmpty) {
+          try {
+            final raw = jsonDecode(bodyStr);
+            List<dynamic>? list;
+            if (raw is List) {
+              list = raw;
+            } else if (raw is Map && raw['data'] is List) {
+              list = raw['data'] as List;
+            } else if (raw is Map && raw['courses'] is List) {
+              list = raw['courses'] as List;
+            }
+            if (list != null && list.isNotEmpty) {
+              courses = list
+                  .whereType<Map<String, dynamic>>()
+                  .map((e) => MentariCourseModel.fromJson(e))
+                  .toList();
+            }
+          } catch (_) {}
+        }
+
+        await _saveSessionAndFinish(
+          cookieString: cookieString,
+          token: activeToken,
+          courses: courses,
+        );
+      }
+    } catch (e) {
+      debugPrint('[MentariAuthModal] probe error: $e');
     }
   }
 
-  Future<void> _saveSessionAndFinish(String cookieString, String sesskey) async {
+  Future<void> _saveSessionAndFinish({
+    required String cookieString,
+    required String token,
+    List<MentariCourseModel> courses = const [],
+  }) async {
     if (_sessionCaptured || !mounted) return;
     _sessionCaptured = true;
 
@@ -180,13 +246,21 @@ class _MentariAuthModalState extends State<MentariAuthModal> {
       await _storage.saveCookies(cookieString);
     }
 
-    if (sesskey.isNotEmpty) {
-      await _storage.saveMentariSesskey(sesskey);
+    if (token.isNotEmpty) {
+      await _storage.saveMentariToken(token);
+    }
+
+    if (courses.isNotEmpty) {
+      await _storage.saveMentariCachedCourses(
+        jsonEncode(courses.map((c) => c.toJson()).toList()),
+      );
     }
 
     if (!mounted) return;
     setState(() {
-      _currentStepText = 'Sesi Mentari LMS & sesskey berhasil tersimpan!';
+      _currentStepText = courses.isNotEmpty
+          ? '${courses.length} mata kuliah Mentari berhasil disinkronkan!'
+          : 'Sesi Mentari LMS berhasil terhubung!';
     });
 
     final mentariProvider = context.read<MentariProvider>();

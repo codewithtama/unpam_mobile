@@ -3,6 +3,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:html/parser.dart' as html_parser;
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:unpam_mobile/core/services/storage_service.dart';
+import 'package:unpam_mobile/features/mentari/data/mentari_service.dart';
 import 'package:unpam_mobile/features/mentari/domain/models/mentari_course_model.dart';
 import 'package:unpam_mobile/features/mentari/domain/models/mentari_section_model.dart';
 import 'package:unpam_mobile/features/mentari/domain/models/mentari_module_model.dart';
@@ -252,6 +253,110 @@ void main() {
       expect(storage.getMentariCookies(), isNull);
       await storage.saveMentariCookies('MoodleSession=mock_cookie_12345');
       expect(storage.getMentariCookies(), equals('MoodleSession=mock_cookie_12345'));
+
+      expect(storage.getMentariToken(), isNull);
+      expect(storage.hasMentariToken, isFalse);
+      await storage.saveMentariToken('mock_jwt_token_1234567890');
+      expect(storage.getMentariToken(), equals('mock_jwt_token_1234567890'));
+      expect(storage.hasMentariToken, isTrue);
+
+      await storage.clearMentariSession();
+      expect(storage.getMentariToken(), isNull);
+      expect(storage.getMentariCookies(), isNull);
+      expect(storage.getMentariSesskey(), isNull);
+    });
+  });
+
+  group('Mentari Modern Vite API Payload Tests', () {
+    test('Parses course JSON from /api/user-course endpoint accurately', () {
+      final json = {
+        'kode_course': '20261-04SIFE001-22SIF0183',
+        'coursename': '[3] PEMROGRAMAN BERORIENTASI OBYEK (JAVA II) # 04SIFE001 (Sabtu) [E-1]',
+        'haveAction': false,
+        'content_type': 'COURSE',
+        'data': [
+          {
+            'kode_section': 'PERTEMUAN_1',
+            'sort': 2,
+            'nama_section': 'Pertemuan 1',
+            'nama_pertemuan': 'Pertemuan 1',
+            'sub_section': [
+              {
+                'id': 'a8ad0755-6a13-4ce0-bd0a-f7bf4bd1d290',
+                'tipe': 'QUIZ',
+                'kode_template': 'PRE_TEST',
+                'sort': 1,
+                'judul': 'Pretest',
+                'konten': '<p>QUIZ</p>',
+                'link': null,
+                'file': null,
+                'completion': true,
+                'haveAction': false,
+              },
+              {
+                'id': '260dc014-d404-4cd7-966d-057147463b69',
+                'tipe': 'LINK',
+                'kode_template': 'BUKU_ISBN',
+                'sort': 2,
+                'judul': 'Buku ISBN',
+                'konten': '',
+                'link': 'https://sakura.unpam.ac.id/api/file/6ba0c256',
+                'file': null,
+                'completion': false,
+                'haveAction': false,
+              },
+              {
+                'id': 'd5100dc1-5af7-4d3c-a7ab-c9400c2f3159',
+                'tipe': 'RESOURCE',
+                'kode_template': 'POWER_POINT',
+                'sort': 4,
+                'judul': 'Power Point',
+                'konten': '',
+                'link': 'https://sakura.unpam.ac.id/api/file/149eeb48',
+                'file': null,
+                'completion': false,
+                'haveAction': false,
+              }
+            ]
+          }
+        ]
+      };
+
+      final course = MentariCourseModel.fromJson(json);
+      expect(course.courseCode, equals('20261-04SIFE001-22SIF0183'));
+      expect(course.cleanTitle, equals('PEMROGRAMAN BERORIENTASI OBYEK (JAVA II)'));
+      expect(course.cleanCode, equals('04SIFE001'));
+      expect(course.sections.length, equals(1));
+
+      final section = course.sections.first;
+      expect(section.name, equals('Pertemuan 1'));
+      expect(section.sectionNumber, equals(2));
+      expect(section.modules.length, equals(3));
+
+      final quizMod = section.modules[0];
+      expect(quizMod.name, equals('Pretest'));
+      expect(quizMod.type, equals(MentariModuleType.quiz));
+      expect(quizMod.isCompleted, isTrue);
+
+      final linkMod = section.modules[1];
+      expect(linkMod.name, equals('Buku ISBN'));
+      expect(linkMod.type, equals(MentariModuleType.resource));
+      expect(linkMod.url, contains('sakura.unpam.ac.id'));
+
+      final resourceMod = section.modules[2];
+      expect(resourceMod.name, equals('Power Point'));
+      expect(resourceMod.type, equals(MentariModuleType.resource));
+    });
+
+    test('MentariService detects active session when token exists', () async {
+      SharedPreferences.setMockInitialValues({});
+      final storage = await StorageService.getInstance();
+      await storage.resetAll();
+      final service = MentariService(storage);
+
+      expect(service.hasActiveSession, isFalse);
+      await storage.saveMentariToken('valid_mentari_token_abc');
+      expect(service.hasActiveSession, isTrue);
     });
   });
 

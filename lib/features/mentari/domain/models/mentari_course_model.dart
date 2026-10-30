@@ -12,6 +12,7 @@ class MentariCourseModel {
   final String? courseCategory;
   final bool isFavorite;
   final List<MentariSectionModel> sections;
+  final String? courseCode;
 
   const MentariCourseModel({
     required this.id,
@@ -23,6 +24,7 @@ class MentariCourseModel {
     this.courseCategory,
     this.isFavorite = false,
     this.sections = const [],
+    this.courseCode,
   });
 
   String get cleanTitle {
@@ -42,14 +44,17 @@ class MentariCourseModel {
   }
 
   String get cleanCode {
-    if (idNumber.isNotEmpty) return idNumber;
-    // Coba ekstrak pola kode kelas UNPAM seperti 04SIFE001 atau 04TPLP001
+    if (idNumber.isNotEmpty) {
+      final unpamClassMatch = RegExp(r'\b([0-9]{2}[A-Za-z]{3,5}[0-9]{3})\b').firstMatch(idNumber);
+      if (unpamClassMatch != null) return unpamClassMatch.group(1)!;
+    }
+    // Coba ekstrak pola kode kelas UNPAM seperti 04SIFE001 atau 04TPLP001 dari fullName
     final unpamClassMatch = RegExp(r'\b([0-9]{2}[A-Za-z]{3,5}[0-9]{3})\b').firstMatch(fullName);
     if (unpamClassMatch != null) return unpamClassMatch.group(1)!;
     // Coba ekstrak pola umum [KODE] atau KODE
     final match = RegExp(r'\[?([A-Z0-9]{5,12})\]?', caseSensitive: false).firstMatch(fullName);
-    if (match != null) return match.group(1) ?? shortName;
-    return shortName;
+    if (match != null) return match.group(1) ?? (idNumber.isNotEmpty ? idNumber : shortName);
+    return idNumber.isNotEmpty ? idNumber : (courseCode ?? shortName);
   }
 
   String get initials {
@@ -72,12 +77,14 @@ class MentariCourseModel {
       Colors.deepPurple.shade700,
       AppTheme.primaryLight,
     ];
-    return colors[id % colors.length];
+    final seed = id != 0 ? id.abs() : (courseCode?.hashCode.abs() ?? 1);
+    return colors[seed % colors.length];
   }
 
   MentariCourseModel copyWith({
     List<MentariSectionModel>? sections,
     int? progress,
+    String? courseCode,
   }) {
     return MentariCourseModel(
       id: id,
@@ -89,6 +96,7 @@ class MentariCourseModel {
       courseCategory: courseCategory,
       isFavorite: isFavorite,
       sections: sections ?? this.sections,
+      courseCode: courseCode ?? this.courseCode,
     );
   }
 
@@ -101,22 +109,32 @@ class MentariCourseModel {
       p = int.tryParse(rawProgress);
     }
 
-    final rawSections = json['sections'] as List<dynamic>? ?? [];
+    final rawSections = (json['sections'] ?? json['data']) as List<dynamic>? ?? [];
     final sections = rawSections
         .whereType<Map<String, dynamic>>()
         .map((s) => MentariSectionModel.fromJson(s))
         .toList();
 
+    final code = (json['kode_course'] ?? json['course_code'] ?? json['idnumber'] ?? '').toString();
+    int parsedId = int.tryParse(json['id']?.toString() ?? '0') ?? 0;
+    if (parsedId == 0 && code.isNotEmpty) {
+      parsedId = code.hashCode.abs();
+    }
+
+    final fullName = (json['coursename'] ?? json['course_name'] ?? json['fullname'] ?? json['name'] ?? 'Mata Kuliah').toString();
+    final shortName = (json['shortname'] ?? (code.isNotEmpty ? code : '')).toString();
+
     return MentariCourseModel(
-      id: int.tryParse(json['id']?.toString() ?? '0') ?? 0,
-      fullName: (json['fullname'] ?? json['name'] ?? 'Mata Kuliah').toString(),
-      shortName: (json['shortname'] ?? '').toString(),
-      idNumber: (json['idnumber'] ?? '').toString(),
-      courseImage: json['courseimage']?.toString(),
+      id: parsedId,
+      fullName: fullName,
+      shortName: shortName,
+      idNumber: (json['idnumber'] ?? code).toString(),
+      courseImage: (json['courseimage'] ?? json['image'] ?? json['cover_image'])?.toString(),
       progress: p,
-      courseCategory: json['coursecategory']?.toString() ?? json['categoryname']?.toString(),
+      courseCategory: (json['coursecategory'] ?? json['categoryname'] ?? json['content_type'])?.toString(),
       isFavorite: json['isfavourite'] == true,
       sections: sections,
+      courseCode: code.isNotEmpty ? code : null,
     );
   }
 
@@ -129,6 +147,7 @@ class MentariCourseModel {
         'progress': progress,
         'coursecategory': courseCategory,
         'isfavourite': isFavorite,
+        if (courseCode != null) 'kode_course': courseCode,
         'sections': sections.map((s) => s.toJson()).toList(),
       };
 }
