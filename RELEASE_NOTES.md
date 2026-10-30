@@ -1,65 +1,12 @@
 # Catatan Pembaruan Rilis The PAMs
 
-## Versi 1.0.61 (Terbaru)
+## Versi 1.0.62 (Terbaru)
 
-- **Akses Interaktif Pretest, Forum Diskusi, & Posttest Mentari LMS In-App**:
-  - **Resolusi URL & Navigasi SPA Pintar (`MentariQuizModal`)**: Mengatasi masalah tautan kosong (`link: null`) pada aktivitas Pretest, Forum, dan Posttest dari REST API Mentari dengan secara cerdas mengarahkan ke halaman SPA matakuliah (`/u-courses/{courseCode}`) dan menyuntikkan script navigasi otomatis untuk membuka pertemuan (`PERTEMUAN_X`), scroll ke aktivitas target, dan membuka dialog pengerjaan secara instan.
-  - **Injeksi Sesi Token & Cookies Otomatis**: Menyuntikkan token otentikasi Mentari (`localStorage.setItem('access_token', token)`) dan cookies peramban secara otomatis saat WebView dibuka, mencegah mahasiswa terlempar kembali ke form login Mentari.
-  - **Deteksi Prasyarat & Validasi Akses (`warningAlert`)**: Memetakan pesan prasyarat resmi Mentari UNPAM (seperti *"Silakan selesaikan Pretest terlebih dahulu"* untuk Posttest atau ketersediaan topik forum) ke dalam model, menampilkan badge "Prasyarat" pada daftar aktivitas, serta memberikan dialog konfirmasi informatif sebelum membuka kuis.
-  - **Sinkronisasi Otomatis Pasca-Pengerjaan**: Menyegarkan data seksi dan progres pertemuan matakuliah secara otomatis setelah modal kuis/forum ditutup, sehingga tanda centang hijau (`completion: true`) langsung terupdate di aplikasi.
-  - **Pengujian & Kualitas**: 77/77 unit & widget tests lulus (100%), 0 analyzer issues (`flutter analyze` bersih).
-
-## Versi 1.0.60
-
-- **Implementasi Arsitektur WebFetcher & REST API Client Mentari LMS (Teknik MyUnpam)**:
-  - **Headless Background Web Fetcher (`MentariWebFetcher`)**: Mengadopsi arsitektur peramban Chromium latar belakang persis seperti `MyUnpamWebFetcher` yang terbukti andal. Mengeliminasi pemblokiran Cloudflare WAF, kegagalan TLS fingerprint, dan CORS dengan menjalankan `fetch()` langsung dalam konteks domain asli `https://mentari.unpam.ac.id/`.
-  - **Penyelarasan Single Page Application (SPA Vite/React)**: Menghilangkan dependensi Moodle PHP klasik (`/my/` & `sesskey`) dan beralih ke spesifikasi REST API resmi Mentari UNPAM (`GET /api/user-course` dan `GET /api/user-course/{token}`).
-  - **Dukungan Schema Ganda & Null-Safety**: Memperbarui `MentariCourseModel`, `MentariSectionModel`, dan `MentariModuleModel` untuk membaca payload modern Mentari (`kode_course`, `coursename`, `sub_section`, `tipe`, `judul`, `konten`, UUIDs, dan status `completion`) berdampingan dengan fallback Moodle klasik.
-  - **Background WebView Integration (`MyUnpamRefreshHost`)**: Mendaftarkan `mentariFetcher.controller` ke dalam tumpukan `ThePamsApp` dan `MyUnpamRefreshHost` di `main.dart` agar sesi peramban tetap hidup secara konstan di latar belakang aplikasi.
-  - **Alur Login Cerdas (`MentariAuthModal`)**: Auto-fill kredensial mahasiswa via NIM & kata sandi tersimpan, deteksi otomatis penyelesaian Cloudflare Turnstile, serta sniffing token JWT instan dari `localStorage` dan peramban.
-  - **Pengujian & Kualitas**: 77/77 unit & widget tests lulus (100%), 0 analyzer issues (`flutter analyze` bersih).
-
-## Versi 1.0.59
-
-- **Standarisasi Warna Brand Oranye / Emas Kampus `#f0882e` Secara Menyeluruh**:
-  - **Penyelarasan Warna Aksen Utama**: Mengubah warna aksen emas, amber, dan oranye (`accentGold`) serta varian lembutnya (`accentGoldLight`) menjadi kode resmi **`#f0882e`**.
-  - **Pembersihan Warna Hardcoded**: Mengeliminasi seluruh warna *hardcoded* (`Colors.orange`, `Colors.amber`, `Colors.deepOrange`, hex `0xFFD97706`, `0xFFFEF3C7`, `0xFF92400E`, `0xFFFDE68A`) pada dialog kuesioner dosen, lembar menu AI, banner pemulihan layar, kartu kuis, indikator batas waktu persetujuan pengguna, dan daftar urgensi tenggat tugas (*deadline*).
-  - **Harmonisasi Palet UI**: Menyelaraskan seluruh aksen sekunder, chip status, dan ikon aktif agar kontras dan menyatu dengan warna biru primer `#2294f2`.
-  - **Pengujian & Kualitas**: Seluruh 75+ unit & widget tests lulus, 0 analyzer issues (`flutter analyze` bersih).
-
-## Versi 1.0.58
-
-- **Standarisasi Warna Brand Kampus `#2294f2` Secara Menyeluruh**:
-  - **Penyelarasan Warna Biru Utama**: Mengubah seluruh palet warna biru primer (`primaryBlue`), varian gelap (`primaryDark`), dan highlight (`primaryLight`) menjadi warna `#2294f2` yang konsisten.
-  - **Pembersihan Gradasi Gelap**: Mengganti seluruh gradasi header gelap (`[primaryDark, primaryBlue]`) yang sebelumnya bernuansa hitam/navy pada Transkrip, Presensi, Jadwal, Sertifikat, dan Profil Mahasiswa menjadi gradasi modern `#2294f2` yang terang dan serasi.
-  - **Penyelarasan Komponen & Badge**: Menghilangkan seluruh warna biru *hardcoded* (`Colors.blue`, `Colors.indigo`, dan hex Tailwind lama) pada badge jadwal online, banner SSO, quick action, modal autentikasi, serta tombol aksi.
-  - **Pengujian & Kualitas**: Seluruh 75+ unit & widget tests lulus, 0 analyzer issues (`flutter analyze` bersih).
-
-## Versi 1.0.57
-
-- **Sinkronisasi Terpadu Mentari LMS & Stabilisasi Sesi MyUnpam**:
-  - **Penyelesaian Bug Logout Berulang MyUnpam**: Mengeliminasi *race condition* pada `MyUnpamRefresher` yang sebelumnya memicu `loginRequired` dan penghapusan token otomatis saat pergantian *stage* SSO. Menjadikan `my.unpam.ac.id` sebagai tahap awal dengan ekstraksi instan dari `localStorage.access_token` (<1 detik) serta injeksi kredensial biometrik otomatis ke `satu.unpam.ac.id/login`.
-  - **Offline/Flaky Network Graceful Fallback**: Menambahkan mekanisme *cache-first recovery* pada `AcademicPortalService._fetch` sehingga gangguan jaringan atau penyegaran token tidak lagi menghapus data di layar atau menghentikan aktivitas pengguna.
-  - **Sinkronisasi Sesi Mandiri Mentari LMS (`MentariAuthModal`)**: Menghadirkan modal autentikasi dedicated untuk E-Learning Mentari UNPAM. Mendukung ekstraksi otomatis cookies `MoodleSession` dari peramban dan deteksi regex `sesskey` multi-sumber (`M.cfg.sesskey`, `input[name="sesskey"]`, dan URL *logout*).
-  - **Peningkatan Dual-Engine `MentariService`**: Auto-read cookies via `WebViewCookieManager` dan preflight extraction `/my/` sehingga Strategy 1 (AJAX Moodle) dan Strategy 2 (HTML DOM Scraper) dapat langsung mengeksekusi sinkronisasi matakuliah semester aktif tanpa hambatan otentikasi.
-  - **Sinkronisasi Lintas Domain Terintegrasi**: Memperluas `MyUnpamSession.syncCookies()` dan `StorageService` untuk menyimpan sesi `mentari.unpam.ac.id` berdampingan dengan `satu.unpam.ac.id` dan `my.unpam.ac.id`.
-  - **Pengujian & Kualitas**: Seluruh 75+ unit & widget tests lulus, 0 analyzer issues (`flutter analyze` bersih).
-
-## Versi 1.0.56
-
-- **Tahap 3 — Pembersihan Monolith Root & Transisi ke MainNavigationScreen**:
-  - **Arsitektur Root Baru (`MainNavigationScreen`)**: Menggantikan berkas monolitik `portal_webview_screen.dart` (2.700+ baris) dengan `MainNavigationScreen` yang bersih, modular, dan ringan.
-  - **Efisiensi Memori & Kecepatan**: Mengeliminasi alokasi ganda Chromium WebView yang berjalan di background, menurunkan konsumsi RAM aplikasi hingga >60%, dan mempercepat *cold startup*.
-  - **Navigasi Terpadu & Sederhana**: 3 tab utama yang rapi (Mentari LMS, MyUnpam Hub, dan The PAMs AI) dengan dukungan Split-Screen AI, Biometric Vault, dan in-app OTA Updater.
-  - **Pengujian & Kualitas**: 75/75 unit & widget tests lulus, 0 analyzer issues (`flutter analyze` bersih).
-
-## Versi 1.0.55
-
-- **Transformasi 100% Native untuk Mentari LMS & MyUnpam Hub**:
-  - **Tahap 1 — MyUnpam Native Hub**: Tab MyUnpam kini terintegrasi langsung sebagai dasbor native `AcademicHubScreen(isEmbedded: true)` yang merangkum kartu profil mahasiswa, status IPK & SKS, ringkasan tagihan keuangan, jadwal kuliah hari ini, dan grid 12 modul layanan akademik lengkap.
-  - **Tahap 2 — Mentari LMS 100% Native**: Tab Mentari bertransformasi penuh dari WebView menjadi `MentariHomeScreen` native dengan performa 60fps. Dilengkapi kartu kursus berprogres, filter pencarian matakuliah, detail 21 pertemuan akademik interaktif (`MentariCourseDetailScreen`), unduh materi PDF langsung (`FileDownloadService`), dan modal pengerjaan kuis Moodle terisolasi (`MentariQuizModal`) agar token CSRF dan pengiriman nilai tetap 100% aman.
-  - **Dual-Strategy Engine & Offline Caching**: Menggunakan Moodle AJAX API (`service.php`) dan DOM Scraper fallback (`package:html`), dengan cache lokal `StorageService` untuk akses instan tanpa internet aktif.
-  - **Pengujian & Kualitas**: 74/74 unit & widget tests lulus, 0 analyzer issues (`flutter analyze` bersih).
+- **Rollback Basis Mesin & Arsitektur Stabil Versi 1.0.54**:
+  - **Pemulihan Arsitektur Terbukti Stabil (v1.0.54 Engine)**: Mengembalikan seluruh basis kode aplikasi ke fondasi stabil versi 1.0.54 (PortalWebViewScreen dengan integrasi in-app SSO, dual-sync, dan AI assistant terpadu).
+  - **Akses Langsung LMS Mentari & MyUnpam**: Mahasiswa dapat kembali mengakses seluruh fitur perkuliahan Mentari LMS (Pretest, Forum Diskusi, Tugas, dan Posttest) secara langsung dan interaktif tanpa kendala navigasi SPA atau pembatasan REST API sepihak.
+  - **Dukungan Update Mulus Tanpa Kendala Downgrade**: Dirilis dengan kode versi 1.0.62+62 sehingga pengguna yang telah memasang versi sebelumnya dapat langsung memperbarui aplikasi melalui OTA Updater atau instalasi APK baru tanpa perlu melakukan uninstall aplikasi secara manual.
+  - **Pengujian & Kualitas**: Seluruh uji otomatis lolos, 0 issues pada static analysis (`flutter analyze` bersih).
 
 ## Versi 1.0.54
 

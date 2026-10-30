@@ -44,16 +44,10 @@ class AcademicPortalService {
       if (cached != null) return cached;
     }
 
-    try {
-      final json = await _session.get(path, query: query);
-      final result = parse(json);
-      await _storage.saveCachedJson(cacheKey, jsonEncode(json));
-      return result;
-    } catch (e) {
-      final cached = _readCache(cacheKey, parse);
-      if (cached != null) return cached;
-      rethrow;
-    }
+    final json = await _session.get(path, query: query);
+    final result = parse(json);
+    await _storage.saveCachedJson(cacheKey, jsonEncode(json));
+    return result;
   }
 
   static StudentBiodata _parseBiodata(dynamic json) =>

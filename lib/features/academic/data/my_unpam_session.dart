@@ -185,11 +185,6 @@ class MyUnpamSession extends ChangeNotifier {
     if (myCookies != null) await _storage.saveMyUnpamCookies(myCookies);
     final satuCookies = await _readWebViewCookies(ApiConstants.satuUnpamBaseUrl);
     if (satuCookies != null) await _storage.saveSatuUnpamCookies(satuCookies);
-    final mentariCookies = await _readWebViewCookies(ApiConstants.mentariBaseUrl);
-    if (mentariCookies != null) {
-      await _storage.saveMentariCookies(mentariCookies);
-      await _storage.saveCookies(mentariCookies);
-    }
   }
 
   void markConnected() => _setStatus(PortalSessionStatus.active);

@@ -116,7 +116,7 @@ class _LectureScheduleScreenState extends State<LectureScheduleScreen> {
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
         gradient: const LinearGradient(
-          colors: [AppTheme.primaryBlue, AppTheme.primaryLight],
+          colors: [AppTheme.primaryDark, AppTheme.primaryBlue],
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
         ),

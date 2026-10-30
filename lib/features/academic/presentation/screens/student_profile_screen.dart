@@ -114,7 +114,7 @@ class _StudentProfileScreenState extends State<StudentProfileScreen> {
     return Container(
       decoration: BoxDecoration(
         gradient: const LinearGradient(
-          colors: [AppTheme.primaryBlue, AppTheme.primaryLight],
+          colors: [AppTheme.primaryDark, AppTheme.primaryBlue],
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
         ),

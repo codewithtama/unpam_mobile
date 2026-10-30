@@ -110,41 +110,6 @@ class StorageService {
 
   String? getSelectedSemester() => _readString(ApiConstants.myUnpamCachedSemesterKey);
 
-  // Mentari LMS Session & Cache
-  Future<void> saveMentariToken(String token) =>
-      _writeString(ApiConstants.mentariTokenKey, token.trim());
-
-  String? getMentariToken() => _readString(ApiConstants.mentariTokenKey);
-
-  bool get hasMentariToken => getMentariToken() != null && getMentariToken()!.isNotEmpty;
-
-  Future<void> saveMentariCookies(String cookies) =>
-      _writeString(ApiConstants.mentariCookiesKey, cookies);
-
-  String? getMentariCookies() => _readString(ApiConstants.mentariCookiesKey);
-
-  Future<void> saveMentariSesskey(String sesskey) =>
-      _writeString(ApiConstants.mentariSesskeyKey, sesskey.trim());
-
-  String? getMentariSesskey() => _readString(ApiConstants.mentariSesskeyKey);
-
-  Future<void> saveMentariCachedCourses(String json) =>
-      _writeString(ApiConstants.mentariCachedCoursesKey, json);
-
-  String? getMentariCachedCourses() => _readString(ApiConstants.mentariCachedCoursesKey);
-
-  Future<void> saveMentariCachedCourseDetail(int courseId, String json) =>
-      _writeString('${ApiConstants.mentariCachedCourseDetailPrefix}$courseId', json);
-
-  String? getMentariCachedCourseDetail(int courseId) =>
-      _readString('${ApiConstants.mentariCachedCourseDetailPrefix}$courseId');
-
-  Future<void> clearMentariSession() async {
-    await _preferences?.remove(ApiConstants.mentariTokenKey);
-    await _preferences?.remove(ApiConstants.mentariCookiesKey);
-    await _preferences?.remove(ApiConstants.mentariSesskeyKey);
-  }
-
   // Active AI Model Selection
   Future<void> saveActiveAiModelId(String modelId) async {
     await _preferences?.setString(ApiConstants.activeAiModelKey, modelId);

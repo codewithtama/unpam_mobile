@@ -204,9 +204,9 @@ class _WeeklyScheduleItem extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final isOnline = schedule.isOnline;
-    final Color badgeBg = isOnline ? AppTheme.primaryBlue.withOpacity(0.08) : const Color(0xFFF0FDF4);
-    final Color badgeText = isOnline ? AppTheme.primaryBlue : const Color(0xFF15803D);
-    final Color badgeBorder = isOnline ? AppTheme.primaryBlue.withOpacity(0.25) : const Color(0xFFBBF7D0);
+    final Color badgeBg = isOnline ? const Color(0xFFEFF6FF) : const Color(0xFFF0FDF4);
+    final Color badgeText = isOnline ? const Color(0xFF1D4ED8) : const Color(0xFF15803D);
+    final Color badgeBorder = isOnline ? const Color(0xFFBFDBFE) : const Color(0xFFBBF7D0);
     final IconData badgeIcon = isOnline ? Icons.laptop_chromebook_rounded : Icons.apartment_rounded;
     final String modeLabel = isOnline ? 'Online' : 'Tatap Muka';
 

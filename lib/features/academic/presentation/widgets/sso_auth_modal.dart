@@ -271,7 +271,7 @@ class _SsoAuthModalState extends State<SsoAuthModal> {
             const Divider(height: 1, thickness: 1),
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
-            color: AppTheme.primaryBlue.withOpacity(0.08),
+            color: Colors.blue.shade50,
             child: Row(
               children: [
                 const Icon(Icons.info_outline_rounded, size: 16, color: AppTheme.primaryBlue),
@@ -279,10 +279,9 @@ class _SsoAuthModalState extends State<SsoAuthModal> {
                 Expanded(
                   child: Text(
                     _getNoticeBannerText(),
-                    style: const TextStyle(
+                    style: TextStyle(
                       fontSize: 11.5,
-                      color: AppTheme.primaryBlue,
-                      fontWeight: FontWeight.w600,
+                      color: Colors.blue.shade900,
                       height: 1.3,
                     ),
                   ),
