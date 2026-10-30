@@ -2451,13 +2451,6 @@ class _PortalWebViewScreenState extends State<PortalWebViewScreen>
                   _updateHistoryState();
                 } else if (idx == 2) {
                   final previousTab = _currentNavIndex;
-                  await _openScheduleScreen();
-                  if (mounted) {
-                    setState(() => _currentNavIndex = previousTab);
-                    _updateHistoryState();
-                  }
-                } else if (idx == 3) {
-                  final previousTab = _currentNavIndex;
                   await _openFullScreenAiAssistant();
                   if (mounted) {
                     setState(() => _currentNavIndex = previousTab);
