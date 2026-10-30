@@ -38,16 +38,68 @@ class _MentariCourseDetailScreenState extends State<MentariCourseDetailScreen> {
     });
   }
 
-  void _handleActivityTap(MentariModuleModel module) {
+  Future<void> _handleActivityTap(MentariModuleModel module, {MentariSectionModel? section}) async {
+    if (module.warningAlert != null && module.warningAlert!.isNotEmpty) {
+      final proceed = await showDialog<bool>(
+        context: context,
+        builder: (ctx) => AlertDialog(
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+          title: const Row(
+            children: [
+              Icon(Icons.info_outline_rounded, color: AppTheme.accentGold, size: 22),
+              SizedBox(width: 8),
+              Text('Informasi Aktivitas', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+            ],
+          ),
+          content: Text(
+            module.warningAlert!,
+            style: const TextStyle(fontSize: 13, height: 1.4),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(ctx, false),
+              child: const Text('Tutup'),
+            ),
+            ElevatedButton(
+              style: ElevatedButton.styleFrom(
+                backgroundColor: AppTheme.primaryBlue,
+                foregroundColor: Colors.white,
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+              ),
+              onPressed: () => Navigator.pop(ctx, true),
+              child: const Text('Tetap Buka'),
+            ),
+          ],
+        ),
+      );
+      if (proceed != true) return;
+      if (!mounted) return;
+    }
+
+    if (!mounted) return;
+
     if (module.type == MentariModuleType.quiz ||
         module.type == MentariModuleType.assign ||
         module.type == MentariModuleType.attendance ||
         module.type == MentariModuleType.forum) {
-      MentariQuizModal.show(
+      final secId = section != null ? 'PERTEMUAN_${section.sectionNumber}' : null;
+      await MentariQuizModal.show(
         context,
-        title: module.name,
+        title: '${module.name} - ${section?.name ?? widget.course.cleanTitle}',
         url: module.url,
+        courseCode: _resolvedCourseCode,
+        sectionIdentifier: secId,
+        activityName: module.name,
+        subtitle: widget.course.cleanTitle,
       );
+
+      if (mounted) {
+        context.read<MentariProvider>().fetchCourseSections(
+              widget.course.id,
+              courseCode: _resolvedCourseCode,
+              forceRefresh: true,
+            );
+      }
     }
   }
 
@@ -306,11 +358,15 @@ class _MentariCourseDetailScreenState extends State<MentariCourseDetailScreen> {
                     ...section.modules.map(
                       (m) => MentariActivityTile(
                         module: m,
-                        onTap: _handleActivityTap,
+                        onTap: (mod) => _handleActivityTap(mod, section: section),
                         onOpenInAppBrowser: (url) => MentariQuizModal.show(
                           context,
                           title: m.name,
                           url: url,
+                          courseCode: _resolvedCourseCode,
+                          sectionIdentifier: 'PERTEMUAN_${section.sectionNumber}',
+                          activityName: m.name,
+                          subtitle: widget.course.cleanTitle,
                         ),
                       ),
                     ),

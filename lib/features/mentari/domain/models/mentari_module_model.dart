@@ -23,6 +23,7 @@ class MentariModuleModel {
   final int? fileSize;
   final bool isCompleted;
   final DateTime? dueDate;
+  final String? warningAlert;
 
   const MentariModuleModel({
     required this.id,
@@ -35,6 +36,7 @@ class MentariModuleModel {
     this.fileSize,
     this.isCompleted = false,
     this.dueDate,
+    this.warningAlert,
   });
 
   static MentariModuleType parseModuleType(String modName) {
@@ -153,6 +155,7 @@ class MentariModuleModel {
       fileSize: fSize,
       isCompleted: isCompleted,
       dueDate: due,
+      warningAlert: json['warningAlert']?.toString(),
     );
   }
 
@@ -167,5 +170,6 @@ class MentariModuleModel {
         'fileSize': fileSize,
         'isCompleted': isCompleted,
         'dueDate': dueDate?.toIso8601String(),
+        if (warningAlert != null) 'warningAlert': warningAlert,
       };
 }

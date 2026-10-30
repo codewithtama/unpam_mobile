@@ -91,6 +91,30 @@ class MentariActivityTile extends StatelessWidget {
                               size: 16,
                               color: AppTheme.successGreen,
                             ),
+                          ] else if (module.warningAlert != null && module.warningAlert!.isNotEmpty) ...[
+                            const Spacer(),
+                            Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1.5),
+                              decoration: BoxDecoration(
+                                color: AppTheme.accentGold.withOpacity(0.12),
+                                borderRadius: BorderRadius.circular(4),
+                              ),
+                              child: const Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  Icon(Icons.lock_outline_rounded, size: 10.5, color: AppTheme.accentGold),
+                                  SizedBox(width: 3),
+                                  Text(
+                                    'Prasyarat',
+                                    style: TextStyle(
+                                      fontSize: 9,
+                                      fontWeight: FontWeight.bold,
+                                      color: AppTheme.accentGold,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
                           ],
                         ],
                       ),

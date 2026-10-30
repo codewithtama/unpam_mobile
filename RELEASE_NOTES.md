@@ -1,6 +1,15 @@
 # Catatan Pembaruan Rilis The PAMs
 
-## Versi 1.0.60 (Terbaru)
+## Versi 1.0.61 (Terbaru)
+
+- **Akses Interaktif Pretest, Forum Diskusi, & Posttest Mentari LMS In-App**:
+  - **Resolusi URL & Navigasi SPA Pintar (`MentariQuizModal`)**: Mengatasi masalah tautan kosong (`link: null`) pada aktivitas Pretest, Forum, dan Posttest dari REST API Mentari dengan secara cerdas mengarahkan ke halaman SPA matakuliah (`/u-courses/{courseCode}`) dan menyuntikkan script navigasi otomatis untuk membuka pertemuan (`PERTEMUAN_X`), scroll ke aktivitas target, dan membuka dialog pengerjaan secara instan.
+  - **Injeksi Sesi Token & Cookies Otomatis**: Menyuntikkan token otentikasi Mentari (`localStorage.setItem('access_token', token)`) dan cookies peramban secara otomatis saat WebView dibuka, mencegah mahasiswa terlempar kembali ke form login Mentari.
+  - **Deteksi Prasyarat & Validasi Akses (`warningAlert`)**: Memetakan pesan prasyarat resmi Mentari UNPAM (seperti *"Silakan selesaikan Pretest terlebih dahulu"* untuk Posttest atau ketersediaan topik forum) ke dalam model, menampilkan badge "Prasyarat" pada daftar aktivitas, serta memberikan dialog konfirmasi informatif sebelum membuka kuis.
+  - **Sinkronisasi Otomatis Pasca-Pengerjaan**: Menyegarkan data seksi dan progres pertemuan matakuliah secara otomatis setelah modal kuis/forum ditutup, sehingga tanda centang hijau (`completion: true`) langsung terupdate di aplikasi.
+  - **Pengujian & Kualitas**: 77/77 unit & widget tests lulus (100%), 0 analyzer issues (`flutter analyze` bersih).
+
+## Versi 1.0.60
 
 - **Implementasi Arsitektur WebFetcher & REST API Client Mentari LMS (Teknik MyUnpam)**:
   - **Headless Background Web Fetcher (`MentariWebFetcher`)**: Mengadopsi arsitektur peramban Chromium latar belakang persis seperti `MyUnpamWebFetcher` yang terbukti andal. Mengeliminasi pemblokiran Cloudflare WAF, kegagalan TLS fingerprint, dan CORS dengan menjalankan `fetch()` langsung dalam konteks domain asli `https://mentari.unpam.ac.id/`.
