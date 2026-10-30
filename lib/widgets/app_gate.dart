@@ -86,7 +86,7 @@ class _AppGateState extends State<AppGate> with WidgetsBindingObserver {
                 ClipRRect(
                   borderRadius: BorderRadius.all(Radius.circular(16)),
                   child: Image(
-                    image: AssetImage('logoaplikasi.jpeg'),
+                    image: ResizeImage(AssetImage('logoaplikasi.jpeg'), width: 144, height: 144),
                     width: 72,
                     height: 72,
                     fit: BoxFit.cover,

@@ -118,10 +118,16 @@ class _PortalWebViewScreenState extends State<PortalWebViewScreen>
   bool _isSplitAiOpen = false;
   bool _isSplitAiMinimized = false;
 
-  WebPageDetectedContext _mentariDetectedContext = WebPageDetectedContext.empty;
-  WebPageDetectedContext _myUnpamDetectedContext = WebPageDetectedContext.empty;
-  WebPageDetectedContext get _activeDetectedContext =>
-      _currentNavIndex == 1 ? _myUnpamDetectedContext : _mentariDetectedContext;
+  final ValueNotifier<WebPageDetectedContext> _mentariDetectedContextNotifier =
+      ValueNotifier<WebPageDetectedContext>(WebPageDetectedContext.empty);
+  final ValueNotifier<WebPageDetectedContext> _myUnpamDetectedContextNotifier =
+      ValueNotifier<WebPageDetectedContext>(WebPageDetectedContext.empty);
+  ValueNotifier<WebPageDetectedContext> get _activeDetectedContextNotifier =>
+      _currentNavIndex == 1
+          ? _myUnpamDetectedContextNotifier
+          : _mentariDetectedContextNotifier;
+  bool get _isActiveAtTop =>
+      _currentNavIndex == 1 ? _isMyUnpamAtTop : _isAtTop;
 
   bool _isMentariLoginDetected = false;
   bool _isMyUnpamLoginDetected = false;
@@ -148,6 +154,9 @@ class _PortalWebViewScreenState extends State<PortalWebViewScreen>
   bool _isHandlingRawPdf = false;
   Timer? _deadlineSnackbarDebounceTimer;
   Timer? _deadlineExtractThrottleTimer;
+  Timer? _pageFinishDelayedTimer;
+  Timer? _whiteScreenTimer1;
+  Timer? _whiteScreenTimer2;
   bool _hasShownDeadlineSnackbarThisSession = false;
   bool _hasShownScheduleSnackbarThisSession = false;
 
@@ -261,6 +270,11 @@ class _PortalWebViewScreenState extends State<PortalWebViewScreen>
     WidgetsBinding.instance.removeObserver(this);
     _deadlineSnackbarDebounceTimer?.cancel();
     _deadlineExtractThrottleTimer?.cancel();
+    _pageFinishDelayedTimer?.cancel();
+    _whiteScreenTimer1?.cancel();
+    _whiteScreenTimer2?.cancel();
+    _mentariDetectedContextNotifier.dispose();
+    _myUnpamDetectedContextNotifier.dispose();
     _fabOffsetNotifier.dispose();
     _isDraggingFabNotifier.dispose();
     _splitAiRatioNotifier.dispose();
@@ -300,22 +314,12 @@ class _PortalWebViewScreenState extends State<PortalWebViewScreen>
       ..setUserAgent(_customUserAgent)
       ..setBackgroundColor(Colors.white)
       ..setOnScrollPositionChange((change) {
-        final atTop = change.y <= 1;
-        if (atTop != _isAtTop && mounted) {
-          setState(() {
-            _isAtTop = atTop;
-          });
-        }
+        _isAtTop = change.y <= 1;
       })
       ..addJavaScriptChannel(
         'ScrollSyncChannel',
         onMessageReceived: (message) {
-          final atTop = message.message == 'true';
-          if (atTop != _isAtTop && mounted) {
-            setState(() {
-              _isAtTop = atTop;
-            });
-          }
+          _isAtTop = message.message == 'true';
         },
       )
       ..addJavaScriptChannel(
@@ -391,7 +395,7 @@ class _PortalWebViewScreenState extends State<PortalWebViewScreen>
                 _hasError = false;
                 _isWhiteScreenDetected = false;
                 _isAtTop = true;
-                _mentariDetectedContext = WebPageDetectedContext.empty;
+                _mentariDetectedContextNotifier.value = WebPageDetectedContext.empty;
                 _isLoginPageDetected = isLogin;
                 if (!isLogin) {
                   _hasAutoLoggedInCurrentSession = false;
@@ -416,7 +420,8 @@ class _PortalWebViewScreenState extends State<PortalWebViewScreen>
             _detectLoginForm();
             _injectLoginCaptureScript();
             _injectContextualPageDetectorScript(_controller);
-            Future.delayed(const Duration(milliseconds: 700), () {
+            _pageFinishDelayedTimer?.cancel();
+            _pageFinishDelayedTimer = Timer(const Duration(milliseconds: 700), () {
               if (mounted) {
                 _detectLoginForm();
                 _injectLoginCaptureScript();
@@ -539,22 +544,12 @@ class _PortalWebViewScreenState extends State<PortalWebViewScreen>
       ..setUserAgent(_customUserAgent)
       ..setBackgroundColor(Colors.white)
       ..setOnScrollPositionChange((change) {
-        final atTop = change.y <= 1;
-        if (atTop != _isMyUnpamAtTop && mounted) {
-          setState(() {
-            _isMyUnpamAtTop = atTop;
-          });
-        }
+        _isMyUnpamAtTop = change.y <= 1;
       })
       ..addJavaScriptChannel(
         'ScrollSyncChannel',
         onMessageReceived: (message) {
-          final atTop = message.message == 'true';
-          if (atTop != _isMyUnpamAtTop && mounted) {
-            setState(() {
-              _isMyUnpamAtTop = atTop;
-            });
-          }
+          _isMyUnpamAtTop = message.message == 'true';
         },
       )
       ..addJavaScriptChannel(
@@ -632,7 +627,7 @@ class _PortalWebViewScreenState extends State<PortalWebViewScreen>
                 _isMyUnpamLoading = true;
                 _myUnpamHasError = false;
                 _isMyUnpamAtTop = true;
-                _myUnpamDetectedContext = WebPageDetectedContext.empty;
+                _myUnpamDetectedContextNotifier.value = WebPageDetectedContext.empty;
                 _isMyUnpamLoginDetected = isLogin;
               });
               _updateHistoryState();
@@ -740,7 +735,7 @@ class _PortalWebViewScreenState extends State<PortalWebViewScreen>
 
   Future<void> _updateHistoryState() async {
     final canBack = await _activeController.canGoBack();
-    if (mounted) {
+    if (mounted && canBack != _canGoBack) {
       setState(() {
         _canGoBack = canBack;
       });
@@ -825,10 +820,12 @@ class _PortalWebViewScreenState extends State<PortalWebViewScreen>
   }
 
   void _scheduleWhiteScreenCheck() {
-    Future.delayed(const Duration(milliseconds: 2500), () {
+    _whiteScreenTimer1?.cancel();
+    _whiteScreenTimer2?.cancel();
+    _whiteScreenTimer1 = Timer(const Duration(milliseconds: 2500), () {
       if (mounted) _performWhiteScreenCheck();
     });
-    Future.delayed(const Duration(milliseconds: 5000), () {
+    _whiteScreenTimer2 = Timer(const Duration(milliseconds: 5000), () {
       if (mounted) _performWhiteScreenCheck();
     });
   }
@@ -1272,13 +1269,18 @@ class _PortalWebViewScreenState extends State<PortalWebViewScreen>
   /// Ekstrak jadwal dari halaman MyUnpam jika URL relevan.
   Future<void> _tryExtractSchedule(WebViewController controller, String url) async {
     final lower = url.toLowerCase();
-    final isSchedulePage = lower.contains('jadwal') ||
+    final isExplicitSchedulePage = lower.contains('jadwal') ||
         lower.contains('schedule') ||
-        lower.contains('krs') ||
-        (lower.contains('my.unpam.ac.id') &&
-            !lower.contains('login') &&
-            !lower.contains('sso'));
-    if (!isSchedulePage) return;
+        lower.contains('krs');
+    final isGenericMyUnpam = lower.contains('my.unpam.ac.id') &&
+        !lower.contains('login') &&
+        !lower.contains('sso') &&
+        !lower.contains('logout');
+
+    final provider = context.read<ScheduleProvider>();
+    if (!isExplicitSchedulePage && (!isGenericMyUnpam || provider.hasSchedules)) {
+      return;
+    }
     try {
       final result = await controller
           .runJavaScriptReturningResult(PortalJsScripts.scheduleExtractor);
@@ -1383,10 +1385,12 @@ class _PortalWebViewScreenState extends State<PortalWebViewScreen>
       final isLoginDetected = (hasForm || isLoginUrl) && !hasProfile;
 
       if (mounted) {
-        setState(() {
-          _isLoginPageDetected = isLoginDetected;
-          _isLoggedOutDetected = false;
-        });
+        if (_isLoginPageDetected != isLoginDetected || _isLoggedOutDetected) {
+          setState(() {
+            _isLoginPageDetected = isLoginDetected;
+            _isLoggedOutDetected = false;
+          });
+        }
 
         if (isLoginDetected) {
           _injectLoginCaptureScript();
@@ -2075,13 +2079,12 @@ Future<void> _openScheduleScreen({int initialTabIndex = 0}) async {
     try {
       final ctx = WebPageDetectedContext.fromRawJson(rawPayload);
       if (mounted) {
-        setState(() {
-          if (isMyUnpam) {
-            _myUnpamDetectedContext = ctx;
-          } else {
-            _mentariDetectedContext = ctx;
-          }
-        });
+        final targetNotifier = isMyUnpam
+            ? _myUnpamDetectedContextNotifier
+            : _mentariDetectedContextNotifier;
+        if (targetNotifier.value != ctx) {
+          targetNotifier.value = ctx;
+        }
       }
     } catch (e) {
       debugPrint('Error parsing page context payload: $e');
@@ -2227,34 +2230,16 @@ Future<void> _openScheduleScreen({int initialTabIndex = 0}) async {
     if (_isRefreshing) return;
     _dragStartY = event.position.dy;
     _dragStartX = event.position.dx;
-    _wasAtTopOnDown = _isAtTop;
+    _wasAtTopOnDown = _isActiveAtTop;
     _isPullingNotifier.value = false;
     _pullDistanceNotifier.value = 0.0;
     _hasHapticed = false;
-
-    _activeController
-        .runJavaScriptReturningResult(
-            'window.scrollY || document.documentElement.scrollTop || 0;')
-        .then((res) {
-      final num? y = num.tryParse(res.toString());
-      if (y != null && mounted) {
-        final atTop = y <= 2;
-        if (atTop != _isAtTop) {
-          _isAtTop = atTop;
-          if (!_isPullingNotifier.value) {
-            _wasAtTopOnDown = atTop;
-          }
-        }
-      }
-    }).catchError((e) {
-      debugPrint('Scroll query error: $e');
-    });
   }
 
   void _onPointerMove(PointerMoveEvent event) {
     if (_isRefreshing || _dragStartY == null || _dragStartX == null) return;
 
-    if (!_wasAtTopOnDown || !_isAtTop) {
+    if (!_wasAtTopOnDown || !_isActiveAtTop) {
       if (_isPullingNotifier.value) {
         _isPullingNotifier.value = false;
         _pullDistanceNotifier.value = 0.0;
@@ -2354,17 +2339,9 @@ Future<void> _openScheduleScreen({int initialTabIndex = 0}) async {
             Expanded(
               child: LayoutBuilder(
                 builder: (context, constraints) {
-                  final activeContext = _activeDetectedContext;
-                  final double estimatedWidth =
-                      activeContext.hasActiveContext ? 148.0 : 118.0;
                   const double buttonHeight = 40.0;
                   final double maxW = constraints.maxWidth;
                   final double maxH = constraints.maxHeight;
-
-                  _fabOffsetNotifier.value ??= Offset(
-                    (maxW - estimatedWidth - 14.0).clamp(8.0, maxW),
-                    (maxH - buttonHeight - 16.0).clamp(8.0, maxH),
-                  );
 
                   final bool showDockedSplitAi =
                       _isSplitAiOpen && !_isSplitAiMinimized;
@@ -2381,16 +2358,16 @@ Future<void> _openScheduleScreen({int initialTabIndex = 0}) async {
                     children: [
                       Column(
                         children: [
-                          // Bagian Atas: Portal WebView dengan RepaintBoundary
+                          // Bagian Atas: Portal WebView dengan RepaintBoundary terisolasi per tab
                           Expanded(
                             child: Stack(
                               children: [
-                                RepaintBoundary(
-                                  child: IndexedStack(
-                                    index: _currentNavIndex == 1 ? 1 : 0,
-                                    children: [
-                                      // Tab 0: Mentari
-                                      Listener(
+                                IndexedStack(
+                                  index: _currentNavIndex == 1 ? 1 : 0,
+                                  children: [
+                                    // Tab 0: Mentari
+                                    RepaintBoundary(
+                                      child: Listener(
                                         behavior: HitTestBehavior.translucent,
                                         onPointerDown: _onPointerDown,
                                         onPointerMove: _onPointerMove,
@@ -2399,8 +2376,10 @@ Future<void> _openScheduleScreen({int initialTabIndex = 0}) async {
                                         child: WebViewWidget(
                                             controller: _controller),
                                       ),
-                                      // Tab 1: MyUnpam
-                                      _myUnpamController != null
+                                    ),
+                                    // Tab 1: MyUnpam
+                                    RepaintBoundary(
+                                      child: _myUnpamController != null
                                           ? Listener(
                                               behavior:
                                                   HitTestBehavior.translucent,
@@ -2417,8 +2396,8 @@ Future<void> _openScheduleScreen({int initialTabIndex = 0}) async {
                                                 color: AppTheme.primaryBlue,
                                               ),
                                             ),
-                                    ],
-                                  ),
+                                    ),
+                                  ],
                                 ),
 
                                 // Floating Pull-to-Refresh Indicator
@@ -2451,35 +2430,38 @@ Future<void> _openScheduleScreen({int initialTabIndex = 0}) async {
                             ),
                           ),
 
-                          // Bagian Bawah: Split-Screen / Mini AI Overlay Panel dengan isolasi rasio
+                          // Bagian Bawah: Split-Screen / Mini AI Overlay Panel dengan isolasi rasio & konteks
                           if (showDockedSplitAi)
-                            ValueListenableBuilder<double>(
-                              valueListenable: _splitAiRatioNotifier,
-                              builder: (context, ratio, _) {
-                                final effectiveSplitHeight = (maxH * ratio)
-                                    .clamp(minAllowedPanelHeight,
-                                        maxAllowedPanelHeight);
+                            ValueListenableBuilder<WebPageDetectedContext>(
+                              valueListenable: _activeDetectedContextNotifier,
+                              builder: (context, activeContext, _) {
+                                return ValueListenableBuilder<double>(
+                                  valueListenable: _splitAiRatioNotifier,
+                                  builder: (context, ratio, _) {
+                                    final effectiveSplitHeight = (maxH * ratio)
+                                        .clamp(minAllowedPanelHeight,
+                                            maxAllowedPanelHeight);
 
-                                return SizedBox(
-                                  height: effectiveSplitHeight,
-                                  width: double.infinity,
-                                  child: MiniAiOverlayPanel(
-                                    activePortalName: _currentNavIndex == 1
-                                        ? 'MyUnpam'
-                                        : 'Mentari',
-                                    activePageTitle: _currentNavIndex == 1
-                                        ? _myUnpamPageTitle
-                                        : _pageTitle,
-                                    detectedContext: activeContext,
-                                    onContextualPrimaryAction: () =>
-                                        _executeContextualPrimaryAction(
-                                            activeContext),
-                                    onContextualSecondaryAction:
-                                        _getContextualSecondaryAction(
-                                            activeContext),
-                                    contextualSecondaryLabel:
-                                        _getContextualSecondaryLabel(
-                                            activeContext),
+                                    return SizedBox(
+                                      height: effectiveSplitHeight,
+                                      width: double.infinity,
+                                      child: MiniAiOverlayPanel(
+                                        activePortalName: _currentNavIndex == 1
+                                            ? 'MyUnpam'
+                                            : 'Mentari',
+                                        activePageTitle: _currentNavIndex == 1
+                                            ? _myUnpamPageTitle
+                                            : _pageTitle,
+                                        detectedContext: activeContext,
+                                        onContextualPrimaryAction: () =>
+                                            _executeContextualPrimaryAction(
+                                                activeContext),
+                                        onContextualSecondaryAction:
+                                            _getContextualSecondaryAction(
+                                                activeContext),
+                                        contextualSecondaryLabel:
+                                            _getContextualSecondaryLabel(
+                                                activeContext),
                                     onClose: () {
                                       setState(() {
                                         _isSplitAiOpen = false;
@@ -2510,7 +2492,9 @@ Future<void> _openScheduleScreen({int initialTabIndex = 0}) async {
                                   ),
                                 );
                               },
-                            ),
+                            );
+                          },
+                        ),
                         ],
                       ),
 
@@ -2529,83 +2513,91 @@ Future<void> _openScheduleScreen({int initialTabIndex = 0}) async {
                           },
                         ),
 
-                      // In-Page Quick Action Floating Pill (Rebuild terisolasi per frame)
+                      // In-Page Quick Action Floating Pill (Rebuild terisolasi per konteks & frame)
                       if (!_isSplitAiOpen)
-                        ValueListenableBuilder<Offset?>(
-                          valueListenable: _fabOffsetNotifier,
-                          builder: (context, fabOffset, _) {
-                            final currentFab = fabOffset ??
-                                Offset(
-                                  (maxW - estimatedWidth - 14.0)
-                                      .clamp(8.0, maxW),
-                                  (maxH - buttonHeight - 16.0).clamp(8.0, maxH),
+                        ValueListenableBuilder<WebPageDetectedContext>(
+                          valueListenable: _activeDetectedContextNotifier,
+                          builder: (context, activeContext, _) {
+                            final double estimatedWidth =
+                                activeContext.hasActiveContext ? 148.0 : 118.0;
+
+                            return ValueListenableBuilder<Offset?>(
+                              valueListenable: _fabOffsetNotifier,
+                              builder: (context, fabOffset, _) {
+                                final currentFab = fabOffset ??
+                                    Offset(
+                                      (maxW - estimatedWidth - 14.0)
+                                          .clamp(8.0, maxW),
+                                      (maxH - buttonHeight - 16.0).clamp(8.0, maxH),
+                                    );
+
+                                final safeX = currentFab.dx.clamp(
+                                  8.0,
+                                  (maxW - estimatedWidth - 8.0).clamp(8.0, maxW),
+                                );
+                                final safeY = currentFab.dy.clamp(
+                                  8.0,
+                                  (maxH - buttonHeight - 8.0).clamp(8.0, maxH),
                                 );
 
-                            final safeX = currentFab.dx.clamp(
-                              8.0,
-                              (maxW - estimatedWidth - 8.0).clamp(8.0, maxW),
-                            );
-                            final safeY = currentFab.dy.clamp(
-                              8.0,
-                              (maxH - buttonHeight - 8.0).clamp(8.0, maxH),
-                            );
-
-                            return Positioned(
-                              left: safeX,
-                              top: safeY,
-                              child: ConstrainedBox(
-                                constraints: BoxConstraints(
-                                  maxWidth: (maxW - 16.0).clamp(110.0, maxW),
-                                ),
-                                child: ValueListenableBuilder<bool>(
-                                  valueListenable: _isDraggingFabNotifier,
-                                  builder: (context, isDragging, _) {
-                                    return InPageQuickActionPill(
-                                      detectedContext: activeContext,
-                                      isDragging: isDragging,
-                                      onPanStart: (_) {
-                                        _isDraggingFabNotifier.value = true;
-                                      },
-                                      onPanUpdate: (details) {
-                                        final nextX = (currentFab.dx +
-                                                details.delta.dx)
-                                            .clamp(
-                                                8.0,
-                                                (maxW - estimatedWidth - 8.0)
-                                                    .clamp(8.0, maxW));
-                                        final nextY =
-                                            (currentFab.dy + details.delta.dy)
+                                return Positioned(
+                                  left: safeX,
+                                  top: safeY,
+                                  child: ConstrainedBox(
+                                    constraints: BoxConstraints(
+                                      maxWidth: (maxW - 16.0).clamp(110.0, maxW),
+                                    ),
+                                    child: ValueListenableBuilder<bool>(
+                                      valueListenable: _isDraggingFabNotifier,
+                                      builder: (context, isDragging, _) {
+                                        return InPageQuickActionPill(
+                                          detectedContext: activeContext,
+                                          isDragging: isDragging,
+                                          onPanStart: (_) {
+                                            _isDraggingFabNotifier.value = true;
+                                          },
+                                          onPanUpdate: (details) {
+                                            final nextX = (currentFab.dx +
+                                                    details.delta.dx)
                                                 .clamp(
                                                     8.0,
-                                                    (maxH - buttonHeight - 8.0)
-                                                        .clamp(8.0, maxH));
-                                        _fabOffsetNotifier.value =
-                                            Offset(nextX, nextY);
+                                                    (maxW - estimatedWidth - 8.0)
+                                                        .clamp(8.0, maxW));
+                                            final nextY =
+                                                (currentFab.dy + details.delta.dy)
+                                                    .clamp(
+                                                        8.0,
+                                                        (maxH - buttonHeight - 8.0)
+                                                            .clamp(8.0, maxH));
+                                            _fabOffsetNotifier.value =
+                                                Offset(nextX, nextY);
+                                          },
+                                          onPanEnd: (_) {
+                                            _isDraggingFabNotifier.value = false;
+                                          },
+                                          onPanCancel: () {
+                                            _isDraggingFabNotifier.value = false;
+                                          },
+                                          onPrimaryAction: () =>
+                                              _executeContextualPrimaryAction(
+                                                  activeContext),
+                                          onSecondaryAction:
+                                              _getContextualSecondaryAction(
+                                                  activeContext),
+                                          secondaryActionLabel:
+                                              _getContextualSecondaryLabel(
+                                                  activeContext),
+                                          secondaryActionIcon:
+                                              _getContextualSecondaryIcon(
+                                                  activeContext),
+                                          onOpenAllTools: _showAiPowerToolsMenu,
+                                          onOpenSplitScreen: _toggleSplitAiOverlay,
+                                        );
                                       },
-                                      onPanEnd: (_) {
-                                        _isDraggingFabNotifier.value = false;
-                                      },
-                                      onPanCancel: () {
-                                        _isDraggingFabNotifier.value = false;
-                                      },
-                                      onPrimaryAction: () =>
-                                          _executeContextualPrimaryAction(
-                                              activeContext),
-                                      onSecondaryAction:
-                                          _getContextualSecondaryAction(
-                                              activeContext),
-                                      secondaryActionLabel:
-                                          _getContextualSecondaryLabel(
-                                              activeContext),
-                                      secondaryActionIcon:
-                                          _getContextualSecondaryIcon(
-                                              activeContext),
-                                      onOpenAllTools: _showAiPowerToolsMenu,
-                                      onOpenSplitScreen: _toggleSplitAiOverlay,
-                                    );
-                                  },
-                                ),
-                              ),
+                                    ),
+                                  ),
+                                );
+                              },
                             );
                           },
                         ),
@@ -2671,20 +2663,15 @@ Future<void> _openScheduleScreen({int initialTabIndex = 0}) async {
           return const SizedBox.shrink();
         }
 
-        return TweenAnimationBuilder<double>(
-          duration: const Duration(milliseconds: 180),
-          curve: Curves.easeOutCubic,
-          tween: Tween<double>(
-            begin: 0,
-            end: progress > 0 ? progress / 100.0 : 0,
-          ),
-          builder: (_, value, __) => LinearProgressIndicator(
-            value: value <= 0 ? null : value,
-            minHeight: 3,
-            backgroundColor: Colors.transparent,
-            valueColor:
-                const AlwaysStoppedAnimation<Color>(AppTheme.accentGold),
-          ),
+        final double? progressValue =
+            (progress > 0 && progress < 100) ? (progress / 100.0) : null;
+
+        return LinearProgressIndicator(
+          value: progressValue,
+          minHeight: 2.5,
+          backgroundColor: Colors.transparent,
+          valueColor:
+              const AlwaysStoppedAnimation<Color>(AppTheme.accentGold),
         );
       },
     );

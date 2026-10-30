@@ -558,58 +558,67 @@ class _DeadlineTab extends StatelessWidget {
                 );
               }
 
-              return ListView(
+              return CustomScrollView(
                 physics: const AlwaysScrollableScrollPhysics(),
-                padding: const EdgeInsets.only(top: 14, bottom: 24),
-                children: [
+                slivers: [
+                  const SliverToBoxAdapter(child: SizedBox(height: 14)),
                   if (upcoming.isNotEmpty) ...[
-                    _SectionHeader(
-                      title: 'Akan Datang (${upcoming.length})',
-                      icon: Icons.pending_actions_outlined,
-                      color: AppTheme.primaryBlue,
+                    SliverToBoxAdapter(
+                      child: _SectionHeader(
+                        title: 'Akan Datang (${upcoming.length})',
+                        icon: Icons.pending_actions_outlined,
+                        color: AppTheme.primaryBlue,
+                      ),
                     ),
-                    ...upcoming.map(
-                      (d) => DeadlineListTile(
-                        deadline: d,
-                        onTap: () => _openDeadline(context, d.url),
+                    SliverList.builder(
+                      itemCount: upcoming.length,
+                      itemBuilder: (context, index) => DeadlineListTile(
+                        deadline: upcoming[index],
+                        onTap: () => _openDeadline(context, upcoming[index].url),
                       ),
                     ),
                   ],
                   if (overdue.isNotEmpty) ...[
-                    const SizedBox(height: 8),
-                    _SectionHeader(
-                      title: 'Terlewat (${overdue.length})',
-                      icon: Icons.assignment_late_outlined,
-                      color: Colors.grey.shade500,
+                    SliverToBoxAdapter(
+                      child: Padding(
+                        padding: const EdgeInsets.only(top: 8),
+                        child: _SectionHeader(
+                          title: 'Terlewat (${overdue.length})',
+                          icon: Icons.assignment_late_outlined,
+                          color: Colors.grey.shade500,
+                        ),
+                      ),
                     ),
-                    ...overdue.map(
-                      (d) => DeadlineListTile(
-                        deadline: d,
-                        onTap: () => _openDeadline(context, d.url),
+                    SliverList.builder(
+                      itemCount: overdue.length,
+                      itemBuilder: (context, index) => DeadlineListTile(
+                        deadline: overdue[index],
+                        onTap: () => _openDeadline(context, overdue[index].url),
                       ),
                     ),
                   ],
-                  const SizedBox(height: 8),
-                  // Sync hint
-                  const Padding(
-                    padding: EdgeInsets.symmetric(horizontal: 16),
-                    child: Row(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        Icon(Icons.info_outline,
-                            size: 13, color: AppTheme.textMuted),
-                        SizedBox(width: 6),
-                        Expanded(
-                          child: Text(
-                            'Deadline disinkronkan langsung dari Mentari LMS.',
-                            style: TextStyle(
-                                fontSize: 11, color: AppTheme.textMuted),
-                            textAlign: TextAlign.center,
+                  const SliverToBoxAdapter(
+                    child: Padding(
+                      padding: EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                      child: Row(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          Icon(Icons.info_outline,
+                              size: 13, color: AppTheme.textMuted),
+                          SizedBox(width: 6),
+                          Expanded(
+                            child: Text(
+                              'Deadline disinkronkan langsung dari Mentari LMS.',
+                              style: TextStyle(
+                                  fontSize: 11, color: AppTheme.textMuted),
+                              textAlign: TextAlign.center,
+                            ),
                           ),
-                        ),
-                      ],
+                        ],
+                      ),
                     ),
                   ),
+                  const SliverToBoxAdapter(child: SizedBox(height: 24)),
                 ],
               );
             },

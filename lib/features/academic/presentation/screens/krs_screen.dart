@@ -96,37 +96,53 @@ class _KrsScreenState extends State<KrsScreen> {
             );
           }
 
-          return ListView(
+          return CustomScrollView(
             physics: const AlwaysScrollableScrollPhysics(),
-            padding: const EdgeInsets.fromLTRB(16, 16, 16, 32),
-            children: [
-              if (krsResource.error != null)
-                PortalSyncBanner(message: krsResource.error!, onRetry: _refresh),
-              _buildHeaderCard(krs),
-              const SizedBox(height: 18),
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  const Text(
-                    'Mata Kuliah Dikontrak',
-                    style: TextStyle(
-                      fontSize: 15,
-                      fontWeight: FontWeight.bold,
-                      color: AppTheme.textDark,
+            slivers: [
+              SliverPadding(
+                padding: const EdgeInsets.fromLTRB(16, 16, 16, 0),
+                sliver: SliverList(
+                  delegate: SliverChildListDelegate.fixed([
+                    if (krsResource.error != null)
+                      PortalSyncBanner(message: krsResource.error!, onRetry: _refresh),
+                    _buildHeaderCard(krs),
+                    const SizedBox(height: 18),
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        const Text(
+                          'Mata Kuliah Dikontrak',
+                          style: TextStyle(
+                            fontSize: 15,
+                            fontWeight: FontWeight.bold,
+                            color: AppTheme.textDark,
+                          ),
+                        ),
+                        Text(
+                          '${krs.courses.length} Mata Kuliah',
+                          style: const TextStyle(
+                            fontSize: 12.5,
+                            color: AppTheme.textMuted,
+                            fontWeight: FontWeight.w500,
+                          ),
+                        ),
+                      ],
                     ),
-                  ),
-                  Text(
-                    '${krs.courses.length} Mata Kuliah',
-                    style: const TextStyle(
-                      fontSize: 12.5,
-                      color: AppTheme.textMuted,
-                      fontWeight: FontWeight.w500,
-                    ),
-                  ),
-                ],
+                    const SizedBox(height: 10),
+                  ]),
+                ),
               ),
-              const SizedBox(height: 10),
-              ...krs.courses.map(_buildCourseCard),
+              SliverPadding(
+                padding: const EdgeInsets.symmetric(horizontal: 16),
+                sliver: SliverList.builder(
+                  itemCount: krs.courses.length,
+                  itemBuilder: (context, index) =>
+                      _buildCourseCard(krs.courses[index]),
+                ),
+              ),
+              const SliverToBoxAdapter(
+                child: SizedBox(height: 32),
+              ),
             ],
           );
         },

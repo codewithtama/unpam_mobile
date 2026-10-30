@@ -100,26 +100,41 @@ class _AcademicGradesScreenState extends State<AcademicGradesScreen> {
       }).toList();
     }
 
-    return ListView(
-      padding: const EdgeInsets.all(16),
-      children: [
-        if (resource.error != null)
-          PortalSyncBanner(message: resource.error!, onRetry: retry),
-        _buildHeroGpaCard(data),
-        const SizedBox(height: 16),
-        _buildSearchField(),
-        const SizedBox(height: 12),
-        _buildSemesterFilterChips(availableSemesters),
-        const SizedBox(height: 16),
-        if (_selectedSemesterFilter > 0)
-          _buildSemesterPerformanceCard(data, _selectedSemesterFilter),
-        _buildCourseListHeader(displayCourses.length),
-        const SizedBox(height: 10),
-        if (displayCourses.isEmpty)
-          _buildEmptyResults()
-        else
-          ...displayCourses.map((c) => _buildCourseCard(c)),
-        const SizedBox(height: 24),
+    return CustomScrollView(
+      physics: const AlwaysScrollableScrollPhysics(),
+      slivers: [
+        SliverPadding(
+          padding: const EdgeInsets.fromLTRB(16, 16, 16, 0),
+          sliver: SliverList(
+            delegate: SliverChildListDelegate.fixed([
+              if (resource.error != null)
+                PortalSyncBanner(message: resource.error!, onRetry: retry),
+              _buildHeroGpaCard(data),
+              const SizedBox(height: 16),
+              _buildSearchField(),
+              const SizedBox(height: 12),
+              _buildSemesterFilterChips(availableSemesters),
+              const SizedBox(height: 16),
+              if (_selectedSemesterFilter > 0)
+                _buildSemesterPerformanceCard(data, _selectedSemesterFilter),
+              _buildCourseListHeader(displayCourses.length),
+              const SizedBox(height: 10),
+              if (displayCourses.isEmpty) _buildEmptyResults(),
+            ]),
+          ),
+        ),
+        if (displayCourses.isNotEmpty)
+          SliverPadding(
+            padding: const EdgeInsets.symmetric(horizontal: 16),
+            sliver: SliverList.builder(
+              itemCount: displayCourses.length,
+              itemBuilder: (context, index) =>
+                  _buildCourseCard(displayCourses[index]),
+            ),
+          ),
+        const SliverToBoxAdapter(
+          child: SizedBox(height: 24),
+        ),
       ],
     );
   }

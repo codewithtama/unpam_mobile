@@ -84,32 +84,47 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
     }
 
 
-    return ListView(
-      padding: const EdgeInsets.all(16),
-      children: [
-        if (resource.error != null)
-          PortalSyncBanner(message: resource.error!, onRetry: retry),
-        _buildHeaderBanner(courses),
-        const SizedBox(height: 16),
-        Row(
-          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-          children: [
-            Text(
-              'Mata Kuliah Semester Ini (${courses.length})',
-              style: const TextStyle(
-                fontSize: 14,
-                fontWeight: FontWeight.bold,
-                color: AppTheme.textDark,
+    return CustomScrollView(
+      physics: const AlwaysScrollableScrollPhysics(),
+      slivers: [
+        SliverPadding(
+          padding: const EdgeInsets.fromLTRB(16, 16, 16, 0),
+          sliver: SliverList(
+            delegate: SliverChildListDelegate.fixed([
+              if (resource.error != null)
+                PortalSyncBanner(message: resource.error!, onRetry: retry),
+              _buildHeaderBanner(courses),
+              const SizedBox(height: 16),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Text(
+                    'Mata Kuliah Semester Ini (${courses.length})',
+                    style: const TextStyle(
+                      fontSize: 14,
+                      fontWeight: FontWeight.bold,
+                      color: AppTheme.textDark,
+                    ),
+                  ),
+                ],
               ),
-            ),
-          ],
+              const SizedBox(height: 10),
+              if (courses.isEmpty) _buildEmptyCourses(),
+            ]),
+          ),
         ),
-        const SizedBox(height: 10),
-        if (courses.isEmpty)
-          _buildEmptyCourses()
-        else
-          ...courses.map((course) => _buildCourseAttendanceTile(provider, course)),
-        const SizedBox(height: 24),
+        if (courses.isNotEmpty)
+          SliverPadding(
+            padding: const EdgeInsets.symmetric(horizontal: 16),
+            sliver: SliverList.builder(
+              itemCount: courses.length,
+              itemBuilder: (context, index) =>
+                  _buildCourseAttendanceTile(provider, courses[index]),
+            ),
+          ),
+        const SliverToBoxAdapter(
+          child: SizedBox(height: 24),
+        ),
       ],
     );
   }

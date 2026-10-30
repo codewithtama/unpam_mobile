@@ -864,7 +864,6 @@ class PortalJsScripts {
           style.textContent = `
             html, body {
               -webkit-overflow-scrolling: touch !important;
-              scroll-behavior: smooth !important;
               overscroll-behavior-y: contain !important;
             }
             * {
@@ -874,22 +873,6 @@ class PortalJsScripts {
           document.head.appendChild(style);
         }
       } catch(e) {}
-
-      var lastAtTop = null;
-      function syncScroll() {
-        try {
-          if (window.ScrollSyncChannel) {
-            var atTop = (window.scrollY || document.documentElement.scrollTop || 0) <= 2;
-            if (atTop !== lastAtTop) {
-              lastAtTop = atTop;
-              window.ScrollSyncChannel.postMessage(atTop ? 'true' : 'false');
-            }
-          }
-        } catch(e) {}
-      }
-      window.removeEventListener('scroll', syncScroll);
-      window.addEventListener('scroll', syncScroll, { passive: true });
-      syncScroll();
     })();
   ''';
 
