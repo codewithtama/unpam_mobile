@@ -37,13 +37,14 @@ class AcademicPortalService {
     required String cacheKey,
     required T Function(dynamic json) parse,
     required bool forceRefresh,
+    Map<String, dynamic>? query,
   }) async {
     if (!forceRefresh) {
       final cached = _readCache(cacheKey, parse);
       if (cached != null) return cached;
     }
 
-    final json = await _session.get(path);
+    final json = await _session.get(path, query: query);
     final result = parse(json);
     await _storage.saveCachedJson(cacheKey, jsonEncode(json));
     return result;
@@ -101,10 +102,10 @@ class AcademicPortalService {
   }
 
   static CourseProjectResponse _parseCourseProjects(dynamic json) =>
-      CourseProjectResponse.fromJson(json as Map<String, dynamic>);
+      CourseProjectResponse.fromJson(json);
 
   static AbsencePermitResponse _parseAbsencePermits(dynamic json) =>
-      AbsencePermitResponse.fromJson(json as Map<String, dynamic>);
+      AbsencePermitResponse.fromJson(json);
 
   // Cache Readers
   StudentBiodata? getCachedBiodata() =>
@@ -138,9 +139,11 @@ class AcademicPortalService {
       _readCache(ApiConstants.myUnpamCachedThesisKey, _parseThesis);
 
   CourseProjectResponse? getCachedCourseProjects() =>
+      _readCache('${ApiConstants.myUnpamCachedCourseProjectsKey}_1', _parseCourseProjects) ??
       _readCache(ApiConstants.myUnpamCachedCourseProjectsKey, _parseCourseProjects);
 
   AbsencePermitResponse? getCachedAbsencePermits() =>
+      _readCache('${ApiConstants.myUnpamCachedAbsencePermitsKey}_1', _parseAbsencePermits) ??
       _readCache(ApiConstants.myUnpamCachedAbsencePermitsKey, _parseAbsencePermits);
 
   // Network Fetchers
@@ -266,7 +269,8 @@ class AcademicPortalService {
     int page = 1,
   }) =>
       _fetch(
-        path: '/api/penugasan-proyek?page=$page',
+        path: '/api/penugasan-proyek',
+        query: {'page': page.toString()},
         cacheKey: '${ApiConstants.myUnpamCachedCourseProjectsKey}_$page',
         parse: _parseCourseProjects,
         forceRefresh: forceRefresh,
@@ -277,7 +281,8 @@ class AcademicPortalService {
     int page = 1,
   }) =>
       _fetch(
-        path: '/api/absen-jalan/pengajuan-izin?page=$page',
+        path: '/api/absen-jalan/pengajuan-izin',
+        query: {'page': page.toString()},
         cacheKey: '${ApiConstants.myUnpamCachedAbsencePermitsKey}_$page',
         parse: _parseAbsencePermits,
         forceRefresh: forceRefresh,

@@ -1,6 +1,14 @@
 # Catatan Pembaruan Rilis The PAMs
 
-## Versi 1.0.52 (Terbaru)
+## Versi 1.0.53 (Terbaru)
+
+- **Perbaikan Format Data Penugasan Proyek & Pengajuan Izin**:
+  - **URL Query Builder Fix**: Memperbaiki konstruksi query URI pada `MyUnpamWebFetcher` dan `AcademicPortalService` sehingga parameter paginasi `?page=X` tidak lagi ter-escape menjadi `%3F` di hidden browser fetcher yang sebelumnya memicu respon halaman HTML SPA (berujung pada error "Format data dari server tidak valid").
+  - **Toleransi Payload JSON Fleksibel**: Model `CourseProjectResponse` dan `AbsencePermitResponse` kini mendukung payload bertingkat (`{ data: [...] }`), array langsung (`[...]`), format null, maupun fallback string/number tanpa risiko exception parsing.
+  - **Pencegahan Error HTML/Redirect**: Deteksi respon HTML otomatis pada level session untuk menyegarkan sesi secara transparan jika dialihkan ke halaman login/WAF.
+  - **Pengujian & Kualitas**: 64/64 unit & widget tests lulus, 0 analyzer issues.
+
+## Versi 1.0.52
 
 - **Integrasi Layanan Native Lengkap Berdasarkan OpenAPI My UNPAM**:
   - **Kartu Rencana Studi (KRS)**: Layanan rencana studi semester aktif (`/api/krs`) menampilkan total SKS dikontrak, total SKS lulus, kelas, kurikulum, dan nama dosen pengampu.

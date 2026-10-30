@@ -264,12 +264,28 @@ class MyUnpamSession extends ChangeNotifier {
     final code = response.statusCode;
     if (code == 401 || code == 403 || code == 419) return true;
     final body = response.data;
-    return body is String &&
-        (body.contains('challenges.cloudflare.com') || body.contains('<title>Just a moment'));
+    if (body is String) {
+      final lower = body.toLowerCase();
+      return lower.contains('challenges.cloudflare.com') ||
+          lower.contains('<title>just a moment') ||
+          lower.contains('satu.unpam.ac.id') ||
+          lower.contains('<!doctype html') ||
+          lower.contains('<html');
+    }
+    return false;
   }
 
   dynamic _decode(dynamic data) {
+    if (data == null) return null;
     if (data is String) {
+      final trimmed = data.trim();
+      if (trimmed.isEmpty) return null;
+      if (trimmed.startsWith('<html') ||
+          trimmed.startsWith('<!DOCTYPE') ||
+          trimmed.startsWith('<!doctype')) {
+        throw const SessionExpiredException(
+            'Sesi berakhir atau server mengembalikan halaman web. Silakan hubungkan akun.');
+      }
       try {
         return jsonDecode(data);
       } catch (_) {

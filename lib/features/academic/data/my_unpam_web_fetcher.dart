@@ -23,7 +23,15 @@ class MyUnpamWebFetcher {
   }
 
   Future<Response<dynamic>> get(String path, Map<String, dynamic>? query, String? token) async {
-    final uri = Uri(path: path, queryParameters: query?.map((k, v) => MapEntry(k, '$v')));
+    final parsed = Uri.parse(path);
+    final queryParams = <String, String>{
+      ...parsed.queryParameters,
+      if (query != null) ...query.map((k, v) => MapEntry(k, '$v')),
+    };
+    final uri = Uri(
+      path: parsed.path,
+      queryParameters: queryParams.isNotEmpty ? queryParams : null,
+    );
     var response = await _fetch(uri.toString(), token);
     if (_isChallenge(response)) {
       await _reloadPage();
@@ -105,9 +113,14 @@ class MyUnpamWebFetcher {
 
   bool _isChallenge(Response<dynamic> response) {
     final body = response.data;
-    return response.statusCode == 403 &&
-        body is String &&
-        (body.contains('challenges.cloudflare.com') || body.contains('Just a moment'));
+    if (body is String) {
+      final lower = body.toLowerCase();
+      if (lower.contains('challenges.cloudflare.com') ||
+          lower.contains('<title>just a moment')) {
+        return true;
+      }
+    }
+    return response.statusCode == 403;
   }
 
   Future<void> _ensurePage() {

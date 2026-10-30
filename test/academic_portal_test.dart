@@ -538,5 +538,19 @@ void main() {
       expect(permits.permits[0].isApproved, isTrue);
       expect(permits.permits[0].alasan, 'Demam berdarah');
     });
+
+    test('CourseProjectResponse and AbsencePermitResponse handle empty and null data safely', () {
+      final emptyPrj = CourseProjectResponse.fromJson(null);
+      expect(emptyPrj.projects, isEmpty);
+
+      final emptyListPrj = CourseProjectResponse.fromJson(const []);
+      expect(emptyListPrj.projects, isEmpty);
+
+      final emptyPermits = AbsencePermitResponse.fromJson(const {});
+      expect(emptyPermits.permits, isEmpty);
+
+      final emptyListPermits = AbsencePermitResponse.fromJson(const []);
+      expect(emptyListPermits.permits, isEmpty);
+    });
   });
 }

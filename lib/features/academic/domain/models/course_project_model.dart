@@ -38,20 +38,27 @@ class CourseProjectItem {
       validasiJawaban == '1';
 
   factory CourseProjectItem.fromJson(Map<String, dynamic> json) {
+    final expiredVal = json['pengajuan_expired'];
+    final isExpired = expiredVal == true || expiredVal == 1 || expiredVal == '1';
+
     return CourseProjectItem(
       id: json['id']?.toString() ?? '',
-      namaMataKuliah: (json['nama_mata_kuliah'] as String?)?.trim() ?? '',
-      pertemuanKe: json['pertemuan_ke']?.toString() ?? '',
-      sks: json['sks']?.toString() ?? '0',
-      namaDosenPengampu: (json['nama_dosen_pengampu'] as String?)?.trim() ?? '',
-      namaJenisLampiran: json['nama_jenis_lampiran'] as String?,
-      fileLampiran: json['file_lampiran'] as String?,
-      batasWaktuMengerjakan: json['batas_waktu_mengerjakan'] as String?,
+      namaMataKuliah: (json['nama_mata_kuliah'] ?? json['mata_kuliah'] ?? json['nama_matakuliah'] ?? '')
+          .toString()
+          .trim(),
+      pertemuanKe: (json['pertemuan_ke'] ?? json['pertemuan'] ?? '').toString(),
+      sks: (json['sks'] ?? json['sks_mata_kuliah'] ?? '0').toString(),
+      namaDosenPengampu: (json['nama_dosen_pengampu'] ?? json['dosen_pengampu'] ?? json['nama_dosen'] ?? '')
+          .toString()
+          .trim(),
+      namaJenisLampiran: json['nama_jenis_lampiran']?.toString(),
+      fileLampiran: json['file_lampiran']?.toString(),
+      batasWaktuMengerjakan: json['batas_waktu_mengerjakan']?.toString(),
       nilai: json['nilai']?.toString(),
       disetujuiDosenPengampu: json['disetujui_dosen_pengampu']?.toString(),
       validasiJawaban: json['validasi_jawaban']?.toString(),
-      pengajuanExpired: json['pengajuan_expired'] == true,
-      createdAt: json['created_at'] as String?,
+      pengajuanExpired: isExpired,
+      createdAt: json['created_at']?.toString(),
     );
   }
 
@@ -86,20 +93,36 @@ class CourseProjectResponse {
     required this.projects,
   });
 
-  factory CourseProjectResponse.fromJson(Map<String, dynamic> json) {
+  factory CourseProjectResponse.fromJson(dynamic json) {
+    if (json == null) return const CourseProjectResponse(projects: []);
+
     final List<CourseProjectItem> items = [];
-    if (json['data'] is List) {
+    if (json is Map<String, dynamic> && json['data'] is List) {
       for (final item in json['data'] as List) {
+        if (item is Map<String, dynamic>) {
+          items.add(CourseProjectItem.fromJson(item));
+        }
+      }
+    } else if (json is List) {
+      for (final item in json) {
         if (item is Map<String, dynamic>) {
           items.add(CourseProjectItem.fromJson(item));
         }
       }
     }
 
+    int parseNum(dynamic val, int fallback) {
+      if (val is num) return val.toInt();
+      if (val is String) return int.tryParse(val) ?? fallback;
+      return fallback;
+    }
+
+    final map = json is Map<String, dynamic> ? json : <String, dynamic>{};
+
     return CourseProjectResponse(
-      currentPage: (json['current_page'] as num?)?.toInt() ?? 1,
-      lastPage: (json['last_page'] as num?)?.toInt() ?? 1,
-      total: (json['total'] as num?)?.toInt() ?? items.length,
+      currentPage: parseNum(map['current_page'], 1),
+      lastPage: parseNum(map['last_page'], 1),
+      total: parseNum(map['total'], items.length),
       projects: List.unmodifiable(items),
     );
   }
@@ -111,4 +134,3 @@ class CourseProjectResponse {
         'data': projects.map((p) => p.toJson()).toList(),
       };
 }
-
