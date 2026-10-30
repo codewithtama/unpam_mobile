@@ -5,8 +5,8 @@ class AppTheme {
   static const Color primaryBlue = Color(0xFF2294F2); // #2294f2 Campus Brand Blue
   static const Color primaryDark = Color(0xFF1B82D8); // #2294f2 Deeper Tone (for subtle gradients)
   static const Color primaryLight = Color(0xFF4BAAF7); // #2294f2 Lighter Highlight Tone
-  static const Color accentGold = Color(0xFFD97706); // Amber Gold
-  static const Color accentGoldLight = Color(0xFFFEF3C7); // Soft Amber
+  static const Color accentGold = Color(0xFFF0882E); // #f0882e Brand Gold/Orange
+  static const Color accentGoldLight = Color(0xFFFEF3E9); // #f0882e Soft Tint
   static const Color bgGrey = Color(0xFFF8FAFC); // Clean Canvas
   static const Color surfaceWhite = Color(0xFFFFFFFF);
   static const Color textDark = Color(0xFF0F172A); // Dark Slate

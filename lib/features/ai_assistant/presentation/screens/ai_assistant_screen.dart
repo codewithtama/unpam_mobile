@@ -278,7 +278,7 @@ class _AiAssistantScreenState extends State<AiAssistantScreen> {
           // Engine Status Indicator Banner (Interactive Model Selector)
           Material(
             color: aiProv.hasKeyForActiveModel
-                ? const Color(0xFFFEF3C7)
+                ? AppTheme.accentGoldLight
                 : const Color(0xFFF1F5F9),
             child: InkWell(
               onTap: () => _showModelSelectorDialog(context),
@@ -292,7 +292,7 @@ class _AiAssistantScreenState extends State<AiAssistantScreen> {
                           : Icons.psychology_rounded,
                       size: 16,
                       color: aiProv.hasKeyForActiveModel
-                          ? const Color(0xFFD97706)
+                          ? AppTheme.accentGold
                           : AppTheme.primaryBlue,
                     ),
                     const SizedBox(width: 8),
@@ -303,7 +303,7 @@ class _AiAssistantScreenState extends State<AiAssistantScreen> {
                           fontSize: 11.5,
                           fontWeight: FontWeight.bold,
                           color: aiProv.hasKeyForActiveModel
-                              ? const Color(0xFF92400E)
+                              ? AppTheme.accentGold
                               : AppTheme.textDark,
                         ),
                         maxLines: 1,

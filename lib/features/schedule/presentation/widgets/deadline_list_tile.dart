@@ -147,8 +147,7 @@ class DeadlineListTile extends StatelessWidget {
     if (deadline.isOverdue) return Colors.grey.shade500;
     final days = deadline.daysUntilDue;
     if (days == 0) return AppTheme.dangerRed;
-    if (days == 1) return Colors.orange.shade700;
-    if (days <= 3) return Colors.amber.shade700;
+    if (days <= 3) return AppTheme.accentGold;
     return AppTheme.primaryBlue;
   }
 

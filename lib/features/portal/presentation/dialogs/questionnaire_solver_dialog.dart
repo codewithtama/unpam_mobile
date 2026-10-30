@@ -287,23 +287,23 @@ class _QuestionnaireSolverDialogState extends State<QuestionnaireSolverDialog> {
                     return Container(
                       padding: const EdgeInsets.all(14),
                       decoration: BoxDecoration(
-                        color: Colors.amber.shade50.withOpacity(0.5),
+                        color: AppTheme.accentGold.withOpacity(0.08),
                         borderRadius: BorderRadius.circular(12),
-                        border: Border.all(color: Colors.amber.shade300),
+                        border: Border.all(color: AppTheme.accentGold.withOpacity(0.3)),
                       ),
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          Row(
+                          const Row(
                             children: [
-                              Icon(Icons.rate_review_rounded, size: 18, color: Colors.amber.shade900),
-                              const SizedBox(width: 8),
+                              Icon(Icons.rate_review_rounded, size: 18, color: AppTheme.accentGold),
+                              SizedBox(width: 8),
                               Text(
                                 'Catatan & Saran untuk Dosen',
                                 style: TextStyle(
                                   fontSize: 13,
                                   fontWeight: FontWeight.bold,
-                                  color: Colors.amber.shade900,
+                                  color: AppTheme.accentGold,
                                 ),
                               ),
                             ],

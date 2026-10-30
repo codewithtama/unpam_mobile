@@ -65,7 +65,7 @@ class MentariModuleModel {
   Color get color => switch (type) {
         MentariModuleType.resource => AppTheme.primaryBlue,
         MentariModuleType.forum => Colors.teal,
-        MentariModuleType.quiz => Colors.deepOrange,
+        MentariModuleType.quiz => AppTheme.accentGold,
         MentariModuleType.assign => AppTheme.accentGold,
         MentariModuleType.attendance => AppTheme.successGreen,
         MentariModuleType.url => AppTheme.primaryBlue,

@@ -193,7 +193,7 @@ class AiToolsMenuSheet extends StatelessWidget {
                     _buildAiToolTile(
                       icon: Icons.chat_bubble_outline_rounded,
                       iconColor: AppTheme.accentGold,
-                      iconBgColor: Colors.amber.shade50,
+                      iconBgColor: AppTheme.accentGoldLight,
                       title: 'Tanya AI Halaman Ini (Split-Screen)',
                       subtitle:
                           'Ekstrak isi halaman dan bahas langsung di panel Split-Screen AI bawah',
@@ -217,7 +217,7 @@ class AiToolsMenuSheet extends StatelessWidget {
                     _buildAiToolTile(
                       icon: Icons.fingerprint_rounded,
                       iconColor: AppTheme.accentGold,
-                      iconBgColor: Colors.amber.shade50,
+                      iconBgColor: AppTheme.accentGoldLight,
                       title: 'Biometric Auto-Login Vault',
                       subtitle:
                           'Kelola akun terenkripsi & masuk otomatis dengan sidik jari',

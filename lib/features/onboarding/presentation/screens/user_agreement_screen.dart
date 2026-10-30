@@ -301,7 +301,7 @@ class _UserAgreementScreenState extends State<UserAgreementScreen> {
   Widget _buildTimerIndicator(bool isReady, double timerProgress) {
     return Container(
       width: double.infinity,
-      color: isReady ? const Color(0xFFECFDF5) : const Color(0xFFFEF3C7),
+      color: isReady ? const Color(0xFFECFDF5) : AppTheme.accentGoldLight,
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
       child: Column(
         children: [
@@ -321,7 +321,7 @@ class _UserAgreementScreenState extends State<UserAgreementScreen> {
                   style: TextStyle(
                     fontSize: 12.5,
                     fontWeight: FontWeight.w600,
-                    color: isReady ? const Color(0xFF065F46) : const Color(0xFF92400E),
+                    color: isReady ? const Color(0xFF065F46) : AppTheme.accentGold,
                   ),
                 ),
               ),
@@ -331,7 +331,7 @@ class _UserAgreementScreenState extends State<UserAgreementScreen> {
                   style: const TextStyle(
                     fontSize: 12.5,
                     fontWeight: FontWeight.bold,
-                    color: Color(0xFF92400E),
+                    color: AppTheme.accentGold,
                   ),
                 ),
             ],
@@ -343,7 +343,7 @@ class _UserAgreementScreenState extends State<UserAgreementScreen> {
               child: LinearProgressIndicator(
                 value: timerProgress,
                 minHeight: 4,
-                backgroundColor: const Color(0xFFFDE68A),
+                backgroundColor: AppTheme.accentGold.withOpacity(0.25),
                 valueColor: const AlwaysStoppedAnimation<Color>(AppTheme.accentGold),
               ),
             ),

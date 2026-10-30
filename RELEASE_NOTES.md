@@ -1,6 +1,14 @@
 # Catatan Pembaruan Rilis The PAMs
 
-## Versi 1.0.58 (Terbaru)
+## Versi 1.0.59 (Terbaru)
+
+- **Standarisasi Warna Brand Oranye / Emas Kampus `#f0882e` Secara Menyeluruh**:
+  - **Penyelarasan Warna Aksen Utama**: Mengubah warna aksen emas, amber, dan oranye (`accentGold`) serta varian lembutnya (`accentGoldLight`) menjadi kode resmi **`#f0882e`**.
+  - **Pembersihan Warna Hardcoded**: Mengeliminasi seluruh warna *hardcoded* (`Colors.orange`, `Colors.amber`, `Colors.deepOrange`, hex `0xFFD97706`, `0xFFFEF3C7`, `0xFF92400E`, `0xFFFDE68A`) pada dialog kuesioner dosen, lembar menu AI, banner pemulihan layar, kartu kuis, indikator batas waktu persetujuan pengguna, dan daftar urgensi tenggat tugas (*deadline*).
+  - **Harmonisasi Palet UI**: Menyelaraskan seluruh aksen sekunder, chip status, dan ikon aktif agar kontras dan menyatu dengan warna biru primer `#2294f2`.
+  - **Pengujian & Kualitas**: Seluruh 75+ unit & widget tests lulus, 0 analyzer issues (`flutter analyze` bersih).
+
+## Versi 1.0.58
 
 - **Standarisasi Warna Brand Kampus `#2294f2` Secara Menyeluruh**:
   - **Penyelarasan Warna Biru Utama**: Mengubah seluruh palet warna biru primer (`primaryBlue`), varian gelap (`primaryDark`), dan highlight (`primaryLight`) menjadi warna `#2294f2` yang konsisten.

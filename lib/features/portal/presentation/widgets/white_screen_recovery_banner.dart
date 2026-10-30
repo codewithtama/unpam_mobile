@@ -38,12 +38,12 @@ class WhiteScreenRecoveryBanner extends StatelessWidget {
                   Container(
                     padding: const EdgeInsets.all(6),
                     decoration: BoxDecoration(
-                      color: Colors.amber.shade50,
+                      color: AppTheme.accentGold.withOpacity(0.12),
                       shape: BoxShape.circle,
                     ),
-                    child: Icon(
+                    child: const Icon(
                       Icons.warning_amber_rounded,
-                      color: Colors.orange.shade800,
+                      color: AppTheme.accentGold,
                       size: 24,
                     ),
                   ),
