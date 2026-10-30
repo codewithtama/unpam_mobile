@@ -1,6 +1,14 @@
 # Catatan Pembaruan Rilis The PAMs
 
-## Versi 1.0.53 (Terbaru)
+## Versi 1.0.54 (Terbaru)
+
+- **In-App Single Sign-On (SSO) & Internal Portal Navigation Fix**:
+  - **Pencegahan Redirect Eksternal saat Login My UNPAM**: Memperbaiki logika intercept navigasi WebView (`onNavigationRequest`) yang sebelumnya melempar pengguna ke peramban eksternal (Chrome/browser bawaan HP) saat dialihkan ke gerbang SSO Satu UNPAM (`satu.unpam.ac.id`).
+  - **Whitelisting Domain Komprehensif (`isAllowedInAppNavigation`)**: Mengizinkan seluruh domain dan subdomain resmi kampus UNPAM (`*.unpam.ac.id`, termasuk `satu.unpam.ac.id`, `my.unpam.ac.id`, `mentari.unpam.ac.id`, `sso.unpam.ac.id`, `auth.unpam.ac.id`), serta penyedia SSO dan verifikasi bot yang sah (`challenges.cloudflare.com`, `accounts.google.com`) untuk tetap bernavigasi secara aman di dalam WebView in-app The PAMs.
+  - **Sinkronisasi Deteksi Form & Auto-Login**: Menambahkan pengenalan `satu.unpam.ac.id` ke dalam skrip deteksi form login dan biometrik credential injection.
+  - **Pengujian & Kualitas**: 65/65 unit & widget tests lulus, 0 analyzer issues.
+
+## Versi 1.0.53
 
 - **Perbaikan Format Data Penugasan Proyek & Pengajuan Izin**:
   - **URL Query Builder Fix**: Memperbaiki konstruksi query URI pada `MyUnpamWebFetcher` dan `AcademicPortalService` sehingga parameter paginasi `?page=X` tidak lagi ter-escape menjadi `%3F` di hidden browser fetcher yang sebelumnya memicu respon halaman HTML SPA (berujung pada error "Format data dari server tidak valid").

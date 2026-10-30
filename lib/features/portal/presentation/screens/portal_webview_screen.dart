@@ -54,6 +54,38 @@ class PortalWebViewScreen extends StatefulWidget {
     this.initialUrl = 'https://mentari.unpam.ac.id/',
   });
 
+  /// Memeriksa apakah URL termasuk alur navigasi internal kampus UNPAM atau alur SSO login.
+  /// Mencegah WebView terlempar (redirect) ke browser eksternal saat proses login berlangsung.
+  static bool isAllowedInAppNavigation(String url) {
+    final lower = url.trim().toLowerCase();
+    if (lower.startsWith('blob:') ||
+        lower.startsWith('data:') ||
+        lower.startsWith('about:') ||
+        lower.startsWith('javascript:')) {
+      return true;
+    }
+
+    final uri = Uri.tryParse(url);
+    if (uri == null || uri.host.isEmpty) return false;
+    final host = uri.host.toLowerCase();
+
+    // Seluruh subdomain dan domain resmi UNPAM (my, mentari, satu, sso, auth, dll.)
+    if (host == 'unpam.ac.id' || host.endsWith('.unpam.ac.id')) {
+      return true;
+    }
+
+    // Penyedia SSO pihak ketiga / tantangan bot yang sah selama alur autentikasi kampus
+    if (host == 'challenges.cloudflare.com' ||
+        host.endsWith('.cloudflare.com') ||
+        host == 'accounts.google.com' ||
+        host.endsWith('.accounts.google.com') ||
+        host == 'login.microsoftonline.com') {
+      return true;
+    }
+
+    return false;
+  }
+
   @override
   State<PortalWebViewScreen> createState() => _PortalWebViewScreenState();
 }
@@ -350,7 +382,9 @@ class _PortalWebViewScreenState extends State<PortalWebViewScreen>
           },
           onPageStarted: (url) {
             if (mounted) {
-              final isLogin = url.toLowerCase().contains('login');
+              final isLogin = url.toLowerCase().contains('login') ||
+                  url.toLowerCase().contains('sso') ||
+                  url.toLowerCase().contains('satu.unpam.ac.id');
               setState(() {
                 _currentUrl = url;
                 _isLoading = true;
@@ -412,7 +446,6 @@ class _PortalWebViewScreenState extends State<PortalWebViewScreen>
           },
           onNavigationRequest: (request) {
             final url = request.url;
-            final lower = url.toLowerCase();
 
             // Tangkap download dokumen akademik
             if (FileDownloadService.isDocumentUrl(url)) {
@@ -420,15 +453,8 @@ class _PortalWebViewScreenState extends State<PortalWebViewScreen>
               return NavigationDecision.prevent;
             }
 
-            // Izinkan skema internal
-            if (url.startsWith('https://mentari.unpam.ac.id') ||
-                url.startsWith('http://mentari.unpam.ac.id') ||
-                url.startsWith('https://my.unpam.ac.id') ||
-                url.startsWith('http://my.unpam.ac.id') ||
-                url.startsWith('https://sso.unpam.ac.id') ||
-                url.startsWith('http://sso.unpam.ac.id') ||
-                lower.startsWith('blob:') ||
-                lower.startsWith('data:')) {
+            // Izinkan navigasi internal UNPAM, SSO, dan autentikasi kampus tanpa keluar aplikasi
+            if (PortalWebViewScreen.isAllowedInAppNavigation(url)) {
               return NavigationDecision.navigate;
             }
 
@@ -581,7 +607,8 @@ class _PortalWebViewScreenState extends State<PortalWebViewScreen>
             final nextUrl = change.url;
             if (nextUrl != null && mounted) {
               final isLogin = nextUrl.toLowerCase().contains('login') ||
-                  nextUrl.toLowerCase().contains('sso');
+                  nextUrl.toLowerCase().contains('sso') ||
+                  nextUrl.toLowerCase().contains('satu.unpam.ac.id');
               setState(() {
                 _myUnpamCurrentUrl = nextUrl;
                 if (!isLogin) {
@@ -598,7 +625,8 @@ class _PortalWebViewScreenState extends State<PortalWebViewScreen>
           onPageStarted: (url) {
             if (mounted) {
               final isLogin = url.toLowerCase().contains('login') ||
-                  url.toLowerCase().contains('sso');
+                  url.toLowerCase().contains('sso') ||
+                  url.toLowerCase().contains('satu.unpam.ac.id');
               setState(() {
                 _myUnpamCurrentUrl = url;
                 _isMyUnpamLoading = true;
@@ -677,12 +705,8 @@ class _PortalWebViewScreenState extends State<PortalWebViewScreen>
               return NavigationDecision.prevent;
             }
 
-            if (url.startsWith('https://my.unpam.ac.id') ||
-                url.startsWith('http://my.unpam.ac.id') ||
-                url.startsWith('https://sso.unpam.ac.id') ||
-                url.startsWith('http://sso.unpam.ac.id') ||
-                lower.startsWith('blob:') ||
-                lower.startsWith('data:')) {
+            // Izinkan navigasi internal UNPAM, SSO, dan autentikasi kampus tanpa keluar aplikasi
+            if (PortalWebViewScreen.isAllowedInAppNavigation(url)) {
               return NavigationDecision.navigate;
             }
 
@@ -1327,6 +1351,7 @@ class _PortalWebViewScreenState extends State<PortalWebViewScreen>
     final bool urlHasLogin = currentActive.contains('login') ||
         currentActive.contains('sso') ||
         currentActive.contains('auth') ||
+        currentActive.contains('satu.unpam.ac.id') ||
         (isMyUnpam &&
             (currentActive.isEmpty ||
                 currentActive == myUnpamUrl ||

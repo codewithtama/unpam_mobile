@@ -1043,6 +1043,7 @@ class PortalJsScripts {
       var isLoginUrl = uUrl.indexOf('login') !== -1 ||
                        uUrl.indexOf('sso') !== -1 ||
                        uUrl.indexOf('auth') !== -1 ||
+                       uUrl.indexOf('satu.unpam.ac.id') !== -1 ||
                        uUrl === 'https://my.unpam.ac.id/' ||
                        uUrl === 'https://my.unpam.ac.id';
 

@@ -28,6 +28,7 @@ import 'package:unpam_mobile/features/schedule/presentation/screens/schedule_scr
 import 'package:unpam_mobile/core/constants/api_constants.dart';
 import 'package:unpam_mobile/features/academic/data/my_unpam_session.dart';
 import 'package:unpam_mobile/features/academic/data/academic_portal_service.dart';
+import 'package:unpam_mobile/features/portal/presentation/screens/portal_webview_screen.dart';
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
@@ -527,6 +528,26 @@ void main() {
       expect(isMyUnpamLogin('https://sso.unpam.ac.id/login', false), isTrue);
       expect(isMyUnpamLogin('https://my.unpam.ac.id/', true), isFalse);
       expect(isMyUnpamLogin('https://my.unpam.ac.id/dashboard', false), isFalse);
+    });
+
+    test('PortalWebViewScreen.isAllowedInAppNavigation correctly keeps SSO and campus domains in-app', () {
+      // UNPAM internal & SSO domains must stay inside WebView
+      expect(PortalWebViewScreen.isAllowedInAppNavigation('https://satu.unpam.ac.id/login'), isTrue);
+      expect(PortalWebViewScreen.isAllowedInAppNavigation('https://satu.unpam.ac.id/oauth/authorize?client_id=myunpam'), isTrue);
+      expect(PortalWebViewScreen.isAllowedInAppNavigation('https://sso.unpam.ac.id/auth/login'), isTrue);
+      expect(PortalWebViewScreen.isAllowedInAppNavigation('https://my.unpam.ac.id/dashboard'), isTrue);
+      expect(PortalWebViewScreen.isAllowedInAppNavigation('https://mentari.unpam.ac.id/course/view.php?id=123'), isTrue);
+      expect(PortalWebViewScreen.isAllowedInAppNavigation('https://akademik.unpam.ac.id/'), isTrue);
+      expect(PortalWebViewScreen.isAllowedInAppNavigation('blob:https://mentari.unpam.ac.id/abc'), isTrue);
+      expect(PortalWebViewScreen.isAllowedInAppNavigation('data:text/html,...'), isTrue);
+      expect(PortalWebViewScreen.isAllowedInAppNavigation('https://challenges.cloudflare.com/turnstile/v0/api.js'), isTrue);
+      expect(PortalWebViewScreen.isAllowedInAppNavigation('https://accounts.google.com/o/oauth2/auth'), isTrue);
+
+      // External websites must be rejected (so they launch in external browser)
+      expect(PortalWebViewScreen.isAllowedInAppNavigation('https://google.com'), isFalse);
+      expect(PortalWebViewScreen.isAllowedInAppNavigation('https://evil-unpam.ac.id/login'), isFalse);
+      expect(PortalWebViewScreen.isAllowedInAppNavigation('https://unpam.ac.id.evil.com/login'), isFalse);
+      expect(PortalWebViewScreen.isAllowedInAppNavigation('https://facebook.com'), isFalse);
     });
   });
 
