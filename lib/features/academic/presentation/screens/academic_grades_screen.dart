@@ -133,7 +133,7 @@ class _AcademicGradesScreenState extends State<AcademicGradesScreen> {
       padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
         gradient: const LinearGradient(
-          colors: [AppTheme.primaryDark, AppTheme.primaryBlue],
+          colors: [AppTheme.primaryBlue, AppTheme.primaryLight],
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
         ),

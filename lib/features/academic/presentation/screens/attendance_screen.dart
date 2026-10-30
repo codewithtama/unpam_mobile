@@ -123,7 +123,7 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
       padding: const EdgeInsets.all(18),
       decoration: BoxDecoration(
         gradient: const LinearGradient(
-          colors: [AppTheme.primaryDark, AppTheme.primaryBlue],
+          colors: [AppTheme.primaryBlue, AppTheme.primaryLight],
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
         ),

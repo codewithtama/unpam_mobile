@@ -822,7 +822,7 @@ class _AiAssistantScreenState extends State<AiAssistantScreen> {
             Container(
               padding: const EdgeInsets.all(8),
               decoration: BoxDecoration(
-                color: const Color(0xFFEFF6FF),
+                color: AppTheme.primaryBlue.withOpacity(0.08),
                 borderRadius: BorderRadius.circular(6),
               ),
               child: Text(

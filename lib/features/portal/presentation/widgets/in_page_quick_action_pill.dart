@@ -191,7 +191,7 @@ class WebPageDetectedContext {
       case WebPageContextType.forum:
         return AppTheme.primaryBlue;
       case WebPageContextType.document:
-        return const Color(0xFF1E40AF);
+        return AppTheme.primaryBlue;
       case WebPageContextType.academicScheduleOrGrades:
         return AppTheme.primaryBlue;
       case WebPageContextType.none:

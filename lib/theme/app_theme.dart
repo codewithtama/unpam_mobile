@@ -1,10 +1,10 @@
 import 'package:flutter/material.dart';
 
 class AppTheme {
-  // Brand Colors The PAMs
-  static const Color primaryDark = Color(0xFF0F172A); // Dark Slate Blue
-  static const Color primaryBlue = Color(0xFF1E3A8A); // Deep Navy Blue
-  static const Color primaryLight = Color(0xFF2563EB); // Royal Blue
+  // Brand Colors The PAMs - Unified #2294f2
+  static const Color primaryBlue = Color(0xFF2294F2); // #2294f2 Campus Brand Blue
+  static const Color primaryDark = Color(0xFF1B82D8); // #2294f2 Deeper Tone (for subtle gradients)
+  static const Color primaryLight = Color(0xFF4BAAF7); // #2294f2 Lighter Highlight Tone
   static const Color accentGold = Color(0xFFD97706); // Amber Gold
   static const Color accentGoldLight = Color(0xFFFEF3C7); // Soft Amber
   static const Color bgGrey = Color(0xFFF8FAFC); // Clean Canvas

@@ -67,10 +67,10 @@ class MentariCourseModel {
     final colors = [
       AppTheme.primaryBlue,
       Colors.teal.shade700,
-      Colors.indigo.shade700,
+      AppTheme.primaryBlue,
       AppTheme.accentGold,
       Colors.deepPurple.shade700,
-      Colors.blueGrey.shade700,
+      AppTheme.primaryLight,
     ];
     return colors[id % colors.length];
   }

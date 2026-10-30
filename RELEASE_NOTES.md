@@ -1,6 +1,14 @@
 # Catatan Pembaruan Rilis The PAMs
 
-## Versi 1.0.57 (Terbaru)
+## Versi 1.0.58 (Terbaru)
+
+- **Standarisasi Warna Brand Kampus `#2294f2` Secara Menyeluruh**:
+  - **Penyelarasan Warna Biru Utama**: Mengubah seluruh palet warna biru primer (`primaryBlue`), varian gelap (`primaryDark`), dan highlight (`primaryLight`) menjadi warna `#2294f2` yang konsisten.
+  - **Pembersihan Gradasi Gelap**: Mengganti seluruh gradasi header gelap (`[primaryDark, primaryBlue]`) yang sebelumnya bernuansa hitam/navy pada Transkrip, Presensi, Jadwal, Sertifikat, dan Profil Mahasiswa menjadi gradasi modern `#2294f2` yang terang dan serasi.
+  - **Penyelarasan Komponen & Badge**: Menghilangkan seluruh warna biru *hardcoded* (`Colors.blue`, `Colors.indigo`, dan hex Tailwind lama) pada badge jadwal online, banner SSO, quick action, modal autentikasi, serta tombol aksi.
+  - **Pengujian & Kualitas**: Seluruh 75+ unit & widget tests lulus, 0 analyzer issues (`flutter analyze` bersih).
+
+## Versi 1.0.57
 
 - **Sinkronisasi Terpadu Mentari LMS & Stabilisasi Sesi MyUnpam**:
   - **Penyelesaian Bug Logout Berulang MyUnpam**: Mengeliminasi *race condition* pada `MyUnpamRefresher` yang sebelumnya memicu `loginRequired` dan penghapusan token otomatis saat pergantian *stage* SSO. Menjadikan `my.unpam.ac.id` sebagai tahap awal dengan ekstraksi instan dari `localStorage.access_token` (<1 detik) serta injeksi kredensial biometrik otomatis ke `satu.unpam.ac.id/login`.

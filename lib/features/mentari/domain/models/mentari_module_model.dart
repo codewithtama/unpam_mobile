@@ -68,7 +68,7 @@ class MentariModuleModel {
         MentariModuleType.quiz => Colors.deepOrange,
         MentariModuleType.assign => AppTheme.accentGold,
         MentariModuleType.attendance => AppTheme.successGreen,
-        MentariModuleType.url => Colors.indigo,
+        MentariModuleType.url => AppTheme.primaryBlue,
         MentariModuleType.page => AppTheme.primaryLight,
         MentariModuleType.other => Colors.grey.shade600,
       };
