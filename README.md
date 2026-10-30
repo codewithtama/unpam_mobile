@@ -2,8 +2,8 @@
 
 [![Flutter](https://img.shields.io/badge/Flutter-3.41.7-02569B?logo=flutter&logoColor=white)](https://flutter.dev)
 [![Dart](https://img.shields.io/badge/Dart-3.11.5-0175C2?logo=dart&logoColor=white)](https://dart.dev)
-[![Release](https://img.shields.io/badge/Release-v1.0.54-10B981?logo=github&logoColor=white)](https://github.com/codewithtama/unpam_mobile/releases/tag/v1.0.54)
-[![Tests](https://img.shields.io/badge/Tests-65%20Passed-brightgreen?logo=checkmarx&logoColor=white)](test/widget_test.dart)
+[![Release](https://img.shields.io/badge/Release-v1.0.55-10B981?logo=github&logoColor=white)](https://github.com/codewithtama/unpam_mobile/releases/tag/v1.0.55)
+[![Tests](https://img.shields.io/badge/Tests-74%20Passed-brightgreen?logo=checkmarx&logoColor=white)](test/widget_test.dart)
 [![Platform](https://img.shields.io/badge/Platform-Android%20(API%2021%2B)-3DDC84?logo=android&logoColor=white)](https://android.com)
 [![License](https://img.shields.io/badge/License-Academic-blue.svg)](#keamanan-integritas-sesi--kepatuhan-privasi)
 
@@ -38,7 +38,7 @@ Aplikasi ini dirancang khusus untuk kenyamanan dan produktivitas civitas akademi
 
 ## Fitur Utama
 
-* **Dual-Isolated Web Engine (Mentari LMS & MyUnpam SIAKAD)**: Memisahkan web controller Mentari dan MyUnpam menggunakan arsitektur `IndexedStack`. Berpindah antar tab portal tidak memicu reload halaman, merusak sesi login, atau menghilangkan input pengerjaan kuis mahasiswa yang sedang berjalan.
+* **Transformasi 100% Native Mentari LMS & MyUnpam Hub**: Mentari LMS dan MyUnpam SIAKAD kini bertransformasi penuh menjadi antarmuka Flutter native berkinerja tinggi 60fps dengan kartu matakuliah berprogres, 21 pertemuan interaktif, unduh materi PDF langsung, modal pengerjaan kuis Moodle aman, dan 12 modul layanan akademik terpadu.
 * **Hub Layanan Akademik Native Lengkap**: Mengintegrasikan 12 modul akademik resmi My UNPAM langsung ke dalam antarmuka Flutter native: Biodata Mahasiswa, Jadwal Kuliah, Nilai Akademik, KHS, KRS, Presensi, Keuangan/SPP, Tugas Akhir/Skripsi, Penugasan Proyek, Pengajuan Izin Kuliah, Dokumen Akademik, dan Sertifikat Seminar.
 * **Sinkronisasi Dua Fase Jadwal & Deadline**:
   * **Fase 1 (Jadwal Kuliah)**: Sinkronisasi native langsung via REST API `/api/jadwal-kuliah` dengan pemisahan cerdas antara kelas **Tatap Muka** dan **Online**.

@@ -20,6 +20,8 @@ import 'features/academic/presentation/providers/finance_provider.dart';
 import 'features/schedule/data/schedule_service.dart';
 import 'features/schedule/data/deadline_reminder_service.dart';
 import 'features/schedule/presentation/providers/schedule_provider.dart';
+import 'features/mentari/data/mentari_service.dart';
+import 'features/mentari/presentation/providers/mentari_provider.dart';
 import 'theme/app_theme.dart';
 import 'widgets/app_gate.dart';
 
@@ -50,6 +52,7 @@ void main() async {
     ..fetcher = portalFetcher.get;
 
   final academicService = AcademicPortalService(portalSession, storage);
+  final mentariService = MentariService(storage);
 
   runApp(
     MultiProvider(
@@ -69,6 +72,9 @@ void main() async {
         ),
         ChangeNotifierProvider(
           create: (_) => AcademicPortalProvider(academicService),
+        ),
+        ChangeNotifierProvider(
+          create: (_) => MentariProvider(mentariService, storage),
         ),
       ],
       child: ThePamsApp(

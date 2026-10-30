@@ -1,6 +1,14 @@
 # Catatan Pembaruan Rilis The PAMs
 
-## Versi 1.0.54 (Terbaru)
+## Versi 1.0.55 (Terbaru)
+
+- **Transformasi 100% Native untuk Mentari LMS & MyUnpam Hub**:
+  - **Tahap 1 — MyUnpam Native Hub**: Tab MyUnpam kini terintegrasi langsung sebagai dasbor native `AcademicHubScreen(isEmbedded: true)` yang merangkum kartu profil mahasiswa, status IPK & SKS, ringkasan tagihan keuangan, jadwal kuliah hari ini, dan grid 12 modul layanan akademik lengkap.
+  - **Tahap 2 — Mentari LMS 100% Native**: Tab Mentari bertransformasi penuh dari WebView menjadi `MentariHomeScreen` native dengan performa 60fps. Dilengkapi kartu kursus berprogres, filter pencarian matakuliah, detail 21 pertemuan akademik interaktif (`MentariCourseDetailScreen`), unduh materi PDF langsung (`FileDownloadService`), dan modal pengerjaan kuis Moodle terisolasi (`MentariQuizModal`) agar token CSRF dan pengiriman nilai tetap 100% aman.
+  - **Dual-Strategy Engine & Offline Caching**: Menggunakan Moodle AJAX API (`service.php`) dan DOM Scraper fallback (`package:html`), dengan cache lokal `StorageService` untuk akses instan tanpa internet aktif.
+  - **Pengujian & Kualitas**: 74/74 unit & widget tests lulus, 0 analyzer issues (`flutter analyze` bersih).
+
+## Versi 1.0.54
 
 - **In-App Single Sign-On (SSO) & Internal Portal Navigation Fix**:
   - **Pencegahan Redirect Eksternal saat Login My UNPAM**: Memperbaiki logika intercept navigasi WebView (`onNavigationRequest`) yang sebelumnya melempar pengguna ke peramban eksternal (Chrome/browser bawaan HP) saat dialihkan ke gerbang SSO Satu UNPAM (`satu.unpam.ac.id`).

@@ -29,6 +29,10 @@ import 'package:unpam_mobile/features/schedule/presentation/providers/schedule_p
 import 'package:unpam_mobile/features/schedule/presentation/screens/schedule_screen.dart';
 import 'package:unpam_mobile/features/schedule/data/schedule_service.dart';
 import 'package:unpam_mobile/features/academic/presentation/screens/academic_hub_screen.dart';
+import 'package:unpam_mobile/features/academic/presentation/providers/academic_portal_provider.dart';
+import 'package:unpam_mobile/features/academic/presentation/providers/finance_provider.dart';
+import 'package:unpam_mobile/features/mentari/presentation/screens/mentari_home_screen.dart';
+import 'package:unpam_mobile/features/mentari/presentation/providers/mentari_provider.dart';
 
 
 import '../../data/scripts/portal_js_scripts.dart';
@@ -39,9 +43,7 @@ import '../dialogs/ai_tools_menu_sheet.dart';
 import '../dialogs/biometric_quick_menu.dart';
 import '../widgets/portal_bottom_nav.dart';
 import '../widgets/biometric_login_banner.dart';
-import '../widgets/white_screen_recovery_banner.dart';
 import '../widgets/minimized_split_ai_pill.dart';
-import '../widgets/portal_pull_refresh_indicator.dart';
 
 /// Halaman utama portal perkuliahan terpadu Mentari LMS & MyUnpam SIAKAD.
 /// Dilengkapi sistem multi-controller terisolasi, akselerasi render GPU (RepaintBoundary),
@@ -97,7 +99,6 @@ class _PortalWebViewScreenState extends State<PortalWebViewScreen>
   bool _isLoading = true;
   bool _hasError = false;
   bool _isWhiteScreenDetected = false;
-  String _errorMessage = '';
   String _pageTitle = 'Mentari Portal';
   String _currentUrl = '';
   bool _canGoBack = false;
@@ -155,20 +156,13 @@ class _PortalWebViewScreenState extends State<PortalWebViewScreen>
       'Mozilla/5.0 (Linux; Android 13; SM-S918B) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.6613.127 Mobile Safari/537.36';
 
   bool _isAtTop = true;
-  bool _wasAtTopOnDown = true;
   bool _isRefreshing = false;
-  bool _hasHapticed = false;
-  double? _dragStartY;
-  double? _dragStartX;
-  static const double _refreshTriggerDistance = 80.0;
 
   static const String mentariUrl = 'https://mentari.unpam.ac.id/';
   static const String myUnpamUrl = 'https://my.unpam.ac.id/';
 
   WebViewController? _myUnpamController;
   bool _isMyUnpamLoading = false;
-  bool _myUnpamHasError = false;
-  String _myUnpamErrorMessage = '';
   String _myUnpamCurrentUrl = '';
   String _myUnpamPageTitle = 'MyUnpam Portal';
   bool _isMyUnpamAtTop = true;
@@ -439,7 +433,6 @@ class _PortalWebViewScreenState extends State<PortalWebViewScreen>
                 setState(() {
                   _hasError = true;
                   _isLoading = false;
-                  _errorMessage = error.description;
                 });
               }
             }
@@ -630,7 +623,6 @@ class _PortalWebViewScreenState extends State<PortalWebViewScreen>
               setState(() {
                 _myUnpamCurrentUrl = url;
                 _isMyUnpamLoading = true;
-                _myUnpamHasError = false;
                 _isMyUnpamAtTop = true;
                 _myUnpamDetectedContext = WebPageDetectedContext.empty;
                 _isMyUnpamLoginDetected = isLogin;
@@ -684,9 +676,7 @@ class _PortalWebViewScreenState extends State<PortalWebViewScreen>
             if (error.isForMainFrame ?? true) {
               if (mounted) {
                 setState(() {
-                  _myUnpamHasError = true;
                   _isMyUnpamLoading = false;
-                  _myUnpamErrorMessage = error.description;
                 });
               }
             }
@@ -739,7 +729,11 @@ class _PortalWebViewScreenState extends State<PortalWebViewScreen>
   }
 
   Future<void> _updateHistoryState() async {
-    final canBack = await _activeController.canGoBack();
+    if (_currentNavIndex == 1) {
+      if (mounted) setState(() => _canGoBack = false);
+      return;
+    }
+    final canBack = await _controller.canGoBack();
     if (mounted) {
       setState(() {
         _canGoBack = canBack;
@@ -813,7 +807,6 @@ class _PortalWebViewScreenState extends State<PortalWebViewScreen>
       if (_currentNavIndex == 1) {
         _myUnpamCurrentUrl = url;
         _isMyUnpamLoading = true;
-        _myUnpamHasError = false;
       } else {
         _currentUrl = url;
         _isLoading = true;
@@ -1956,31 +1949,7 @@ class _PortalWebViewScreenState extends State<PortalWebViewScreen>
     );
   }
 
-  Future<void> _openAcademicHubScreen() async {
-    final previousTab = _currentNavIndex;
-    await Navigator.push(
-      context,
-      MaterialPageRoute(
-        builder: (_) => AcademicHubScreen(
-          onOpenDeadlineUrl: (url) {
-            Navigator.pop(context);
-            setState(() => _currentNavIndex = 0);
-            Future.delayed(const Duration(milliseconds: 300), () {
-              if (mounted) {
-                _navigateToUrl(url);
-              }
-            });
-          },
-        ),
-      ),
-    );
-    if (mounted) {
-      setState(() => _currentNavIndex = previousTab);
-      _updateHistoryState();
-    }
-  }
-
-Future<void> _openScheduleScreen({int initialTabIndex = 0}) async {
+  Future<void> _openScheduleScreen({int initialTabIndex = 0}) async {
     final previousTab = _currentNavIndex;
     await Navigator.push(
       context,
@@ -2223,120 +2192,6 @@ Future<void> _openScheduleScreen({int initialTabIndex = 0}) async {
     }
   }
 
-  void _onPointerDown(PointerDownEvent event) {
-    if (_isRefreshing) return;
-    _dragStartY = event.position.dy;
-    _dragStartX = event.position.dx;
-    _wasAtTopOnDown = _isAtTop;
-    _isPullingNotifier.value = false;
-    _pullDistanceNotifier.value = 0.0;
-    _hasHapticed = false;
-
-    _activeController
-        .runJavaScriptReturningResult(
-            'window.scrollY || document.documentElement.scrollTop || 0;')
-        .then((res) {
-      final num? y = num.tryParse(res.toString());
-      if (y != null && mounted) {
-        final atTop = y <= 2;
-        if (atTop != _isAtTop) {
-          _isAtTop = atTop;
-          if (!_isPullingNotifier.value) {
-            _wasAtTopOnDown = atTop;
-          }
-        }
-      }
-    }).catchError((e) {
-      debugPrint('Scroll query error: $e');
-    });
-  }
-
-  void _onPointerMove(PointerMoveEvent event) {
-    if (_isRefreshing || _dragStartY == null || _dragStartX == null) return;
-
-    if (!_wasAtTopOnDown || !_isAtTop) {
-      if (_isPullingNotifier.value) {
-        _isPullingNotifier.value = false;
-        _pullDistanceNotifier.value = 0.0;
-      }
-      return;
-    }
-
-    final double deltaY = event.position.dy - _dragStartY!;
-    final double deltaX = (event.position.dx - _dragStartX!).abs();
-
-    if (deltaX > deltaY && !_isPullingNotifier.value) {
-      return;
-    }
-
-    if (deltaY > 0) {
-      double calculated = deltaY * 0.52;
-      if (calculated > 120.0) {
-        calculated = 120.0 + (calculated - 120.0) * 0.25;
-      }
-
-      final bool reachedThreshold = calculated >= _refreshTriggerDistance;
-      if (reachedThreshold && !_hasHapticed) {
-        _hasHapticed = true;
-        HapticFeedback.mediumImpact();
-      } else if (!reachedThreshold && _hasHapticed) {
-        _hasHapticed = false;
-      }
-
-      _isPullingNotifier.value = true;
-      _pullDistanceNotifier.value = calculated;
-    } else {
-      if (_isPullingNotifier.value) {
-        _isPullingNotifier.value = false;
-        _pullDistanceNotifier.value = 0.0;
-      }
-    }
-  }
-
-  void _onPointerUp(PointerUpEvent event) {
-    _handlePointerRelease();
-  }
-
-  void _onPointerCancel(PointerCancelEvent event) {
-    _handlePointerRelease();
-  }
-
-  void _handlePointerRelease() {
-    _dragStartY = null;
-    _dragStartX = null;
-    _hasHapticed = false;
-
-    if (_isPullingNotifier.value) {
-      if (_pullDistanceNotifier.value >= _refreshTriggerDistance) {
-        _startRefresh();
-      } else {
-        _isPullingNotifier.value = false;
-        _pullDistanceNotifier.value = 0.0;
-      }
-    }
-  }
-
-  Future<void> _startRefresh() async {
-    if (_isRefreshing) return;
-    _hasShownDeadlineSnackbarThisSession = false;
-    _hasShownScheduleSnackbarThisSession = false;
-    setState(() => _isRefreshing = true);
-    _isPullingNotifier.value = false;
-    _pullDistanceNotifier.value = 0.0;
-
-    try {
-      await _activeController.reload();
-    } catch (e) {
-      debugPrint('Refresh error: $e');
-    }
-
-    Future.delayed(const Duration(milliseconds: 1400), () {
-      if (mounted && _isRefreshing) {
-        setState(() => _isRefreshing = false);
-      }
-    });
-  }
-
   @override
   Widget build(BuildContext context) {
     return PopScope(
@@ -2389,64 +2244,21 @@ Future<void> _openScheduleScreen({int initialTabIndex = 0}) async {
                                   child: IndexedStack(
                                     index: _currentNavIndex == 1 ? 1 : 0,
                                     children: [
-                                      // Tab 0: Mentari
-                                      Listener(
-                                        behavior: HitTestBehavior.translucent,
-                                        onPointerDown: _onPointerDown,
-                                        onPointerMove: _onPointerMove,
-                                        onPointerUp: _onPointerUp,
-                                        onPointerCancel: _onPointerCancel,
-                                        child: WebViewWidget(
-                                            controller: _controller),
+                                      // Tab 0: Mentari LMS Native Hub
+                                      MentariHomeScreen(
+                                        onOpenExternalUrl: (url) =>
+                                            _launchExternalUrl(url),
                                       ),
-                                      // Tab 1: MyUnpam
-                                      _myUnpamController != null
-                                          ? Listener(
-                                              behavior:
-                                                  HitTestBehavior.translucent,
-                                              onPointerDown: _onPointerDown,
-                                              onPointerMove: _onPointerMove,
-                                              onPointerUp: _onPointerUp,
-                                              onPointerCancel: _onPointerCancel,
-                                              child: WebViewWidget(
-                                                  controller:
-                                                      _myUnpamController!),
-                                            )
-                                          : const Center(
-                                              child: CircularProgressIndicator(
-                                                color: AppTheme.primaryBlue,
-                                              ),
-                                            ),
+                                      // Tab 1: MyUnpam Native Hub
+                                      AcademicHubScreen(
+                                        isEmbedded: true,
+                                        onOpenDeadlineUrl: (url) {
+                                          setState(() => _currentNavIndex = 0);
+                                        },
+                                      ),
                                     ],
                                   ),
                                 ),
-
-                                // Floating Pull-to-Refresh Indicator
-                                PortalPullRefreshIndicator(
-                                  pullDistanceNotifier: _pullDistanceNotifier,
-                                  isPullingNotifier: _isPullingNotifier,
-                                  isRefreshing: _isRefreshing,
-                                  triggerDistance: _refreshTriggerDistance,
-                                ),
-
-                                // Tampilan Offline / Gagal Muat
-                                if ((_currentNavIndex == 0 && _hasError) ||
-                                    (_currentNavIndex == 1 && _myUnpamHasError))
-                                  _buildErrorView(maxH),
-
-                                // Banner Pemulihan jika terdeteksi Layar Putih / SPA Blank
-                                if (_currentNavIndex == 0 &&
-                                    _isWhiteScreenDetected &&
-                                    !_hasError &&
-                                    !_isLoading)
-                                  WhiteScreenRecoveryBanner(
-                                    onRefresh: () {
-                                      setState(
-                                          () => _isWhiteScreenDetected = false);
-                                      _startRefresh();
-                                    },
-                                    onResetSession: _resetMentariSession,
-                                  ),
                               ],
                             ),
                           ),
@@ -2619,10 +2431,10 @@ Future<void> _openScheduleScreen({int initialTabIndex = 0}) async {
         bottomNavigationBar: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            if ((_currentNavIndex == 0 || _currentNavIndex == 1) &&
+            if (_currentNavIndex == 0 &&
                 (_isLoginPageDetected || _isLoggedOutDetected))
               BiometricLoginBanner(
-                portalName: _currentNavIndex == 1 ? 'MyUnpam' : 'Mentari',
+                portalName: 'Mentari',
                 isLoginPageDetected: _isLoginPageDetected,
                 onLoginPressed: _performBiometricLogin,
               ),
@@ -2635,15 +2447,15 @@ Future<void> _openScheduleScreen({int initialTabIndex = 0}) async {
                   _detectLoginForm();
                   _injectContextualPageDetectorScript(_controller);
                 } else if (idx == 1) {
-                  _ensureMyUnpamControllerInitialized();
                   setState(() => _currentNavIndex = 1);
                   _updateHistoryState();
-                  _detectLoginForm();
-                  if (_myUnpamController != null) {
-                    _injectContextualPageDetectorScript(_myUnpamController!);
-                  }
                 } else if (idx == 2) {
-                  await _openAcademicHubScreen();
+                  final previousTab = _currentNavIndex;
+                  await _openScheduleScreen();
+                  if (mounted) {
+                    setState(() => _currentNavIndex = previousTab);
+                    _updateHistoryState();
+                  }
                 } else if (idx == 3) {
                   final previousTab = _currentNavIndex;
                   await _openFullScreenAiAssistant();
@@ -2687,103 +2499,6 @@ Future<void> _openScheduleScreen({int initialTabIndex = 0}) async {
           ),
         );
       },
-    );
-  }
-
-  Widget _buildErrorView(double maxH) {
-    return Container(
-      color: Colors.white,
-      width: double.infinity,
-      height: double.infinity,
-      child: RefreshIndicator(
-        onRefresh: _startRefresh,
-        color: AppTheme.primaryBlue,
-        child: ListView(
-          physics: const AlwaysScrollableScrollPhysics(),
-          padding: const EdgeInsets.all(28),
-          children: [
-            SizedBox(height: maxH * 0.08),
-            Container(
-              padding: const EdgeInsets.all(20),
-              decoration: BoxDecoration(
-                color: Colors.red.shade50,
-                shape: BoxShape.circle,
-              ),
-              child: Icon(Icons.wifi_off_rounded,
-                  size: 52, color: Colors.red.shade400),
-            ),
-            const SizedBox(height: 18),
-            Text(
-              _currentNavIndex == 1
-                  ? 'Gagal Memuat MyUnpam'
-                  : 'Gagal Memuat Mentari',
-              textAlign: TextAlign.center,
-              style: const TextStyle(
-                fontSize: 18,
-                fontWeight: FontWeight.bold,
-                color: AppTheme.textDark,
-              ),
-            ),
-            const SizedBox(height: 8),
-            Text(
-              (_currentNavIndex == 1 ? _myUnpamErrorMessage : _errorMessage)
-                      .isNotEmpty
-                  ? (_currentNavIndex == 1
-                      ? _myUnpamErrorMessage
-                      : _errorMessage)
-                  : 'Periksa koneksi internet Anda atau coba muat ulang.',
-              textAlign: TextAlign.center,
-              style: const TextStyle(fontSize: 13, color: AppTheme.textMuted),
-            ),
-            const SizedBox(height: 24),
-            Wrap(
-              spacing: 12,
-              runSpacing: 10,
-              alignment: WrapAlignment.center,
-              children: [
-                ElevatedButton.icon(
-                  onPressed: () {
-                    setState(() {
-                      if (_currentNavIndex == 1) {
-                        _myUnpamHasError = false;
-                      } else {
-                        _hasError = false;
-                      }
-                    });
-                    _startRefresh();
-                  },
-                  icon: const Icon(Icons.refresh_rounded, size: 18),
-                  label: const Text('Muat Ulang'),
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: AppTheme.primaryBlue,
-                    foregroundColor: Colors.white,
-                    padding: const EdgeInsets.symmetric(
-                        horizontal: 20, vertical: 12),
-                  ),
-                ),
-                OutlinedButton.icon(
-                  onPressed: () => _resetMentariSession(),
-                  icon: const Icon(Icons.cleaning_services_rounded, size: 18),
-                  label: const Text('Reset Sesi & Cache'),
-                ),
-                OutlinedButton.icon(
-                  onPressed: () {
-                    if (_currentNavIndex == 1) {
-                      _myUnpamController?.loadRequest(Uri.parse(myUnpamUrl));
-                    } else {
-                      _navigateToUrl(mentariUrl);
-                    }
-                  },
-                  icon: const Icon(Icons.home_rounded, size: 18),
-                  label: Text(_currentNavIndex == 1
-                      ? 'Ke Beranda MyUnpam'
-                      : 'Ke Beranda Mentari'),
-                ),
-              ],
-            ),
-          ],
-        ),
-      ),
     );
   }
 
@@ -2860,10 +2575,8 @@ Future<void> _openScheduleScreen({int initialTabIndex = 0}) async {
           const SizedBox(height: 2),
           Text(
             isMyUnpam
-                ? (_myUnpamPageTitle.isNotEmpty
-                    ? _myUnpamPageTitle
-                    : 'my.unpam.ac.id')
-                : (_pageTitle.isNotEmpty ? _pageTitle : 'mentari.unpam.ac.id'),
+                ? 'Portal Akademik Mahasiswa'
+                : 'Portal Pembelajaran Daring',
             style: const TextStyle(fontSize: 11, color: Colors.white70),
             overflow: TextOverflow.ellipsis,
             maxLines: 1,
@@ -2871,6 +2584,32 @@ Future<void> _openScheduleScreen({int initialTabIndex = 0}) async {
         ],
       ),
       actions: [
+        IconButton(
+          tooltip:
+              isMyUnpam ? 'Segarkan Data Akademik' : 'Segarkan Kursus Mentari',
+          icon: const Icon(Icons.refresh_rounded, color: Colors.white, size: 21),
+          onPressed: () {
+            if (isMyUnpam) {
+              context.read<AcademicPortalProvider>().refreshAll();
+              context.read<FinanceProvider>().refresh();
+              context
+                  .read<ScheduleProvider>()
+                  .syncScheduleWithPortal(forceRefresh: true);
+            } else {
+              context.read<MentariProvider>().fetchCourses(forceRefresh: true);
+            }
+            ScaffoldMessenger.of(context).hideCurrentSnackBar();
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(
+                content: Text(isMyUnpam
+                    ? 'Menyegarkan data MyUnpam...'
+                    : 'Menyegarkan mata kuliah Mentari...'),
+                duration: const Duration(seconds: 1),
+                behavior: SnackBarBehavior.floating,
+              ),
+            );
+          },
+        ),
         Consumer<BiometricProvider>(
           builder: (ctx, bioProv, _) {
             final hasCreds = bioProv.hasSavedCredentials;
@@ -2907,14 +2646,24 @@ Future<void> _openScheduleScreen({int initialTabIndex = 0}) async {
           tooltip: 'Menu Lainnya',
           onSelected: (val) {
             if (val == 'refresh') {
-              _startRefresh();
+              if (isMyUnpam) {
+                context.read<AcademicPortalProvider>().refreshAll();
+                context.read<FinanceProvider>().refresh();
+                context
+                    .read<ScheduleProvider>()
+                    .syncScheduleWithPortal(forceRefresh: true);
+              } else {
+                context.read<MentariProvider>().fetchCourses(forceRefresh: true);
+              }
             } else if (val == 'home') {
-              _navigateToUrl(isMyUnpam ? myUnpamUrl : mentariUrl);
+              if (isMyUnpam) {
+                context.read<AcademicPortalProvider>().refreshAll();
+              } else {
+                context.read<MentariProvider>().fetchCourses(forceRefresh: true);
+              }
             } else if (val == 'open_browser') {
-              final current = isMyUnpam ? _myUnpamCurrentUrl : _currentUrl;
-              _launchExternalUrl(current.isNotEmpty
-                  ? current
-                  : (isMyUnpam ? myUnpamUrl : mentariUrl));
+              final current = isMyUnpam ? myUnpamUrl : mentariUrl;
+              _launchExternalUrl(current);
             } else if (val == 'reset_cache') {
               _resetMentariSession();
             } else if (val == 'history') {
@@ -2922,13 +2671,13 @@ Future<void> _openScheduleScreen({int initialTabIndex = 0}) async {
             }
           },
           itemBuilder: (ctx) => [
-            const PopupMenuItem(
+            PopupMenuItem(
               value: 'refresh',
               child: Row(
                 children: [
-                  Icon(Icons.refresh_rounded, size: 18),
-                  SizedBox(width: 10),
-                  Text('Muat Ulang'),
+                  const Icon(Icons.refresh_rounded, size: 18),
+                  const SizedBox(width: 10),
+                  Text(isMyUnpam ? 'Segarkan Data' : 'Muat Ulang'),
                 ],
               ),
             ),
@@ -2942,26 +2691,27 @@ Future<void> _openScheduleScreen({int initialTabIndex = 0}) async {
                 ],
               ),
             ),
-            const PopupMenuItem(
+            PopupMenuItem(
               value: 'open_browser',
               child: Row(
                 children: [
-                  Icon(Icons.open_in_browser_rounded, size: 18),
-                  SizedBox(width: 10),
-                  Text('Buka di Peramban Luar'),
+                  const Icon(Icons.open_in_browser_rounded, size: 18),
+                  const SizedBox(width: 10),
+                  Text(isMyUnpam ? 'Buka Web MyUnpam' : 'Buka Web Mentari'),
                 ],
               ),
             ),
-            const PopupMenuItem(
-              value: 'reset_cache',
-              child: Row(
-                children: [
-                  Icon(Icons.cleaning_services_rounded, size: 18),
-                  SizedBox(width: 10),
-                  Text('Reset Sesi & Cache'),
-                ],
+            if (!isMyUnpam)
+              const PopupMenuItem(
+                value: 'reset_cache',
+                child: Row(
+                  children: [
+                    Icon(Icons.cleaning_services_rounded, size: 18),
+                    SizedBox(width: 10),
+                    Text('Reset Sesi & Cache'),
+                  ],
+                ),
               ),
-            ),
             const PopupMenuItem(
               value: 'history',
               child: Row(

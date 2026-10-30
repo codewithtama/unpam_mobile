@@ -1,7 +1,7 @@
 name: unpam_mobile
 description: "The PAMs - Portal Perkuliahan & Akademik Terpadu"
 publish_to: 'none'
-version: 1.0.54+54
+version: 1.0.55+55
 
 environment:
   sdk: '>=3.0.0 <4.0.0'
@@ -28,6 +28,7 @@ dependencies:
   timezone: ^0.11.0
   permission_handler: 11.3.1
   device_info_plus: ^13.3.0
+  html: ^0.15.7
 
 dev_dependencies:
   flutter_test:

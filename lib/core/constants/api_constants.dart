@@ -70,4 +70,7 @@ class ApiConstants {
   static const String deadlineLastSyncKey = 'unpam_deadline_last_sync';
   static const String scheduledReminderIdsKey = 'unpam_scheduled_reminder_ids';
   static const String mentariSesskeyKey = 'unpam_mentari_sesskey';
+  static const String mentariCachedCoursesKey = 'unpam_mentari_cached_courses_v1';
+  static const String mentariCachedCourseDetailPrefix = 'unpam_mentari_cached_detail_';
+  static const String mentariLastSyncKey = 'unpam_mentari_last_sync';
 }

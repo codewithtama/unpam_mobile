@@ -110,6 +110,23 @@ class StorageService {
 
   String? getSelectedSemester() => _readString(ApiConstants.myUnpamCachedSemesterKey);
 
+  // Mentari LMS Session & Cache
+  Future<void> saveMentariSesskey(String sesskey) =>
+      _writeString(ApiConstants.mentariSesskeyKey, sesskey.trim());
+
+  String? getMentariSesskey() => _readString(ApiConstants.mentariSesskeyKey);
+
+  Future<void> saveMentariCachedCourses(String json) =>
+      _writeString(ApiConstants.mentariCachedCoursesKey, json);
+
+  String? getMentariCachedCourses() => _readString(ApiConstants.mentariCachedCoursesKey);
+
+  Future<void> saveMentariCachedCourseDetail(int courseId, String json) =>
+      _writeString('${ApiConstants.mentariCachedCourseDetailPrefix}$courseId', json);
+
+  String? getMentariCachedCourseDetail(int courseId) =>
+      _readString('${ApiConstants.mentariCachedCourseDetailPrefix}$courseId');
+
   // Active AI Model Selection
   Future<void> saveActiveAiModelId(String modelId) async {
     await _preferences?.setString(ApiConstants.activeAiModelKey, modelId);
