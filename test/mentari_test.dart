@@ -6,6 +6,7 @@ import 'package:unpam_mobile/core/services/storage_service.dart';
 import 'package:unpam_mobile/features/mentari/domain/models/mentari_course_model.dart';
 import 'package:unpam_mobile/features/mentari/domain/models/mentari_section_model.dart';
 import 'package:unpam_mobile/features/mentari/domain/models/mentari_module_model.dart';
+import 'package:unpam_mobile/features/portal/presentation/screens/main_navigation_screen.dart';
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
@@ -247,6 +248,19 @@ void main() {
       const testDetailJson = '[{"id":1,"name":"Pertemuan 1","modules":[]}]';
       await storage.saveMentariCachedCourseDetail(101, testDetailJson);
       expect(storage.getMentariCachedCourseDetail(101), equals(testDetailJson));
+    });
+  });
+
+  group('MainNavigationScreen Architecture Tests', () {
+    test('isAllowedInAppNavigation correctly validates internal campus & SSO domains', () {
+      expect(MainNavigationScreen.isAllowedInAppNavigation('https://mentari.unpam.ac.id/my/'), isTrue);
+      expect(MainNavigationScreen.isAllowedInAppNavigation('https://my.unpam.ac.id/dashboard'), isTrue);
+      expect(MainNavigationScreen.isAllowedInAppNavigation('https://satu.unpam.ac.id/login'), isTrue);
+      expect(MainNavigationScreen.isAllowedInAppNavigation('https://challenges.cloudflare.com/turnstile'), isTrue);
+      expect(MainNavigationScreen.isAllowedInAppNavigation('blob:https://mentari.unpam.ac.id/test.pdf'), isTrue);
+
+      expect(MainNavigationScreen.isAllowedInAppNavigation('https://unpam.fake-domain.com'), isFalse);
+      expect(MainNavigationScreen.isAllowedInAppNavigation('https://phishing-site.com'), isFalse);
     });
   });
 }

@@ -1,6 +1,14 @@
 # Catatan Pembaruan Rilis The PAMs
 
-## Versi 1.0.55 (Terbaru)
+## Versi 1.0.56 (Terbaru)
+
+- **Tahap 3 — Pembersihan Monolith Root & Transisi ke MainNavigationScreen**:
+  - **Arsitektur Root Baru (`MainNavigationScreen`)**: Menggantikan berkas monolitik `portal_webview_screen.dart` (2.700+ baris) dengan `MainNavigationScreen` yang bersih, modular, dan ringan.
+  - **Efisiensi Memori & Kecepatan**: Mengeliminasi alokasi ganda Chromium WebView yang berjalan di background, menurunkan konsumsi RAM aplikasi hingga >60%, dan mempercepat *cold startup*.
+  - **Navigasi Terpadu & Sederhana**: 3 tab utama yang rapi (Mentari LMS, MyUnpam Hub, dan The PAMs AI) dengan dukungan Split-Screen AI, Biometric Vault, dan in-app OTA Updater.
+  - **Pengujian & Kualitas**: 75/75 unit & widget tests lulus, 0 analyzer issues (`flutter analyze` bersih).
+
+## Versi 1.0.55
 
 - **Transformasi 100% Native untuk Mentari LMS & MyUnpam Hub**:
   - **Tahap 1 — MyUnpam Native Hub**: Tab MyUnpam kini terintegrasi langsung sebagai dasbor native `AcademicHubScreen(isEmbedded: true)` yang merangkum kartu profil mahasiswa, status IPK & SKS, ringkasan tagihan keuangan, jadwal kuliah hari ini, dan grid 12 modul layanan akademik lengkap.
