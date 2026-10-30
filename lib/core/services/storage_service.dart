@@ -111,6 +111,11 @@ class StorageService {
   String? getSelectedSemester() => _readString(ApiConstants.myUnpamCachedSemesterKey);
 
   // Mentari LMS Session & Cache
+  Future<void> saveMentariCookies(String cookies) =>
+      _writeString(ApiConstants.mentariCookiesKey, cookies);
+
+  String? getMentariCookies() => _readString(ApiConstants.mentariCookiesKey);
+
   Future<void> saveMentariSesskey(String sesskey) =>
       _writeString(ApiConstants.mentariSesskeyKey, sesskey.trim());
 

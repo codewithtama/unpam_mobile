@@ -248,6 +248,10 @@ void main() {
       const testDetailJson = '[{"id":1,"name":"Pertemuan 1","modules":[]}]';
       await storage.saveMentariCachedCourseDetail(101, testDetailJson);
       expect(storage.getMentariCachedCourseDetail(101), equals(testDetailJson));
+
+      expect(storage.getMentariCookies(), isNull);
+      await storage.saveMentariCookies('MoodleSession=mock_cookie_12345');
+      expect(storage.getMentariCookies(), equals('MoodleSession=mock_cookie_12345'));
     });
   });
 

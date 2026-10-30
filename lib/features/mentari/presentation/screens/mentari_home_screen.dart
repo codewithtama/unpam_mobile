@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../../../../theme/app_theme.dart';
-import '../../../academic/presentation/widgets/sso_auth_modal.dart';
 import '../providers/mentari_provider.dart';
+import '../widgets/mentari_auth_modal.dart';
 import '../widgets/mentari_course_card.dart';
 import 'mentari_course_detail_screen.dart';
 
@@ -41,11 +41,11 @@ class _MentariHomeScreenState extends State<MentariHomeScreen> {
   }
 
   Future<void> _handleConnectMentari() async {
-    final success = await SsoAuthModal.show(context);
+    final success = await MentariAuthModal.show(context);
     if (success == true && mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
-          content: Text('Sesi Mentari & Satu UNPAM berhasil disinkronkan'),
+          content: Text('Sesi Mentari LMS berhasil disinkronkan'),
           backgroundColor: AppTheme.successGreen,
           behavior: SnackBarBehavior.floating,
         ),
@@ -165,9 +165,17 @@ class _MentariHomeScreenState extends State<MentariHomeScreen> {
                                 padding: EdgeInsets.zero,
                                 visualDensity: VisualDensity.compact,
                               ),
-                              onPressed: () => provider.fetchCourses(forceRefresh: true),
-                              icon: const Icon(Icons.sync_rounded, size: 16),
-                              label: const Text('Sinkronkan', style: TextStyle(fontSize: 12)),
+                              onPressed: provider.hasActiveSession
+                                  ? () => provider.fetchCourses(forceRefresh: true)
+                                  : _handleConnectMentari,
+                              icon: Icon(
+                                provider.hasActiveSession ? Icons.sync_rounded : Icons.link_rounded,
+                                size: 16,
+                              ),
+                              label: Text(
+                                provider.hasActiveSession ? 'Sinkronkan' : 'Hubungkan',
+                                style: const TextStyle(fontSize: 12),
+                              ),
                             ),
                           ],
                         ),
@@ -245,29 +253,34 @@ class _MentariHomeScreenState extends State<MentariHomeScreen> {
                     ),
                     child: Column(
                       children: [
-                        const Icon(Icons.cast_for_education_rounded, size: 48, color: AppTheme.accentGold),
+                        const Icon(Icons.school_rounded, size: 48, color: AppTheme.accentGold),
                         const SizedBox(height: 12),
                         Text(
                           _searchQuery.isNotEmpty
                               ? 'Tidak Ada Mata Kuliah Cocok'
-                              : 'Belum Ada Data Kursus Mentari',
+                              : 'Belum Terhubung ke Mentari LMS',
                           style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15),
                         ),
                         const SizedBox(height: 6),
                         Text(
                           _searchQuery.isNotEmpty
                               ? 'Coba gunakan kata kunci pencarian yang lain.'
-                              : 'Hubungkan akun Satu UNPAM untuk menarik daftar perkuliahan Mentari secara otomatis.',
+                              : 'Hubungkan akun Mentari E-Learning untuk menyinkronkan daftar perkuliahan, modul materi, kuis, dan forum diskusi.',
                           textAlign: TextAlign.center,
                           style: const TextStyle(fontSize: 12, color: AppTheme.textMuted),
                         ),
                         const SizedBox(height: 16),
                         if (_searchQuery.isEmpty)
                           ElevatedButton.icon(
-                            style: ElevatedButton.styleFrom(backgroundColor: AppTheme.primaryBlue),
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: AppTheme.primaryBlue,
+                              foregroundColor: Colors.white,
+                              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                            ),
                             onPressed: _handleConnectMentari,
-                            icon: const Icon(Icons.link_rounded, size: 18, color: Colors.white),
-                            label: const Text('Hubungkan Sesi Mentari', style: TextStyle(color: Colors.white)),
+                            icon: const Icon(Icons.link_rounded, size: 18),
+                            label: const Text('Hubungkan Akun Mentari', style: TextStyle(fontWeight: FontWeight.bold)),
                           ),
                       ],
                     ),

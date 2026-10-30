@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'package:dio/dio.dart';
 import 'package:flutter/foundation.dart';
 import 'package:html/parser.dart' as html_parser;
+import 'package:webview_flutter/webview_flutter.dart';
 import '../../../../core/constants/api_constants.dart';
 import '../../../../core/services/storage_service.dart';
 import '../domain/models/mentari_course_model.dart';
@@ -11,7 +12,7 @@ import '../domain/models/mentari_module_model.dart';
 class MentariAuthException implements Exception {
   final String message;
   const MentariAuthException([
-    this.message = 'Sesi Mentari LMS belum terhubung atau telah kedaluwarsa.',
+    this.message = 'Sesi Mentari LMS belum terhubung atau telah kedaluwarsa. Silakan login ke Mentari.',
   ]);
   @override
   String toString() => message;
@@ -36,13 +37,66 @@ class MentariService {
               ),
             );
 
-  Map<String, String> _buildHeaders() {
+  bool get hasActiveSession {
+    final sesskey = _storage.getMentariSesskey();
+    final cookies = _storage.getMentariCookies() ?? _storage.getCookies();
+    return (sesskey != null && sesskey.isNotEmpty) || (cookies != null && cookies.isNotEmpty);
+  }
+
+  Future<Map<String, String>> _buildHeaders() async {
     final headers = <String, String>{};
-    final cookies = _storage.getCookies();
+    var cookies = _storage.getMentariCookies() ?? _storage.getCookies();
+
+    if (cookies == null || cookies.isEmpty) {
+      try {
+        final webCookies = await WebViewCookieManager().getCookies(
+          domain: Uri.parse(ApiConstants.mentariBaseUrl),
+        );
+        if (webCookies.isNotEmpty) {
+          cookies = webCookies.map((c) => '${c.name}=${c.value}').join('; ');
+          await _storage.saveMentariCookies(cookies);
+        }
+      } catch (_) {}
+    }
+
     if (cookies != null && cookies.isNotEmpty) {
       headers['Cookie'] = cookies;
     }
     return headers;
+  }
+
+  void _tryExtractAndSaveSesskey(String html) {
+    if (html.isEmpty) return;
+
+    // 1. window.M.cfg.sesskey atau "sesskey":"..."
+    final m1 = RegExp(r'"sesskey":\s*"([a-zA-Z0-9]+)"').firstMatch(html);
+    if (m1 != null) {
+      final key = m1.group(1);
+      if (key != null && key.isNotEmpty) {
+        _storage.saveMentariSesskey(key);
+        return;
+      }
+    }
+
+    // 2. input[name="sesskey"] value="..."
+    final m2 = RegExp(r'name=[\x22\x27]sesskey[\x22\x27]\s+value=[\x22\x27]([a-zA-Z0-9]+)[\x22\x27]').firstMatch(html);
+    if (m2 != null) {
+      final key = m2.group(1);
+      if (key != null && key.isNotEmpty) {
+        _storage.saveMentariSesskey(key);
+        return;
+      }
+    }
+
+    // 3. logout.php?sesskey=...
+    final m3 = RegExp(r'logout\.php\?sesskey=([a-zA-Z0-9]+)').firstMatch(html);
+    if (m3 != null) {
+      final key = m3.group(1);
+      if (key != null && key.isNotEmpty) {
+        _storage.saveMentariSesskey(key);
+        return;
+      }
+    }
   }
 
   // ──────────────────────────────────────────────────────────────────────────
@@ -66,7 +120,30 @@ class MentariService {
       }
     }
 
-    final sesskey = _storage.getMentariSesskey();
+    final headers = await _buildHeaders();
+    var sesskey = _storage.getMentariSesskey();
+
+    // Jika sesskey belum ada namun cookies ada, preflight ke /my/ untuk tangkap sesskey
+    if ((sesskey == null || sesskey.isEmpty) && headers.containsKey('Cookie')) {
+      try {
+        final preflight = await _dio.get(
+          '/my/',
+          options: Options(headers: headers),
+        );
+        if (preflight.statusCode == 200 && preflight.data is String) {
+          final html = preflight.data as String;
+          _tryExtractAndSaveSesskey(html);
+          sesskey = _storage.getMentariSesskey();
+          final parsed = _parseCoursesFromHtml(html);
+          if (parsed.isNotEmpty) {
+            await _storage.saveMentariCachedCourses(jsonEncode(parsed));
+            return parsed;
+          }
+        }
+      } catch (e) {
+        debugPrint('[MentariService] Preflight /my/ error: $e');
+      }
+    }
 
     // ── Strategi 1: Moodle AJAX Web Service ──
     if (sesskey != null && sesskey.isNotEmpty) {
@@ -89,7 +166,7 @@ class MentariService {
           ajaxUrl,
           data: jsonEncode(payload),
           options: Options(
-            headers: _buildHeaders(),
+            headers: headers,
             contentType: 'application/json',
           ),
         );
@@ -120,11 +197,13 @@ class MentariService {
     try {
       final res = await _dio.get(
         '/my/',
-        options: Options(headers: _buildHeaders()),
+        options: Options(headers: headers),
       );
 
       if (res.statusCode == 200 && res.data is String) {
-        final courses = _parseCoursesFromHtml(res.data as String);
+        final html = res.data as String;
+        _tryExtractAndSaveSesskey(html);
+        final courses = _parseCoursesFromHtml(html);
         if (courses.isNotEmpty) {
           await _storage.saveMentariCachedCourses(jsonEncode(courses));
           return courses;
@@ -168,6 +247,7 @@ class MentariService {
       }
     }
 
+    final headers = await _buildHeaders();
     final sesskey = _storage.getMentariSesskey();
 
     // ── Strategi 1: Moodle AJAX Web Service ──
@@ -186,7 +266,7 @@ class MentariService {
           ajaxUrl,
           data: jsonEncode(payload),
           options: Options(
-            headers: _buildHeaders(),
+            headers: headers,
             contentType: 'application/json',
           ),
         );
@@ -223,11 +303,13 @@ class MentariService {
     try {
       final res = await _dio.get(
         '/course/view.php?id=$courseId',
-        options: Options(headers: _buildHeaders()),
+        options: Options(headers: headers),
       );
 
       if (res.statusCode == 200 && res.data is String) {
-        final sections = _parseSectionsFromHtml(res.data as String);
+        final html = res.data as String;
+        _tryExtractAndSaveSesskey(html);
+        final sections = _parseSectionsFromHtml(html);
         if (sections.isNotEmpty) {
           await _storage.saveMentariCachedCourseDetail(courseId, jsonEncode(sections));
           return sections;
@@ -299,26 +381,28 @@ class MentariService {
       );
     }
 
-    // Fallback pencarian tautan langsung jika card tidak terdeteksi
+    // Fallback: parsing dari generic links
     if (results.isEmpty) {
       final allLinks = doc.querySelectorAll('a[href*="/course/view.php?id="]');
-      for (final a in allLinks) {
-        final href = a.attributes['href'] ?? '';
+      for (final link in allLinks) {
+        final href = link.attributes['href'] ?? '';
         final match = RegExp(r'[?&]id=(\d+)').firstMatch(href);
         if (match == null) continue;
 
         final id = int.tryParse(match.group(1) ?? '0') ?? 0;
         if (id <= 0 || seenIds.contains(id)) continue;
 
-        final text = a.text.trim();
-        if (text.length < 4 || text.toLowerCase() == 'view') continue;
+        final title = link.text.trim();
+        if (title.length < 3 || title.toLowerCase().contains('view') || title.toLowerCase().contains('masuk')) {
+          continue;
+        }
 
         seenIds.add(id);
         results.add(
           MentariCourseModel(
             id: id,
-            fullName: text,
-            shortName: text,
+            fullName: title,
+            shortName: title,
           ),
         );
       }
@@ -329,10 +413,10 @@ class MentariService {
 
   List<MentariSectionModel> _parseSectionsFromHtml(String html) {
     final doc = html_parser.parse(html);
-    final results = <MentariSectionModel>[];
-    var sectionNodes = doc.querySelectorAll('li.section.main, .section.course-section');
+    final sections = <MentariSectionModel>[];
 
-    // Dukung DOM Mentari modern (React/MUI: div[id^="PERTEMUAN_"], div#GENERAL)
+    // Deteksi container section Moodle
+    var sectionNodes = doc.querySelectorAll('li.section.main, .section.course-section');
     if (sectionNodes.isEmpty) {
       sectionNodes = doc
           .querySelectorAll('div[id^="PERTEMUAN_"], div#GENERAL')
@@ -340,72 +424,72 @@ class MentariService {
           .toList();
     }
 
-    int sectionIdx = 0;
-    for (final secNode in sectionNodes) {
-      final titleElem = secNode.querySelector('.sectionname, .section-title, .MuiTypography-h6, h3, h6');
-      final title = titleElem?.text.trim() ?? 'Pertemuan $sectionIdx';
+    for (var i = 0; i < sectionNodes.length; i++) {
+      final node = sectionNodes[i];
+      final titleNode = node.querySelector('.sectionname, .section-title, h3, h4');
+      final rawTitle = titleNode?.text.trim() ?? 'Pertemuan ${i + 1}';
 
-      final summaryElem = secNode.querySelector('.summary, .section-summary, .MuiTypography-caption');
-      final summary = summaryElem?.text.trim() ?? '';
+      final summaryNode = node.querySelector('.summary, .section-summary');
+      final summary = summaryNode?.text.trim();
 
       final modules = <MentariModuleModel>[];
-      final activityNodes = secNode.querySelectorAll('li.activity, .activity-item, a[href*="/mod/"]');
+      final modNodes = node.querySelectorAll('li.activity, .activity-item');
 
-      for (final act in activityNodes) {
-        final actLink = act.localName == 'a' 
-            ? act 
-            : (act.querySelector('a.aalink, a[href*="/mod/"]') ?? act.querySelector('a'));
-        final actUrl = actLink?.attributes['href'] ?? '';
-        if (actUrl.isEmpty) continue;
+      for (final mod in modNodes) {
+        final link = mod.querySelector('a');
+        final href = link?.attributes['href'] ?? '';
+        final modIdMatch = RegExp(r'[?&]id=(\d+)').firstMatch(href);
+        final modId = int.tryParse(modIdMatch?.group(1) ?? '0') ?? 0;
 
-        final nameElem = act.querySelector('.instancename, .activityname') ?? actLink;
-        var actName = nameElem?.text.trim() ?? 'Aktivitas';
-        // Bersihkan label Moodle tersembunyi seperti "File", "Forum"
-        actName = actName.replaceAll(RegExp(r'\s*(?:File|Forum|Quiz|Assignment)\s*$', caseSensitive: false), '');
+        final nameNode = mod.querySelector('.instancename, .activityname') ?? link;
+        var name = nameNode?.text.trim() ?? '';
+        name = name.replaceAll(RegExp(r'\s+'), ' ').trim();
 
-        // Tipe modul dari class name CSS atau URL path (/mod/quiz/, dsb)
-        final classList = act.classes.join(' ').toLowerCase();
-        String typeStr = 'other';
-        if (classList.contains('modtype_resource') || actUrl.contains('/mod/resource/')) {
-          typeStr = 'resource';
-        } else if (classList.contains('modtype_forum') || actUrl.contains('/mod/forum/')) {
-          typeStr = 'forum';
-        } else if (classList.contains('modtype_quiz') || actUrl.contains('/mod/quiz/')) {
-          typeStr = 'quiz';
-        } else if (classList.contains('modtype_assign') || actUrl.contains('/mod/assign/')) {
-          typeStr = 'assign';
-        } else if (classList.contains('modtype_attendance') || actUrl.contains('/mod/attendance/')) {
-          typeStr = 'attendance';
-        } else if (classList.contains('modtype_url') || actUrl.contains('/mod/url/')) {
-          typeStr = 'url';
+        if (name.isEmpty) continue;
+
+        String? modTypeStr;
+        final classes = mod.attributes['class'] ?? '';
+        final classMatch = RegExp(r'modtype_([a-zA-Z0-9_]+)').firstMatch(classes);
+        if (classMatch != null) {
+          modTypeStr = classMatch.group(1);
+        } else {
+          final match = RegExp(r'/mod/([a-zA-Z0-9_]+)/').firstMatch(href);
+          modTypeStr = match?.group(1);
         }
 
-        final mIdMatch = RegExp(r'[?&]id=(\d+)').firstMatch(actUrl);
-        final mId = int.tryParse(mIdMatch?.group(1) ?? '0') ?? 0;
+        final modType = MentariModuleModel.parseModuleType(modTypeStr ?? '');
+
+        // Cari link file langsung jika ada (PDF / Resource)
+        String? directFileUrl;
+        if (modType == MentariModuleType.resource) {
+          final fileLink = mod.querySelector('a[href*="pluginfile.php"]');
+          if (fileLink != null) {
+            directFileUrl = fileLink.attributes['href'];
+          }
+        }
 
         modules.add(
           MentariModuleModel(
-            id: mId,
-            name: actName.isNotEmpty ? actName : 'Aktivitas',
-            type: MentariModuleModel.parseModuleType(typeStr),
-            url: actUrl,
-            fileUrl: typeStr == 'resource' ? actUrl : null,
+            id: modId,
+            name: name,
+            type: modType,
+            url: href,
+            fileUrl: directFileUrl,
           ),
         );
       }
 
-      results.add(
+      sections.add(
         MentariSectionModel(
-          id: sectionIdx,
-          name: title,
-          sectionNumber: sectionIdx,
-          summary: summary,
+          id: i + 1,
+          name: rawTitle,
+          sectionNumber: i + 1,
+          summary: summary ?? '',
           modules: modules,
         ),
       );
-      sectionIdx++;
     }
 
-    return results;
+    return sections;
   }
 }

@@ -25,6 +25,7 @@ class MentariProvider extends ChangeNotifier {
   bool get isLoadingSections => _isLoadingSections;
   String? get errorMessage => _errorMessage;
   bool get hasCourses => _courses.isNotEmpty;
+  bool get hasActiveSession => _service.hasActiveSession;
   int? get selectedCourseId => _selectedCourseId;
 
   MentariCourseModel? get selectedCourse {

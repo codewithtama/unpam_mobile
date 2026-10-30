@@ -1,6 +1,16 @@
 # Catatan Pembaruan Rilis The PAMs
 
-## Versi 1.0.56 (Terbaru)
+## Versi 1.0.57 (Terbaru)
+
+- **Sinkronisasi Terpadu Mentari LMS & Stabilisasi Sesi MyUnpam**:
+  - **Penyelesaian Bug Logout Berulang MyUnpam**: Mengeliminasi *race condition* pada `MyUnpamRefresher` yang sebelumnya memicu `loginRequired` dan penghapusan token otomatis saat pergantian *stage* SSO. Menjadikan `my.unpam.ac.id` sebagai tahap awal dengan ekstraksi instan dari `localStorage.access_token` (<1 detik) serta injeksi kredensial biometrik otomatis ke `satu.unpam.ac.id/login`.
+  - **Offline/Flaky Network Graceful Fallback**: Menambahkan mekanisme *cache-first recovery* pada `AcademicPortalService._fetch` sehingga gangguan jaringan atau penyegaran token tidak lagi menghapus data di layar atau menghentikan aktivitas pengguna.
+  - **Sinkronisasi Sesi Mandiri Mentari LMS (`MentariAuthModal`)**: Menghadirkan modal autentikasi dedicated untuk E-Learning Mentari UNPAM. Mendukung ekstraksi otomatis cookies `MoodleSession` dari peramban dan deteksi regex `sesskey` multi-sumber (`M.cfg.sesskey`, `input[name="sesskey"]`, dan URL *logout*).
+  - **Peningkatan Dual-Engine `MentariService`**: Auto-read cookies via `WebViewCookieManager` dan preflight extraction `/my/` sehingga Strategy 1 (AJAX Moodle) dan Strategy 2 (HTML DOM Scraper) dapat langsung mengeksekusi sinkronisasi matakuliah semester aktif tanpa hambatan otentikasi.
+  - **Sinkronisasi Lintas Domain Terintegrasi**: Memperluas `MyUnpamSession.syncCookies()` dan `StorageService` untuk menyimpan sesi `mentari.unpam.ac.id` berdampingan dengan `satu.unpam.ac.id` dan `my.unpam.ac.id`.
+  - **Pengujian & Kualitas**: Seluruh 75+ unit & widget tests lulus, 0 analyzer issues (`flutter analyze` bersih).
+
+## Versi 1.0.56
 
 - **Tahap 3 — Pembersihan Monolith Root & Transisi ke MainNavigationScreen**:
   - **Arsitektur Root Baru (`MainNavigationScreen`)**: Menggantikan berkas monolitik `portal_webview_screen.dart` (2.700+ baris) dengan `MainNavigationScreen` yang bersih, modular, dan ringan.
