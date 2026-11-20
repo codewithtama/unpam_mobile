@@ -17,6 +17,9 @@ import 'features/academic/data/my_unpam_session.dart';
 import 'features/academic/data/my_unpam_web_fetcher.dart';
 import 'features/academic/presentation/providers/academic_portal_provider.dart';
 import 'features/academic/presentation/providers/finance_provider.dart';
+import 'features/mentari/data/mentari_service.dart';
+import 'features/mentari/data/mentari_web_fetcher.dart';
+import 'features/mentari/presentation/providers/mentari_provider.dart';
 import 'features/schedule/data/schedule_service.dart';
 import 'features/schedule/data/deadline_reminder_service.dart';
 import 'features/schedule/presentation/providers/schedule_provider.dart';
@@ -50,10 +53,13 @@ void main() async {
     ..fetcher = portalFetcher.get;
 
   final academicService = AcademicPortalService(portalSession, storage);
+  final mentariFetcher = MentariWebFetcher(storage);
+  final mentariService = MentariService(storage, webFetcher: mentariFetcher);
 
   runApp(
     MultiProvider(
       providers: [
+        Provider<StorageService>.value(value: storage),
         ChangeNotifierProvider(create: (_) => AiProvider(aiService, storage)),
         ChangeNotifierProvider(create: (_) => BiometricProvider(biometricService)),
         ChangeNotifierProvider(
@@ -70,10 +76,18 @@ void main() async {
         ChangeNotifierProvider(
           create: (_) => AcademicPortalProvider(academicService),
         ),
+        ChangeNotifierProvider(
+          create: (_) => MentariProvider(mentariService, storage),
+        ),
+        Provider<MentariWebFetcher>.value(value: mentariFetcher),
       ],
       child: ThePamsApp(
         storageService: storage,
-        portalWebViews: [portalRefresher.controller, portalFetcher.controller],
+        portalWebViews: [
+          portalRefresher.controller,
+          portalFetcher.controller,
+          mentariFetcher.controller,
+        ],
       ),
     ),
   );

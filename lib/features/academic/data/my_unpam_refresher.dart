@@ -18,8 +18,9 @@ class MyUnpamRefresher {
   Timer? _ticker;
   Timer? _deadline;
   DateTime _stageStartedAt = DateTime.now();
-  bool _triedMyUnpamDirect = false;
+  bool _triedSatuUnpam = false;
   bool _validating = false;
+  bool _isNavigating = false;
   int _loginTicks = 0;
   String _lastHost = '';
 
@@ -31,9 +32,10 @@ class MyUnpamRefresher {
 
     final completer = Completer<RefreshOutcome>();
     _completer = completer;
-    _triedMyUnpamDirect = false;
+    _triedSatuUnpam = false;
     _loginTicks = 0;
     _lastHost = '';
+    _isNavigating = true;
 
     final webView = WebViewController()
       ..setJavaScriptMode(JavaScriptMode.unrestricted)
@@ -46,10 +48,16 @@ class MyUnpamRefresher {
         MyUnpamScripts.statusChannel,
         onMessageReceived: (_) {},
       )
-      ..setNavigationDelegate(NavigationDelegate(onPageFinished: _onPageFinished));
+      ..setNavigationDelegate(
+        NavigationDelegate(
+          onPageStarted: (_) => _isNavigating = true,
+          onPageFinished: _onPageFinished,
+        ),
+      );
 
     controller.value = webView;
-    _loadStage(ApiConstants.satuUnpamBaseUrl);
+    // Prioritaskan membuka My UNPAM terlebih dahulu karena token JWT tersimpan di localStorage
+    _loadStage(ApiConstants.myUnpamBaseUrl);
     _ticker = Timer.periodic(const Duration(seconds: 2), (_) => _tick());
     _deadline = Timer(_timeout, () => _finish(RefreshOutcome.failed));
 
@@ -57,18 +65,58 @@ class MyUnpamRefresher {
   }
 
   void _loadStage(String baseUrl) {
+    _isNavigating = true;
     _stageStartedAt = DateTime.now();
     _loginTicks = 0;
     controller.value?.loadRequest(Uri.parse('$baseUrl/'));
   }
 
   Future<void> _onPageFinished(String url) async {
+    _isNavigating = false;
     final webView = controller.value;
     if (webView == null) return;
+
+    final lower = url.toLowerCase();
     try {
       await webView.runJavaScript(MyUnpamScripts.tokenSniffer);
-      if (url.toLowerCase().contains('satu.unpam.ac.id')) {
+
+      if (lower.contains('my.unpam.ac.id')) {
+        // Cek langsung localStorage untuk token access_token
+        await _tryExtractTokenDirectly(webView);
+      } else if (lower.contains('satu.unpam.ac.id')) {
         await webView.runJavaScript(MyUnpamScripts.satuUnpamNavigator);
+        final creds = _session.rememberedCredentials;
+        if (creds != null) {
+          await webView.runJavaScript(MyUnpamScripts.fillLogin(creds.$1, creds.$2));
+        }
+      }
+    } catch (_) {}
+  }
+
+  Future<void> _tryExtractTokenDirectly(WebViewController webView) async {
+    try {
+      final result = await webView.runJavaScriptReturningResult(r'''
+      (function() {
+        try {
+          var t = (localStorage.getItem('access_token') || '').replace(/^__q_strn\|/, '');
+          if (t.indexOf('eyJ') === 0 && t.length > 20) return t;
+          for (var i = 0; i < localStorage.length; i++) {
+            var v = localStorage.getItem(localStorage.key(i)) || '';
+            var m = v.match(/eyJ[\w-]+\.[\w-]+\.[\w-]+/);
+            if (m) return m[0];
+          }
+        } catch(e) {}
+        return '';
+      })()
+      ''');
+      final tokenStr = result.toString().replaceAll('"', '').trim();
+      if (tokenStr.startsWith('eyJ') && tokenStr.length > 20) {
+        final host = await _session.captureToken(
+          jsonEncode({'host': 'my.unpam.ac.id', 'token': tokenStr}),
+        );
+        if (host != null && host.contains('my.unpam.ac.id')) {
+          await _validateAndFinish();
+        }
       }
     } catch (_) {}
   }
@@ -91,6 +139,7 @@ class MyUnpamRefresher {
   }
 
   Future<void> _tick() async {
+    if (_isNavigating) return;
     final webView = controller.value;
     if (webView == null) return;
 
@@ -104,15 +153,41 @@ class MyUnpamRefresher {
 
     final host = (state['host'] ?? '').toString();
     final onMyUnpam = host.contains('my.unpam.ac.id');
+    final onSatuUnpam = host.contains('satu.unpam.ac.id');
+
     if (host != _lastHost) {
       _lastHost = host;
       _stageStartedAt = DateTime.now();
+      _loginTicks = 0;
+    }
+
+    if (onMyUnpam) {
+      await _tryExtractTokenDirectly(webView);
+      if (_completer == null) return;
     }
 
     if (state['isLogin'] == true) {
       _loginTicks++;
-      if (_loginTicks < 2) return;
-      _tryMyUnpamDirectOr(RefreshOutcome.loginRequired);
+      if (onSatuUnpam) {
+        // Pada halaman login Satu UNPAM
+        final hasCreds = _session.rememberedCredentials != null;
+        final maxTicks = hasCreds ? 5 : 3;
+        if (_loginTicks >= maxTicks) {
+          _finish(RefreshOutcome.loginRequired);
+          return;
+        }
+      } else if (onMyUnpam) {
+        // My UNPAM redirect ke login, arahkan ke SSO Satu UNPAM
+        if (!_triedSatuUnpam) {
+          _triedSatuUnpam = true;
+          _loadStage(ApiConstants.satuUnpamBaseUrl);
+          return;
+        }
+        if (_loginTicks >= 3) {
+          _finish(RefreshOutcome.loginRequired);
+          return;
+        }
+      }
       return;
     }
 
@@ -121,18 +196,15 @@ class MyUnpamRefresher {
       await _validateAndFinish();
       if (_completer == null) return;
     }
-    if (DateTime.now().difference(_stageStartedAt) > _stageGrace) {
-      _tryMyUnpamDirectOr(RefreshOutcome.failed);
-    }
-  }
 
-  void _tryMyUnpamDirectOr(RefreshOutcome outcome) {
-    if (_triedMyUnpamDirect) {
-      _finish(outcome);
-      return;
+    if (DateTime.now().difference(_stageStartedAt) > _stageGrace) {
+      if (!onSatuUnpam && !_triedSatuUnpam) {
+        _triedSatuUnpam = true;
+        _loadStage(ApiConstants.satuUnpamBaseUrl);
+      } else {
+        _finish(RefreshOutcome.failed);
+      }
     }
-    _triedMyUnpamDirect = true;
-    _loadStage(ApiConstants.myUnpamBaseUrl);
   }
 
   Map<String, dynamic>? _decodeState(Object raw) {

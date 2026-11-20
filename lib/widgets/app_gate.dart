@@ -2,8 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:unpam_mobile/core/services/permission_service.dart';
 import 'package:unpam_mobile/core/services/storage_service.dart';
 import 'package:unpam_mobile/features/onboarding/presentation/screens/permission_gate_screen.dart';
-import 'package:unpam_mobile/features/portal/presentation/screens/portal_webview_screen.dart';
 import 'package:unpam_mobile/features/onboarding/presentation/screens/user_agreement_screen.dart';
+import 'package:unpam_mobile/features/portal/presentation/screens/main_navigation_screen.dart';
 import 'package:unpam_mobile/theme/app_theme.dart';
 
 enum GateDestination {
@@ -51,7 +51,6 @@ class _AppGateState extends State<AppGate> with WidgetsBindingObserver {
   }
 
   Future<void> _evaluateGateDestination() async {
-    // 1. Cek apakah Syarat & Ketentuan Pengguna sudah disetujui
     final isAgreementAccepted = widget.storageService.isUserAgreementAccepted();
     if (!isAgreementAccepted) {
       if (mounted) {
@@ -60,7 +59,6 @@ class _AppGateState extends State<AppGate> with WidgetsBindingObserver {
       return;
     }
 
-    // 2. Cek apakah seluruh izin aplikasi wajib (Notifikasi, Kamera, Media) sudah diizinkan
     final arePermissionsGranted =
         await _permissionService.areAllPermissionsGranted();
 
@@ -86,7 +84,11 @@ class _AppGateState extends State<AppGate> with WidgetsBindingObserver {
                 ClipRRect(
                   borderRadius: BorderRadius.all(Radius.circular(16)),
                   child: Image(
-                    image: ResizeImage(AssetImage('logoaplikasi.jpeg'), width: 144, height: 144),
+                    image: ResizeImage(
+                      AssetImage('logoaplikasi.jpeg'),
+                      width: 144,
+                      height: 144,
+                    ),
                     width: 72,
                     height: 72,
                     fit: BoxFit.cover,
@@ -99,7 +101,7 @@ class _AppGateState extends State<AppGate> with WidgetsBindingObserver {
                 ),
                 SizedBox(height: 12),
                 Text(
-                  'Menyiapkan The PAMs...',
+                  'Menyiapkan The PAMs Native...',
                   style: TextStyle(
                     fontSize: 13,
                     color: AppTheme.textMuted,
@@ -122,7 +124,7 @@ class _AppGateState extends State<AppGate> with WidgetsBindingObserver {
         );
 
       case GateDestination.portal:
-        return const PortalWebViewScreen();
+        return const MainNavigationScreen();
     }
   }
 }

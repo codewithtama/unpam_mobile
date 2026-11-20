@@ -1,13 +1,19 @@
 import 'dart:async';
+import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:webview_flutter/webview_flutter.dart';
 import '../../../../../core/constants/api_constants.dart';
 import '../../../../../core/constants/my_unpam_scripts.dart';
+import '../../../../../core/network/cloudflare_clearance_modal.dart';
 import '../../data/my_unpam_session.dart';
 import '../../../../../providers/biometric_provider.dart';
 import '../../../../../theme/app_theme.dart';
 
+/// Modal Autentikasi Satu UNPAM & My UNPAM 100% Native Form + OTP Telegram.
+/// WebView berjalan secara headless (1x1 px) untuk menjaga cookie jar Chromium,
+/// sedangkan user hanya melihat form Native Flutter dan hanya membuka
+/// `CloudflareClearanceModal` bila Cloudflare Turnstile meminta centang verifikasi.
 class SsoAuthModal extends StatefulWidget {
   final String? initialNim;
 
@@ -27,22 +33,29 @@ class SsoAuthModal extends StatefulWidget {
 }
 
 class _SsoAuthModalState extends State<SsoAuthModal> {
-  late final WebViewController _controller;
+  final TextEditingController _nimController = TextEditingController();
+  final TextEditingController _passwordController = TextEditingController();
+  final TextEditingController _otpController = TextEditingController();
+
+  late final WebViewController _headlessController;
   late final MyUnpamSession _session;
-  int _progress = 0;
-  bool _isLoading = true;
-  String _currentStepText = 'Memuat halaman login Satu UNPAM...';
+
+  bool _obscurePassword = true;
+  bool _isSubmitting = false;
+  bool _isOtpStep = false;
+  bool _needsCloudflare = false;
   bool _tokenCaptured = false;
   bool _myUnpamTokenSeen = false;
+  String _currentStepText = 'Masukkan NIM dan Password Satu UNPAM Anda.';
   Timer? _closeFallback;
-  late final Future<(String, String)?> _credentials;
 
   @override
   void initState() {
     super.initState();
     _session = context.read<MyUnpamSession>();
-    _credentials = _resolveCredentials();
-    _controller = WebViewController()
+    _prefillCredentials();
+
+    _headlessController = WebViewController()
       ..setJavaScriptMode(JavaScriptMode.unrestricted)
       ..setUserAgent(ApiConstants.webViewUserAgent)
       ..addJavaScriptChannel(
@@ -55,13 +68,6 @@ class _SsoAuthModalState extends State<SsoAuthModal> {
       )
       ..setNavigationDelegate(
         NavigationDelegate(
-          onProgress: (progress) {
-            if (!mounted) return;
-            setState(() {
-              _progress = progress;
-              _isLoading = progress < 100;
-            });
-          },
           onPageStarted: _updateStepDescription,
           onPageFinished: (url) {
             _updateStepDescription(url);
@@ -75,26 +81,43 @@ class _SsoAuthModalState extends State<SsoAuthModal> {
   @override
   void dispose() {
     _closeFallback?.cancel();
+    _nimController.dispose();
+    _passwordController.dispose();
+    _otpController.dispose();
     super.dispose();
   }
 
-  Future<(String, String)?> _resolveCredentials() async {
+  Future<void> _prefillCredentials() async {
     final remembered = _session.rememberedCredentials;
-    if (remembered != null) return remembered;
-
-    final biometric = context.read<BiometricProvider>();
-    if (biometric.isAvailable && biometric.hasSavedCredentials) {
-      final creds = await biometric.getCredentialsForLogin();
-      final nim = (creds?['nim'] ?? '').trim();
-      final password = creds?['password'] ?? '';
-      if (nim.isNotEmpty && password.isNotEmpty) {
-        _session.rememberCredentials(nim, password);
-        return (nim, password);
-      }
+    if (remembered != null) {
+      _nimController.text = remembered.$1;
+      _passwordController.text = remembered.$2;
+      return;
     }
 
+    final biometric = context.read<BiometricProvider>();
     final nim = widget.initialNim ?? biometric.savedNim;
-    return nim == null || nim.isEmpty ? null : (nim, '');
+    if (nim != null && nim.isNotEmpty) {
+      _nimController.text = nim;
+    }
+  }
+
+  Future<void> _fillWithBiometric() async {
+    final biometric = context.read<BiometricProvider>();
+    if (!biometric.hasSavedCredentials) return;
+
+    final creds = await biometric.getCredentialsForLogin();
+    if (!mounted || creds == null) return;
+    final nim = (creds['nim'] ?? '').trim();
+    final password = creds['password'] ?? '';
+    if (nim.isNotEmpty && password.isNotEmpty) {
+      _session.rememberCredentials(nim, password);
+      setState(() {
+        _nimController.text = nim;
+        _passwordController.text = password;
+      });
+      await _submitNativeCredentials();
+    }
   }
 
   void _updateStepDescription(String url) {
@@ -104,12 +127,11 @@ class _SsoAuthModalState extends State<SsoAuthModal> {
       if (lower.contains('my.unpam.ac.id')) {
         _currentStepText = 'Berhasil masuk My UNPAM! Menyimpan sesi...';
       } else if (lower.contains('otp')) {
-        _currentStepText = 'Silakan masukkan kode OTP dari Telegram Anda.';
-      } else if (lower.contains('login')) {
-        _currentStepText = 'Masukkan NIM dan password Satu UNPAM Anda.';
-      } else if (lower.contains('satu.unpam.ac.id')) {
-        _currentStepText =
-            'Login berhasil! Klik kartu My UNPAM di bawah jika belum terbuka otomatis.';
+        _isOtpStep = true;
+        _isSubmitting = false;
+        _currentStepText = 'Masukkan 6 digit kode OTP dari Bot Telegram UNPAM Anda.';
+      } else if (lower.contains('satu.unpam.ac.id') && !lower.contains('login')) {
+        _currentStepText = 'Mengarahkan otomatis dari Satu UNPAM ke My UNPAM...';
       }
     });
   }
@@ -118,11 +140,11 @@ class _SsoAuthModalState extends State<SsoAuthModal> {
     if (!mounted || _tokenCaptured) return;
     setState(() {
       if (status == 'auto_submitted') {
-        _currentStepText = 'NIM & password terisi otomatis. Menunggu verifikasi...';
+        _currentStepText = 'Memverifikasi kredensial Satu UNPAM...';
       } else if (status == 'clicked_myunpam') {
-        _currentStepText = 'Membuka My UNPAM...';
+        _currentStepText = 'Membuka sesi My UNPAM...';
       } else if (status == 'clicked_proceed') {
-        _currentStepText = 'Mengonfirmasi redirect ke My UNPAM...';
+        _currentStepText = 'Mengonfirmasi akses SSO ke My UNPAM...';
       }
     });
   }
@@ -130,18 +152,121 @@ class _SsoAuthModalState extends State<SsoAuthModal> {
   Future<void> _injectScripts(String url) async {
     final lower = url.toLowerCase();
     try {
-      await _controller.runJavaScript(MyUnpamScripts.tokenSniffer);
+      await _headlessController.runJavaScript(MyUnpamScripts.tokenSniffer);
+
+      // Cek apakah halaman ditahan oleh Cloudflare Turnstile
+      final cfRes = await _headlessController.runJavaScriptReturningResult(r'''
+(function() {
+  var t = (document.title || '').toLowerCase();
+  var hasOtp = !!document.querySelector('input[name*="otp" i], input[placeholder*="otp" i]');
+  var isCf = t.indexOf('just a moment') !== -1 ||
+      t.indexOf('attention required') !== -1 ||
+      !!document.querySelector('#challenge-form, iframe[src*="challenges.cloudflare.com"]');
+  return JSON.stringify({ isCf: isCf, hasOtp: hasOtp });
+})()
+''');
+      final rawStr = cfRes.toString();
+      final isCf = rawStr.contains('"isCf":true');
+      final hasOtp = rawStr.contains('"hasOtp":true');
+
+      if (mounted) {
+        setState(() {
+          _needsCloudflare = isCf;
+          if (hasOtp) {
+            _isOtpStep = true;
+            _isSubmitting = false;
+            _currentStepText = 'Masukkan kode OTP dari Telegram Anda.';
+          }
+        });
+      }
+
       if (lower.contains('satu.unpam.ac.id')) {
-        await _controller.runJavaScript(MyUnpamScripts.satuUnpamNavigator);
-        final creds = await _credentials;
-        if (creds != null && mounted) {
-          await _controller.runJavaScript(MyUnpamScripts.fillLogin(creds.$1, creds.$2));
-        }
+        await _headlessController.runJavaScript(MyUnpamScripts.satuUnpamNavigator);
       } else if (lower.contains('my.unpam.ac.id')) {
         _scheduleCloseFallback();
       }
     } catch (e) {
       debugPrint('[SsoAuthModal] script injection: $e');
+    }
+  }
+
+  Future<void> _submitNativeCredentials() async {
+    final nim = _nimController.text.trim();
+    final pass = _passwordController.text;
+    if (nim.isEmpty || pass.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('NIM dan Password wajib diisi.'),
+          backgroundColor: AppTheme.accentGold,
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+      return;
+    }
+
+    _session.rememberCredentials(nim, pass);
+    setState(() {
+      _isSubmitting = true;
+      _currentStepText = 'Mengirim kredensial ke Satu UNPAM...';
+    });
+
+    try {
+      await _headlessController.runJavaScript(
+        'window.__unpamAutoSubmitted = false;',
+      );
+      await _headlessController.runJavaScript(
+        MyUnpamScripts.fillLogin(nim, pass),
+      );
+    } catch (_) {}
+  }
+
+  Future<void> _submitNativeOtp() async {
+    final otp = _otpController.text.trim();
+    if (otp.isEmpty) return;
+
+    setState(() {
+      _isSubmitting = true;
+      _currentStepText = 'Memverifikasi kode OTP Telegram...';
+    });
+
+    try {
+      await _headlessController.runJavaScript('''
+(function(otpVal) {
+  var inp = document.querySelector('input[name*="otp" i], input[type="number"], input[type="tel"], input[type="text"]');
+  if (inp) {
+    var desc = Object.getOwnPropertyDescriptor(Object.getPrototypeOf(inp), 'value') ||
+        Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value');
+    if (desc && desc.set) desc.set.call(inp, otpVal); else inp.value = otpVal;
+    ['input', 'change', 'blur'].forEach(function(t) {
+      inp.dispatchEvent(new Event(t, { bubbles: true }));
+    });
+  }
+  var btns = Array.from(document.querySelectorAll('button, input[type="submit"], [role="button"]'));
+  var btn = btns.find(function(b) {
+    var txt = (b.textContent || b.value || '').toLowerCase();
+    return txt.indexOf('verifikasi') !== -1 || txt.indexOf('kirim') !== -1 || txt.indexOf('submit') !== -1 || txt.indexOf('masuk') !== -1;
+  });
+  if (btn) btn.click();
+})(${jsonEncode(otp)});
+''');
+    } catch (_) {}
+  }
+
+  Future<void> _openCloudflareOnlyModal() async {
+    final currentUrl = await _headlessController.currentUrl() ??
+        '${ApiConstants.satuUnpamBaseUrl}/login';
+    if (!mounted) return;
+    final cleared = await CloudflareClearanceModal.show(
+      context,
+      targetUrl: currentUrl,
+      portalTitle: 'Satu UNPAM / MyUnpam',
+    );
+    if (cleared == true && mounted) {
+      setState(() {
+        _needsCloudflare = false;
+        _currentStepText = 'Cloudflare terverifikasi! Melanjutkan koneksi SSO...';
+      });
+      await _headlessController.reload();
     }
   }
 
@@ -155,187 +280,273 @@ class _SsoAuthModalState extends State<SsoAuthModal> {
 
   void _scheduleCloseFallback() {
     _closeFallback?.cancel();
-    _closeFallback = Timer(const Duration(seconds: 6), () {
+    _closeFallback = Timer(const Duration(seconds: 4), () {
       if (_myUnpamTokenSeen) _finishIfOnMyUnpam();
     });
   }
 
   Future<void> _finishIfOnMyUnpam() async {
     if (_tokenCaptured || !mounted || !_myUnpamTokenSeen) return;
-    final currentUrl = (await _controller.currentUrl())?.toLowerCase() ?? '';
+    final currentUrl = (await _headlessController.currentUrl())?.toLowerCase() ?? '';
     if (!currentUrl.contains('my.unpam.ac.id') || _tokenCaptured || !mounted) return;
 
     setState(() {
       _tokenCaptured = true;
+      _isSubmitting = false;
       _currentStepText = 'Sesi Satu UNPAM & My UNPAM berhasil terhubung!';
     });
     await _session.syncCookies();
     _session.markConnected();
-    await Future.delayed(const Duration(milliseconds: 600));
+    await Future.delayed(const Duration(milliseconds: 500));
     if (mounted) Navigator.of(context).pop(true);
-  }
-
-  String _getNoticeBannerText() {
-    if (_currentStepText.contains('My UNPAM!') || _currentStepText.contains('Membuka')) {
-      return 'Sedang menghubungkan ke My UNPAM. Jendela ini akan otomatis tertutup.';
-    } else if (_currentStepText.contains('OTP')) {
-      return 'Ketikkan kode OTP yang masuk ke chat bot Telegram UNPAM.';
-    } else if (_currentStepText.contains('kartu My UNPAM')) {
-      return 'Penting: klik ikon/kartu "My UNPAM" pada dashboard untuk melanjutkan.';
-    }
-    return 'Login dengan NIM & Password Satu UNPAM, lalu verifikasi OTP Telegram.';
   }
 
   @override
   Widget build(BuildContext context) {
-    final mediaQuery = MediaQuery.of(context);
-    final modalHeight = mediaQuery.size.height * 0.92;
+    final bottomInset = MediaQuery.of(context).viewInsets.bottom;
+    final bioProv = context.watch<BiometricProvider>();
 
-    return Container(
-      height: modalHeight,
-      decoration: const BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
-      ),
-      child: Column(
-        children: [
-          Center(
-            child: Container(
-              margin: const EdgeInsets.only(top: 10, bottom: 6),
-              width: 44,
-              height: 4.5,
-              decoration: BoxDecoration(
-                color: Colors.grey.shade300,
-                borderRadius: BorderRadius.circular(2.5),
+    return Padding(
+      padding: EdgeInsets.only(bottom: bottomInset),
+      child: Container(
+        padding: const EdgeInsets.fromLTRB(20, 12, 20, 24),
+        decoration: const BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+        ),
+        child: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              // Headless 1x1 bridge
+              SizedBox(
+                width: 1,
+                height: 1,
+                child: Opacity(
+                  opacity: 0.01,
+                  child: WebViewWidget(controller: _headlessController),
+                ),
               ),
-            ),
-          ),
-          Padding(
-            padding: const EdgeInsets.fromLTRB(16, 4, 12, 10),
-            child: Row(
-              children: [
-                Container(
-                  padding: const EdgeInsets.all(8),
+              Center(
+                child: Container(
+                  margin: const EdgeInsets.only(bottom: 14),
+                  width: 42,
+                  height: 4,
                   decoration: BoxDecoration(
-                    color: AppTheme.primaryBlue.withOpacity(0.1),
-                    borderRadius: BorderRadius.circular(10),
-                  ),
-                  child: const Icon(
-                    Icons.security_rounded,
-                    color: AppTheme.primaryBlue,
-                    size: 20,
+                    color: Colors.grey.shade300,
+                    borderRadius: BorderRadius.circular(2),
                   ),
                 ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      const Text(
-                        'Verifikasi Satu UNPAM',
-                        style: TextStyle(
-                          fontSize: 16,
-                          fontWeight: FontWeight.bold,
-                          color: AppTheme.textDark,
-                        ),
-                      ),
-                      const SizedBox(height: 2),
-                      Text(
-                        _currentStepText,
-                        style: const TextStyle(
-                          fontSize: 12,
-                          color: AppTheme.textMuted,
-                        ),
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                    ],
-                  ),
-                ),
-                IconButton(
-                  tooltip: 'Tutup',
-                  icon: const Icon(Icons.close_rounded, color: AppTheme.textDark),
-                  onPressed: () => Navigator.of(context).pop(false),
-                ),
-              ],
-            ),
-          ),
-          if (_isLoading)
-            LinearProgressIndicator(
-              value: _progress > 0 ? _progress / 100 : null,
-              backgroundColor: Colors.grey.shade100,
-              color: AppTheme.primaryBlue,
-              minHeight: 2.5,
-            )
-          else
-            const Divider(height: 1, thickness: 1),
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
-            color: Colors.blue.shade50,
-            child: Row(
-              children: [
-                const Icon(Icons.info_outline_rounded, size: 16, color: AppTheme.primaryBlue),
-                const SizedBox(width: 8),
-                Expanded(
-                  child: Text(
-                    _getNoticeBannerText(),
-                    style: TextStyle(
-                      fontSize: 11.5,
-                      color: Colors.blue.shade900,
-                      height: 1.3,
+              ),
+              Row(
+                children: [
+                  Container(
+                    padding: const EdgeInsets.all(10),
+                    decoration: BoxDecoration(
+                      color: AppTheme.primaryBlue.withOpacity(0.1),
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: const Icon(
+                      Icons.security_rounded,
+                      color: AppTheme.primaryBlue,
+                      size: 22,
                     ),
                   ),
-                ),
-              ],
-            ),
-          ),
-          Expanded(
-            child: Stack(
-              children: [
-                WebViewWidget(controller: _controller),
-                if (_tokenCaptured)
-                  Container(
-                    color: Colors.white.withOpacity(0.92),
-                    alignment: Alignment.center,
+                  const SizedBox(width: 12),
+                  Expanded(
                     child: Column(
-                      mainAxisSize: MainAxisSize.min,
+                      crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Container(
-                          padding: const EdgeInsets.all(16),
-                          decoration: BoxDecoration(
-                            color: Colors.green.shade50,
-                            shape: BoxShape.circle,
-                          ),
-                          child: const Icon(
-                            Icons.check_circle_rounded,
-                            color: Colors.green,
-                            size: 48,
-                          ),
-                        ),
-                        const SizedBox(height: 14),
                         const Text(
-                          'Berhasil Terhubung!',
+                          'Login Native Satu UNPAM',
                           style: TextStyle(
-                            fontSize: 18,
+                            fontSize: 16.5,
                             fontWeight: FontWeight.bold,
                             color: AppTheme.textDark,
                           ),
                         ),
-                        const SizedBox(height: 6),
-                        const Text(
-                          'Menyiapkan data akademik Anda...',
-                          style: TextStyle(
-                            fontSize: 13,
+                        const SizedBox(height: 2),
+                        Text(
+                          _currentStepText,
+                          style: const TextStyle(
+                            fontSize: 12,
                             color: AppTheme.textMuted,
                           ),
                         ),
                       ],
                     ),
                   ),
+                  IconButton(
+                    tooltip: 'Tutup',
+                    icon: const Icon(Icons.close_rounded, color: AppTheme.textDark),
+                    onPressed: () => Navigator.of(context).pop(false),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 18),
+
+              if (_needsCloudflare)
+                Container(
+                  margin: const EdgeInsets.only(bottom: 14),
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    color: AppTheme.accentGold.withOpacity(0.14),
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(color: AppTheme.accentGold),
+                  ),
+                  child: Row(
+                    children: [
+                      const Icon(Icons.verified_user_rounded, color: AppTheme.accentGold, size: 20),
+                      const SizedBox(width: 10),
+                      const Expanded(
+                        child: Text(
+                          'Verifikasi Cloudflare Turnstile diperlukan untuk melanjutkan.',
+                          style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600),
+                        ),
+                      ),
+                      ElevatedButton(
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: AppTheme.accentGold,
+                          foregroundColor: Colors.white,
+                          visualDensity: VisualDensity.compact,
+                        ),
+                        onPressed: _openCloudflareOnlyModal,
+                        child: const Text('Centang CF'),
+                      ),
+                    ],
+                  ),
+                ),
+
+              if (!_isOtpStep) ...[
+                TextField(
+                  controller: _nimController,
+                  keyboardType: TextInputType.number,
+                  decoration: const InputDecoration(
+                    labelText: 'NIM Mahasiswa',
+                    hintText: 'Masukkan NIM Anda',
+                    prefixIcon: Icon(Icons.badge_outlined),
+                  ),
+                ),
+                const SizedBox(height: 12),
+                TextField(
+                  controller: _passwordController,
+                  obscureText: _obscurePassword,
+                  decoration: InputDecoration(
+                    labelText: 'Password Satu UNPAM',
+                    hintText: 'Masukkan password Anda',
+                    prefixIcon: const Icon(Icons.lock_outline_rounded),
+                    suffixIcon: IconButton(
+                      icon: Icon(
+                        _obscurePassword
+                            ? Icons.visibility_off_outlined
+                            : Icons.visibility_outlined,
+                      ),
+                      onPressed: () =>
+                          setState(() => _obscurePassword = !_obscurePassword),
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 16),
+                Row(
+                  children: [
+                    Expanded(
+                      child: ElevatedButton.icon(
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: AppTheme.primaryBlue,
+                          foregroundColor: Colors.white,
+                          padding: const EdgeInsets.symmetric(vertical: 14),
+                        ),
+                        onPressed: _isSubmitting ? null : _submitNativeCredentials,
+                        icon: _isSubmitting
+                            ? const SizedBox(
+                                width: 16,
+                                height: 16,
+                                child: CircularProgressIndicator(
+                                  strokeWidth: 2,
+                                  color: Colors.white,
+                                ),
+                              )
+                            : const Icon(Icons.login_rounded, size: 18),
+                        label: Text(_isSubmitting ? 'Memproses...' : 'Masuk Satu UNPAM'),
+                      ),
+                    ),
+                    if (bioProv.hasSavedCredentials) ...[
+                      const SizedBox(width: 10),
+                      IconButton.filledTonal(
+                        tooltip: 'Auto-Fill Biometrik',
+                        onPressed: _isSubmitting ? null : _fillWithBiometric,
+                        icon: const Icon(
+                          Icons.fingerprint_rounded,
+                          color: AppTheme.primaryBlue,
+                        ),
+                      ),
+                    ],
+                  ],
+                ),
+              ] else ...[
+                TextField(
+                  controller: _otpController,
+                  keyboardType: TextInputType.number,
+                  maxLength: 6,
+                  decoration: const InputDecoration(
+                    labelText: 'Kode OTP Telegram (6 Digit)',
+                    hintText: 'Contoh: 123456',
+                    prefixIcon: Icon(Icons.telegram_rounded),
+                  ),
+                ),
+                const SizedBox(height: 12),
+                SizedBox(
+                  width: double.infinity,
+                  child: ElevatedButton.icon(
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: AppTheme.successGreen,
+                      foregroundColor: Colors.white,
+                      padding: const EdgeInsets.symmetric(vertical: 14),
+                    ),
+                    onPressed: _isSubmitting ? null : _submitNativeOtp,
+                    icon: const Icon(Icons.check_circle_outline_rounded, size: 18),
+                    label: Text(_isSubmitting ? 'Memverifikasi OTP...' : 'Verifikasi Kode OTP'),
+                  ),
+                ),
+                TextButton(
+                  onPressed: () => setState(() {
+                    _isOtpStep = false;
+                    _isSubmitting = false;
+                  }),
+                  child: const Text('Kembali ke Input NIM & Password'),
+                ),
               ],
-            ),
+
+              const SizedBox(height: 10),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  TextButton.icon(
+                    onPressed: () => setState(() => _isOtpStep = !_isOtpStep),
+                    icon: const Icon(Icons.pin_outlined, size: 16),
+                    label: Text(
+                      _isOtpStep ? 'Input NIM' : 'Sudah Punya Kode OTP?',
+                      style: const TextStyle(fontSize: 12),
+                    ),
+                  ),
+                  TextButton.icon(
+                    onPressed: _openCloudflareOnlyModal,
+                    icon: const Icon(
+                      Icons.verified_user_outlined,
+                      size: 16,
+                      color: AppTheme.accentGold,
+                    ),
+                    label: const Text(
+                      'Verifikasi Cloudflare',
+                      style: TextStyle(fontSize: 12, color: AppTheme.textMuted),
+                    ),
+                  ),
+                ],
+              ),
+            ],
           ),
-        ],
+        ),
       ),
     );
   }

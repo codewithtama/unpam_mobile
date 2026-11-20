@@ -1,7 +1,8 @@
+import 'package:flutter/material.dart';
+import 'package:intl/intl.dart';
+import 'package:provider/provider.dart';
 import '../../../schedule/presentation/screens/schedule_screen.dart';
 import '../../../schedule/presentation/providers/schedule_provider.dart';
-import 'package:flutter/material.dart';
-import 'package:provider/provider.dart';
 import '../../data/my_unpam_session.dart';
 import '../../data/portal_ai_text.dart';
 import '../providers/academic_portal_provider.dart';
@@ -23,8 +24,13 @@ import 'thesis_screen.dart';
 
 class AcademicHubScreen extends StatefulWidget {
   final void Function(String url)? onOpenDeadlineUrl;
+  final bool isEmbedded;
 
-  const AcademicHubScreen({super.key, this.onOpenDeadlineUrl});
+  const AcademicHubScreen({
+    super.key,
+    this.onOpenDeadlineUrl,
+    this.isEmbedded = false,
+  });
 
   @override
   State<AcademicHubScreen> createState() => _AcademicHubScreenState();
@@ -149,8 +155,21 @@ class _AcademicHubScreenState extends State<AcademicHubScreen> {
   void initState() {
     super.initState();
     WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
       final portal = context.read<AcademicPortalProvider>();
-      if (!portal.biodata.hasData) portal.fetchBiodata();
+      if (!portal.biodata.hasData && !portal.biodata.isLoading) {
+        portal.fetchBiodata();
+      }
+
+      final finance = context.read<FinanceProvider>();
+      if (finance.financeData == null && !finance.isLoading) {
+        finance.fetchFinanceData();
+      }
+
+      final schedule = context.read<ScheduleProvider>();
+      if (!schedule.hasSchedules && !schedule.isScheduleLoading) {
+        schedule.syncScheduleWithPortal();
+      }
     });
   }
 
@@ -182,38 +201,72 @@ class _AcademicHubScreenState extends State<AcademicHubScreen> {
     ].where((part) => part.isNotEmpty).join('\n\n');
   }
 
+  Widget _buildContent() {
+    return ListView(
+      physics: const AlwaysScrollableScrollPhysics(),
+      padding: const EdgeInsets.fromLTRB(16, 16, 16, 96),
+      children: [
+        _buildStudentCard(),
+        const SizedBox(height: 14),
+        _buildSessionCard(),
+        _buildFinancialSummaryCard(),
+        _buildTodayClassesCard(),
+        const SizedBox(height: 22),
+        _buildSectionHeader('Akademik Perkuliahan', Icons.school_rounded),
+        const SizedBox(height: 10),
+        _buildMenuGrid(_coreAcademicMenus),
+        const SizedBox(height: 22),
+        _buildSectionHeader('Administrasi & Dokumen', Icons.business_center_rounded),
+        const SizedBox(height: 10),
+        _buildMenuGrid(_administrationMenus),
+        const SizedBox(height: 22),
+        _buildSectionHeader('Program & Bimbingan', Icons.auto_stories_rounded),
+        const SizedBox(height: 10),
+        _buildMenuGrid(_specialProgramMenus),
+      ],
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
+    if (widget.isEmbedded) {
+      final isLoading = context.watch<AcademicPortalProvider>().biodata.isLoading;
+      return Container(
+        color: AppTheme.bgGrey,
+        child: Stack(
+          children: [
+            RefreshIndicator(
+              color: AppTheme.primaryBlue,
+              backgroundColor: Colors.white,
+              onRefresh: _refresh,
+              child: _buildContent(),
+            ),
+            if (isLoading)
+              const Positioned(
+                top: 0,
+                left: 0,
+                right: 0,
+                child: LinearProgressIndicator(
+                  minHeight: 2.5,
+                  backgroundColor: Colors.transparent,
+                  color: AppTheme.accentGold,
+                ),
+              ),
+          ],
+        ),
+      );
+    }
+
     return PortalPageScaffold(
-      title: 'Akademik',
+      title: 'MyUnpam',
       isLoading: context.watch<AcademicPortalProvider>().biodata.isLoading,
       onRefresh: _refresh,
       aiContext: PortalAiContext(
-        pageTitle: 'Akademik',
-        label: 'Data Akademik',
+        pageTitle: 'MyUnpam',
+        label: 'Data Akademik MyUnpam',
         buildPageText: _buildAiSummary,
       ),
-      body: ListView(
-        physics: const AlwaysScrollableScrollPhysics(),
-        padding: const EdgeInsets.fromLTRB(16, 16, 16, 32),
-        children: [
-          _buildStudentCard(),
-          const SizedBox(height: 14),
-          _buildSessionCard(),
-          const SizedBox(height: 22),
-          _buildSectionHeader('Akademik Perkuliahan', Icons.school_rounded),
-          const SizedBox(height: 10),
-          _buildMenuGrid(_coreAcademicMenus),
-          const SizedBox(height: 22),
-          _buildSectionHeader('Administrasi & Dokumen', Icons.business_center_rounded),
-          const SizedBox(height: 10),
-          _buildMenuGrid(_administrationMenus),
-          const SizedBox(height: 22),
-          _buildSectionHeader('Program & Bimbingan', Icons.auto_stories_rounded),
-          const SizedBox(height: 10),
-          _buildMenuGrid(_specialProgramMenus),
-        ],
-      ),
+      body: _buildContent(),
     );
   }
 
@@ -276,71 +329,164 @@ class _AcademicHubScreenState extends State<AcademicHubScreen> {
           ),
         ],
       ),
-      child: Row(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          CircleAvatar(
-            radius: 28,
-            backgroundColor: Colors.white,
-            child: Text(
-              initials.isEmpty ? 'UN' : initials,
-              style: const TextStyle(
-                fontSize: 18,
-                fontWeight: FontWeight.bold,
-                color: AppTheme.primaryBlue,
-              ),
-            ),
-          ),
-          const SizedBox(width: 14),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  name,
-                  maxLines: 2,
-                  overflow: TextOverflow.ellipsis,
+          Row(
+            children: [
+              CircleAvatar(
+                radius: 28,
+                backgroundColor: Colors.white,
+                child: Text(
+                  initials.isEmpty ? 'UN' : initials,
                   style: const TextStyle(
-                    color: Colors.white,
-                    fontSize: 16,
+                    fontSize: 18,
                     fontWeight: FontWeight.bold,
+                    color: AppTheme.primaryBlue,
                   ),
                 ),
-                const SizedBox(height: 4),
-                Text(
-                  biodata == null ? 'Hubungkan akun untuk memuat profil' : 'NIM ${biodata.nim}',
-                  style: TextStyle(color: Colors.white.withOpacity(0.9), fontSize: 12.5),
+              ),
+              const SizedBox(width: 14),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      name,
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontSize: 16,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      biodata == null
+                          ? 'Hubungkan akun untuk memuat profil'
+                          : 'NIM ${biodata.nim}',
+                      style: TextStyle(
+                        color: Colors.white.withOpacity(0.9),
+                        fontSize: 12.5,
+                      ),
+                    ),
+                    if (prodi != null) ...[
+                      const SizedBox(height: 2),
+                      Text(
+                        prodi,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(
+                          color: Colors.white.withOpacity(0.8),
+                          fontSize: 12,
+                        ),
+                      ),
+                    ],
+                  ],
                 ),
-                if (prodi != null) ...[
-                  const SizedBox(height: 2),
-                  Text(
-                    prodi,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: TextStyle(color: Colors.white.withOpacity(0.8), fontSize: 12),
+              ),
+              if (biodata?.ipkSemesterBerjalan != null)
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                  decoration: BoxDecoration(
+                    color: Colors.white.withOpacity(0.18),
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(color: Colors.white.withOpacity(0.3)),
+                  ),
+                  child: Column(
+                    children: [
+                      Text(
+                        biodata!.ipkSemesterBerjalan!,
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontSize: 19,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                      Text(
+                        'IPK',
+                        style: TextStyle(
+                          color: Colors.white.withOpacity(0.85),
+                          fontSize: 10.5,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+            ],
+          ),
+          if (biodata != null) ...[
+            const SizedBox(height: 14),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+              decoration: BoxDecoration(
+                color: Colors.black.withOpacity(0.12),
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.spaceAround,
+                children: [
+                  _buildStudentStatItem(
+                    label: 'Semester',
+                    value: biodata.semester != null ? 'Sem. ${biodata.semester}' : '-',
+                    icon: Icons.calendar_today_rounded,
+                  ),
+                  Container(width: 1, height: 20, color: Colors.white24),
+                  _buildStudentStatItem(
+                    label: 'SKS Lulus',
+                    value: biodata.sksSemesterBerjalan != null
+                        ? '${biodata.sksSemesterBerjalan} SKS'
+                        : '-',
+                    icon: Icons.credit_score_rounded,
+                  ),
+                  Container(width: 1, height: 20, color: Colors.white24),
+                  _buildStudentStatItem(
+                    label: 'Status',
+                    value: biodata.statusMahasiswa?.namaStatusMahasiswa ?? 'Aktif',
+                    icon: Icons.check_circle_outline_rounded,
                   ),
                 ],
-              ],
+              ),
             ),
-          ),
-          if (biodata?.ipkSemesterBerjalan != null)
-            Column(
-              children: [
-                Text(
-                  biodata!.ipkSemesterBerjalan!,
-                  style: const TextStyle(
-                    color: Colors.white,
-                    fontSize: 20,
-                    fontWeight: FontWeight.bold,
-                  ),
-                ),
-                Text(
-                  'IPK',
-                  style: TextStyle(color: Colors.white.withOpacity(0.8), fontSize: 11),
-                ),
-              ],
-            ),
+          ],
         ],
       ),
+    );
+  }
+
+  Widget _buildStudentStatItem({
+    required String label,
+    required String value,
+    required IconData icon,
+  }) {
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Icon(icon, size: 14, color: AppTheme.accentGold),
+        const SizedBox(width: 6),
+        Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              label,
+              style: TextStyle(
+                color: Colors.white.withOpacity(0.7),
+                fontSize: 10,
+              ),
+            ),
+            Text(
+              value,
+              style: const TextStyle(
+                color: Colors.white,
+                fontSize: 12,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+          ],
+        ),
+      ],
     );
   }
 
@@ -411,6 +557,180 @@ class _AcademicHubScreenState extends State<AcademicHubScreen> {
             onPressed: session.isRefreshing ? null : () => reconnectPortal(context, _refresh),
             child: Text(session.needsLogin ? 'Hubungkan' : 'Hubungkan Ulang'),
           ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildFinancialSummaryCard() {
+    final finance = context.watch<FinanceProvider>();
+    final data = finance.financeData;
+    if (data == null && !finance.isLoading) return const SizedBox.shrink();
+
+    final isPaidOff = data != null && data.totalUnpaidAmount == 0;
+    final remainingBill = data?.totalUnpaidAmount ?? 0;
+    final color = isPaidOff ? AppTheme.successGreen : AppTheme.accentGold;
+
+    return Container(
+      margin: const EdgeInsets.only(top: 14),
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: color.withOpacity(0.35)),
+      ),
+      child: Row(
+        children: [
+          Container(
+            padding: const EdgeInsets.all(8),
+            decoration: BoxDecoration(
+              color: color.withOpacity(0.12),
+              shape: BoxShape.circle,
+            ),
+            child: Icon(
+              isPaidOff ? Icons.check_circle_rounded : Icons.receipt_long_rounded,
+              size: 20,
+              color: color,
+            ),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  isPaidOff ? 'Keuangan SPP Lunas' : 'Tagihan Semester Aktif',
+                  style: TextStyle(
+                    fontSize: 13,
+                    fontWeight: FontWeight.bold,
+                    color: isPaidOff ? AppTheme.successGreen : AppTheme.textDark,
+                  ),
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  isPaidOff
+                      ? 'Tidak ada kewajiban pembayaran tertunda'
+                      : 'Sisa: ${NumberFormat.currency(locale: 'id_ID', symbol: 'Rp ', decimalDigits: 0).format(remainingBill)}',
+                  style: const TextStyle(fontSize: 11.5, color: AppTheme.textMuted),
+                ),
+              ],
+            ),
+          ),
+          TextButton(
+            onPressed: () => Navigator.push(
+              context,
+              MaterialPageRoute(builder: (_) => const FinanceScreen()),
+            ),
+            child: const Text('Rincian'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildTodayClassesCard() {
+    final schedule = context.watch<ScheduleProvider>();
+    final today = schedule.todaySchedule;
+    if (today.isEmpty) return const SizedBox.shrink();
+
+    return Container(
+      margin: const EdgeInsets.only(top: 14),
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: AppTheme.cardBorder),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              const Icon(Icons.access_time_filled_rounded,
+                  size: 16, color: AppTheme.primaryBlue),
+              const SizedBox(width: 8),
+              Text(
+                'Kuliah Hari Ini (${today.length} Matkul)',
+                style: const TextStyle(
+                  fontSize: 13,
+                  fontWeight: FontWeight.bold,
+                  color: AppTheme.textDark,
+                ),
+              ),
+              const Spacer(),
+              InkWell(
+                onTap: () => Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (ctx) => ScheduleScreen(
+                      onOpenDeadlineUrl: widget.onOpenDeadlineUrl,
+                    ),
+                  ),
+                ),
+                child: const Text(
+                  'Lihat Semua',
+                  style: TextStyle(
+                    fontSize: 12,
+                    fontWeight: FontWeight.w600,
+                    color: AppTheme.primaryBlue,
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 10),
+          ...today.take(2).map((item) => Padding(
+                padding: const EdgeInsets.only(bottom: 6),
+                child: Row(
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 6, vertical: 2),
+                      decoration: BoxDecoration(
+                        color: item.isOnline
+                            ? AppTheme.accentGold.withOpacity(0.15)
+                            : AppTheme.primaryLight.withOpacity(0.15),
+                        borderRadius: BorderRadius.circular(6),
+                      ),
+                      child: Text(
+                        item.jamMulai.isNotEmpty
+                            ? item.jamMulai
+                            : (item.isOnline ? 'Online' : 'TM'),
+                        style: TextStyle(
+                          fontSize: 10.5,
+                          fontWeight: FontWeight.bold,
+                          color: item.isOnline
+                              ? AppTheme.accentGold
+                              : AppTheme.primaryBlue,
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Text(
+                        item.namaMataKuliah,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(
+                          fontSize: 12.5,
+                          fontWeight: FontWeight.w600,
+                          color: AppTheme.textDark,
+                        ),
+                      ),
+                    ),
+                    if (item.ruang.isNotEmpty) ...[
+                      const SizedBox(width: 6),
+                      Text(
+                        item.ruang,
+                        style: const TextStyle(
+                          fontSize: 11,
+                          color: AppTheme.textMuted,
+                        ),
+                      ),
+                    ],
+                  ],
+                ),
+              )),
         ],
       ),
     );

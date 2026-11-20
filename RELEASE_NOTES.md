@@ -1,6 +1,22 @@
 # Catatan Pembaruan Rilis The PAMs
 
-## Versi 1.0.63 (Terbaru)
+## Versi 1.0.64 (Terbaru)
+
+- **Transformasi Arsitektur 100% Native Flutter & WebView Khusus Cloudflare Turnstile**:
+  - **Tahap 1 — Cloudflare-Only Gatekeeper (`CloudflareClearanceModal`) & Native Login/OTP**:
+    - Menghadirkan `CloudflareClearanceModal` yang **hanya** membuka jendela verifikasi ketika server kampus meminta centang anti-bot Cloudflare (`HTTP 403 / cf-mitigated: challenge`) dan otomatis menutup dirinya dalam `<300ms` setelah `cf_clearance` diperoleh.
+    - Mengubah `MentariAuthModal` dan `SsoAuthModal` menjadi form **100% Native Flutter** (NIM, Password, Auto-Fill Biometric Vault, serta input 6 digit OTP Telegram Satu UNPAM).
+  - **Tahap 2 — Shell Navigasi Utama 100% Native (`MainNavigationScreen`)**:
+    - Menggantikan `PortalWebViewScreen` monolitik (2.960 baris) dengan `MainNavigationScreen` yang merender 4 tab native terisolasi `RepaintBoundary`: **Mentari LMS**, **MyUnpam SIAKAD** (12 layanan native OpenAPI), **Jadwal & Deadline**, serta **The PAMs AI**.
+  - **Tahap 3 — Mentari LMS Native Hub, 21 Pertemuan & Peserta Kelas**:
+    - Merender daftar mata kuliah (`/api/user-course`), accordion 21 pertemuan, dan tab **Peserta Kelas** (`peserta` dari `/api/user-course/{kode_course}`) menggunakan `CustomScrollView` + `SliverList.builder` (120 FPS).
+  - **Tahap 4 — Layar Interaktif 100% Native (Kuis, Forum Diskusi, Tugas Terstruktur)**:
+    - `MentariNativeQuizScreen`: Pengerjaan Pretest & Posttest 100% Native lengkap dengan timer hitung mundur, navigasi nomor soal, tombol **AI Quiz Solver** terintegrasi, dan pembahasan soal.
+    - `MentariNativeForumScreen`: Diskusi forum 100% Native dengan topik dosen, daftar balasan mahasiswa, tombol **Buat Draf AI**, dan pengiriman tanggapan langsung.
+    - `MentariNativeAssignmentScreen`: Pengumpulan tugas terstruktur & lampiran materi secara native.
+  - **Tahap 5 — Pengujian & Kualitas**: 73/73 unit & widget test lulus, 0 issues pada `flutter analyze`.
+
+## Versi 1.0.63
 
 - **Optimasi Performa Menyeluruh & Eliminasi Lag (Zero-Lag Engine)**:
   - **Eliminasi Scroll Jank pada WebView**: Menghapus pemanggilan setState berulang pada setOnScrollPositionChange dan channel scroll JavaScript yang sebelumnya memicu rebuild seluruh widget tree layar saat scrolling. Navigasi web dan swipe kini berjalan mulus pada 60-120 FPS.
